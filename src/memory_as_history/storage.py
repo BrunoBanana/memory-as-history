@@ -1,14 +1,25 @@
 """SQLite-backed storage for Memory as History.
 
-Two modules for v0.1:
-- Consolidation: memories start as `working` and must be explicitly `promoted`
-  to `consolidated` with a recorded reason (a ceremony, not a similarity score).
-- Anchors: a small set of pinned, identity-cornerstone memories that are always
-  surfaced first and never compete on recency/relevance. Each pin requires a
-  reason (why this became a "site of memory").
+Three modules for v0.2:
 
-Design principle: every state change that matters (promote, pin) is recorded
-with a reason and a timestamp. Nothing is silently reclassified.
+- Consolidation (Assmann): memories start as `working` and must be explicitly
+  `promoted` to `consolidated` with a recorded, non-empty reason — a ceremony,
+  not a similarity score.
+- Anchors (Nora): a small set of pinned, identity-cornerstone memories that
+  are always surfaced first and never compete on recency/relevance. Each pin
+  requires a reason. Anchors are meant to stay few ("lieux de mémoire" are
+  necessarily scarce) — exceeding a soft limit returns a warning rather than
+  a hard block, so the caller can decide whether that's intentional.
+- Provenance tiers (Ricoeur): every memory carries a tier —
+  `archive` (raw, as originally captured), `testimony` (corroborated by an
+  independent, additional source), or `interpretation` (the agent's own
+  inference, which is not self-evidently true and must be periodically
+  re-examined). Archive memories can be upgraded to testimony by
+  corroboration; interpretation memories must be reviewed on a cadence.
+
+Design principle: every state change that matters (promote, pin, corroborate,
+review) is recorded with a reason/note and a timestamp in a single audit log.
+Nothing is silently reclassified.
 """
 
 from __future__ import annotations
@@ -16,20 +27,27 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path.home() / ".memory-as-history" / "memory.db"
+DEFAULT_ANCHOR_SOFT_LIMIT = 12
+DEFAULT_INTERPRETATION_REVIEW_DAYS = 30
+
+TIERS = ("archive", "testimony", "interpretation")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     content TEXT NOT NULL,
     source TEXT,
-    status TEXT NOT NULL DEFAULT 'working',  -- 'working' | 'consolidated'
+    status TEXT NOT NULL DEFAULT 'working',        -- 'working' | 'consolidated'
+    tier TEXT NOT NULL DEFAULT 'archive',           -- 'archive' | 'testimony' | 'interpretation'
     created_at TEXT NOT NULL,
     consolidated_at TEXT,
-    consolidation_reason TEXT
+    consolidation_reason TEXT,
+    last_reviewed_at TEXT,
+    review_status TEXT                              -- 'current' | 'stale' | NULL
 );
 
 CREATE TABLE IF NOT EXISTS anchors (
@@ -38,10 +56,17 @@ CREATE TABLE IF NOT EXISTS anchors (
     pinned_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS consolidation_log (
+CREATE TABLE IF NOT EXISTS corroborations (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL REFERENCES memories(id),
+    source TEXT NOT NULL,
+    at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
 );
@@ -56,15 +81,24 @@ def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+def _require_text(value: str, field: str) -> str:
+    if value is None or not value.strip():
+        raise ValueError(f"{field} is required and cannot be empty")
+    return value
+
+
 @dataclass
 class Memory:
     id: str
     content: str
     source: str | None
     status: str
+    tier: str
     created_at: str
     consolidated_at: str | None
     consolidation_reason: str | None
+    last_reviewed_at: str | None
+    review_status: str | None
 
     def to_dict(self) -> dict:
         return {
@@ -72,89 +106,142 @@ class Memory:
             "content": self.content,
             "source": self.source,
             "status": self.status,
+            "tier": self.tier,
             "created_at": self.created_at,
             "consolidated_at": self.consolidated_at,
             "consolidation_reason": self.consolidation_reason,
+            "last_reviewed_at": self.last_reviewed_at,
+            "review_status": self.review_status,
         }
 
-
 class Store:
-    def __init__(self, db_path: Path | str = DEFAULT_DB_PATH):
+    def __init__(
+        self,
+        db_path: Path | str = DEFAULT_DB_PATH,
+        anchor_soft_limit: int = DEFAULT_ANCHOR_SOFT_LIMIT,
+        interpretation_review_days: int = DEFAULT_INTERPRETATION_REVIEW_DAYS,
+    ):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.db_path)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+        self.anchor_soft_limit = anchor_soft_limit
+        self.interpretation_review_days = interpretation_review_days
 
     def close(self) -> None:
         self._conn.close()
 
-    # -- consolidation module -------------------------------------------------
+    def _log(self, memory_id: str, action: str, reason: str) -> None:
+        self._conn.execute(
+            "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (_new_id(), memory_id, action, reason, _now()),
+        )
 
-    def remember(self, content: str, source: str | None = None) -> Memory:
-        """Store a new working memory. Working memories are ordinary,
-        unconsolidated recollections — they can still be recalled, but they
-        have not gone through the consolidation ceremony."""
+    # -- capture --------------------------------------------------------------
+
+    def remember(
+        self, content: str, source: str | None = None, tier: str = "archive"
+    ) -> Memory:
+        """Store a new working memory. Working memories are ordinary
+        recollections — they can still be recalled, but they have not gone
+        through the consolidation ceremony.
+
+        `tier` defaults to 'archive' (captured as-is). Pass tier='interpretation'
+        when the content is the agent's own inference/summary rather than a
+        directly observed fact — this schedules it for periodic review."""
+        content = _require_text(content, "content")
+        if tier not in TIERS:
+            raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
         mid = _new_id()
         now = _now()
+        review_status = "current" if tier == "interpretation" else None
+        last_reviewed_at = now if tier == "interpretation" else None
         self._conn.execute(
-            "INSERT INTO memories (id, content, source, status, created_at) "
-            "VALUES (?, ?, ?, 'working', ?)",
-            (mid, content, source, now),
+            "INSERT INTO memories "
+            "(id, content, source, status, tier, created_at, last_reviewed_at, review_status) "
+            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?)",
+            (mid, content, source, tier, now, last_reviewed_at, review_status),
         )
         self._conn.commit()
         return self.get(mid)
 
+    # -- consolidation module (Assmann) ---------------------------------------
+
     def promote(self, memory_id: str, reason: str) -> Memory:
         """Explicitly consolidate a working memory. This is a deliberate act,
-        not an automatic score threshold. A reason is required — this is the
-        audit trail that makes consolidation accountable rather than opaque."""
+        not an automatic score threshold. A non-empty reason is required —
+        this is the audit trail that makes consolidation accountable rather
+        than opaque. Promoting an already-consolidated memory re-logs the
+        action (e.g. to record a stronger/updated justification) but does
+        not change `consolidated_at` to a later "first consolidated" time."""
+        reason = _require_text(reason, "reason")
         mem = self.get(memory_id)
         if mem is None:
             raise KeyError(f"no such memory: {memory_id}")
         now = _now()
-        self._conn.execute(
-            "UPDATE memories SET status='consolidated', consolidated_at=?, "
-            "consolidation_reason=? WHERE id=?",
-            (now, reason, memory_id),
-        )
-        self._conn.execute(
-            "INSERT INTO consolidation_log (id, memory_id, action, reason, at) "
-            "VALUES (?, ?, 'promote', ?, ?)",
-            (_new_id(), memory_id, reason, now),
-        )
+        if mem.status != "consolidated":
+            self._conn.execute(
+                "UPDATE memories SET status='consolidated', consolidated_at=?, "
+                "consolidation_reason=? WHERE id=?",
+                (now, reason, memory_id),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE memories SET consolidation_reason=? WHERE id=?",
+                (reason, memory_id),
+            )
+        self._log(memory_id, "promote", reason)
         self._conn.commit()
         return self.get(memory_id)
 
-    def consolidation_log(self, limit: int = 50) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT * FROM consolidation_log ORDER BY at DESC LIMIT ?", (limit,)
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-    # -- anchor module ----------------------------------------------------------
+    # -- anchor module (Nora) --------------------------------------------------
 
     def pin(self, memory_id: str, reason: str) -> dict:
-        """Mark a memory as an anchor: a site of memory that is always
-        surfaced and never competes with ordinary memories on recency or
-        relevance. Requires a reason — anchors are declared, not inferred."""
+        """Mark a memory as an anchor: a 'site of memory' that is always
+        surfaced on recall and never competes with ordinary memories on
+        recency or relevance. Requires a non-empty reason — anchors are
+        declared, not inferred.
+
+        A memory must already be consolidated before it can be pinned: an
+        anchor is, by construction, something that has already become
+        history — you cannot skip straight from a passing remark to a
+        monument. Call `promote()` first.
+
+        Anchors are meant to stay few. Exceeding `anchor_soft_limit` does not
+        block the pin, but the returned dict includes a `warning` — a large
+        set of "anchors" stops functioning as a set of anchors."""
+        reason = _require_text(reason, "reason")
         mem = self.get(memory_id)
         if mem is None:
             raise KeyError(f"no such memory: {memory_id}")
+        if mem.status != "consolidated":
+            raise ValueError(
+                "memory must be consolidated (call promote() first) before "
+                "it can be pinned as an anchor"
+            )
         now = _now()
         self._conn.execute(
             "INSERT OR REPLACE INTO anchors (memory_id, reason, pinned_at) "
             "VALUES (?, ?, ?)",
             (memory_id, reason, now),
         )
-        self._conn.execute(
-            "INSERT INTO consolidation_log (id, memory_id, action, reason, at) "
-            "VALUES (?, ?, 'pin', ?, ?)",
-            (_new_id(), memory_id, reason, now),
-        )
+        self._log(memory_id, "pin", reason)
         self._conn.commit()
-        return {"memory_id": memory_id, "reason": reason, "pinned_at": now}
+
+        count = self._conn.execute("SELECT COUNT(*) FROM anchors").fetchone()[0]
+        result = {"memory_id": memory_id, "reason": reason, "pinned_at": now}
+        if count > self.anchor_soft_limit:
+            result["warning"] = (
+                f"{count} anchors pinned, exceeding the soft limit of "
+                f"{self.anchor_soft_limit}. Anchors work as identity "
+                f"cornerstones only while they stay few — consider unpinning "
+                f"some."
+            )
+        return result
 
     def unpin(self, memory_id: str) -> None:
         self._conn.execute("DELETE FROM anchors WHERE memory_id=?", (memory_id,))
@@ -165,6 +252,91 @@ class Store:
             "SELECT m.*, a.reason AS anchor_reason, a.pinned_at "
             "FROM anchors a JOIN memories m ON m.id = a.memory_id "
             "ORDER BY a.pinned_at ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- provenance tiers module (Ricoeur) --------------------------------------
+
+    def corroborate(self, memory_id: str, source: str) -> Memory:
+        """Record that an independent additional source corroborates this
+        memory. An 'archive' (raw, single-source) memory is automatically
+        upgraded to 'testimony' on its first corroboration. 'interpretation'
+        memories are not upgraded by corroboration alone — they must go
+        through `review()` instead, since they are inferences, not facts
+        that a second source can simply confirm."""
+        source = _require_text(source, "source")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        now = _now()
+        self._conn.execute(
+            "INSERT INTO corroborations (id, memory_id, source, at) VALUES (?, ?, ?, ?)",
+            (_new_id(), memory_id, source, now),
+        )
+        if mem.tier == "archive":
+            self._conn.execute(
+                "UPDATE memories SET tier='testimony' WHERE id=?", (memory_id,)
+            )
+            self._log(
+                memory_id,
+                "corroborate_upgrade",
+                f"corroborated by additional source: {source}",
+            )
+        self._conn.commit()
+        return self.get(memory_id)
+
+    def review(self, memory_id: str, note: str) -> Memory:
+        """Re-examine an 'interpretation' memory and confirm it still holds.
+        Ricoeur treats interpretation as inherently provisional — it must be
+        periodically revisited, not trusted indefinitely just because it was
+        once inferred. Resets the review clock; the reasoning is logged."""
+        note = _require_text(note, "note")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        if mem.tier != "interpretation":
+            raise ValueError(
+                "only 'interpretation'-tier memories require review; "
+                f"this memory has tier={mem.tier!r}"
+            )
+        now = _now()
+        self._conn.execute(
+            "UPDATE memories SET last_reviewed_at=?, review_status='current' WHERE id=?",
+            (now, memory_id),
+        )
+        self._log(memory_id, "review", note)
+        self._conn.commit()
+        return self.get(memory_id)
+
+    def due_for_review(self, days: int | None = None) -> list[dict]:
+        """Return interpretation-tier memories whose last review is older
+        than `days` (default: interpretation_review_days), or that have
+        never been reviewed. Marks them 'stale' in the store as a side
+        effect, so `get()`/`recall()` reflect their status too."""
+        days = self.interpretation_review_days if days is None else days
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = self._conn.execute(
+            "SELECT * FROM memories WHERE tier='interpretation' AND "
+            "(last_reviewed_at IS NULL OR last_reviewed_at < ?)",
+            (cutoff,),
+        ).fetchall()
+        stale = [dict(r) for r in rows]
+        if stale:
+            ids = [r["id"] for r in stale]
+            self._conn.executemany(
+                "UPDATE memories SET review_status='stale' WHERE id=?",
+                [(i,) for i in ids],
+            )
+            self._conn.commit()
+            for r in stale:
+                r["review_status"] = "stale"
+        return stale
+
+    # -- audit ------------------------------------------------------------------
+
+    def audit_log(self, limit: int = 50) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM audit_log ORDER BY at DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -183,7 +355,10 @@ class Store:
         regardless of the query — they do not compete on relevance.
         Remaining slots are filled by consolidated memories, then working
         memories, newest first, optionally filtered by a naive substring
-        match on `query` (v0.1 has no embedding dependency by design)."""
+        match on `query` (v0.1/v0.2 have no embedding dependency by design).
+
+        Also surfaces `stale_interpretations`: interpretation-tier memories
+        due for review, so callers can prompt for re-examination."""
         anchors = self.list_anchors()
 
         def _match(row: sqlite3.Row) -> bool:
@@ -205,4 +380,8 @@ class Store:
                 if len(rest) >= remaining:
                     break
 
-        return {"anchors": anchors, "memories": rest}
+        return {
+            "anchors": anchors,
+            "memories": rest,
+            "stale_interpretations": self.due_for_review(),
+        }

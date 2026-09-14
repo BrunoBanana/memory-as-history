@@ -1,8 +1,8 @@
 # Memory as History
 
-> Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation** and **anchored identity** — not just storage and retrieval.
+> Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Status: v0.1 — local prototype, not yet published.**
+**Status: v0.2 — local prototype, not yet published.**
 
 ## Why
 
@@ -13,24 +13,27 @@ Memory studies (Halbwachs, Nora, Assmann, Ricoeur) has spent a century describin
 - Memory is **socially framed**, not a private recording (Halbwachs).
 - Identity anchors on a small set of **sites of memory** — *lieux de mémoire* — that don't compete with ordinary recollection (Nora).
 - Durable ("cultural") memory is reached through an explicit **consolidation** process out of everyday ("communicative") memory — a ceremony, not a threshold (Assmann).
-- Memory is layered into **archive / testimony / interpretation**, and forgetting is treated as necessary and legitimate, not a failure (Ricoeur).
+- Memory is layered into **archive / testimony / interpretation**, and forgetting/re-examination is treated as necessary and legitimate, not a failure (Ricoeur).
 
 Agent memory today has the storage. It is missing the historiography — the accountable process by which something becomes "remembered" rather than just "logged."
 
-## What (v0.1 scope)
+## What (v0.2 scope)
 
-Two modules, deliberately small:
+Three modules, deliberately small and composable:
 
 | Module | Mechanism | Source theory |
 |---|---|---|
-| **Consolidation** | Memories start as `working`. They only become `consolidated` through an explicit `promote(reason)` call — never automatically. Every promotion is logged with its reason. | Assmann: communicative → cultural memory |
-| **Anchors** | A small set of `pin(reason)`-ed memories. Anchors are always surfaced on recall, in full, regardless of query — they do not compete on relevance or recency. | Nora: *lieux de mémoire* |
+| **Consolidation** | Memories start as `working`. They only become `consolidated` through an explicit `promote(reason)` call — never automatically, and `reason` cannot be empty. Re-promoting an already-consolidated memory updates the reason without resetting `consolidated_at`. | Assmann: communicative → cultural memory |
+| **Anchors** | A small set of `pin(reason)`-ed memories. Anchors are always surfaced on recall, in full, regardless of query — they do not compete on relevance or recency. **A memory must already be `consolidated` before it can be pinned** — you can't skip from a passing remark to a monument. Exceeding a soft limit (default 12) doesn't block pinning but returns a `warning`, since a large set of "anchors" stops functioning as anchors. | Nora: *lieux de mémoire* |
+| **Provenance tiers** | Every memory carries a tier: `archive` (captured as-is), `testimony` (corroborated by an independent second source — `archive` auto-upgrades to `testimony` on first `corroborate()`), or `interpretation` (the agent's own inference — never auto-upgraded by corroboration; must be periodically re-confirmed via `review()`, and `due_for_review()` surfaces anything overdue). | Ricoeur: archive / testimony / interpretation, forgetting/revision as legitimate |
 
-Not in v0.1 (planned, not yet built): provenance tiers (archive/testimony/interpretation), accountable forgetting.
+All state-changing actions (`promote`, `pin`, `corroborate` when it upgrades, `review`) are written to a single `audit_log` with the reason/note and timestamp — every accountable decision about what became history, and why, is queryable.
+
+Not yet built: active/accountable forgetting (tombstoned removal). Provenance tiers currently cover corroboration-based upgrade and interpretation review; forgetting is a natural next module using the same "requires a reason, logged" pattern.
 
 ## Distribution
 
-MCP Server, Python. Designed to sit as a protocol layer — not a replacement for a storage/embedding backend. v0.1 uses plain SQLite with no embedding dependency by design (recall is anchors-first + substring match); a real backend can be swapped in later without changing the protocol surface.
+MCP Server, Python. Designed to sit as a protocol layer — not a replacement for a storage/embedding backend. v0.2 uses plain SQLite with no embedding dependency by design (recall is anchors-first + substring match); a real backend can be swapped in later without changing the protocol surface.
 
 ## Quick start (local)
 
@@ -50,12 +53,15 @@ Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 
 ### Tools exposed
 
-- `remember(content, source?)` — store a working memory
+- `remember(content, source?, tier?)` — store a memory (`tier`: `archive` default, `testimony`, or `interpretation`)
 - `promote(memory_id, reason)` — consolidate a working memory (reason required)
-- `pin(memory_id, reason)` — mark a memory as an anchor (reason required)
+- `pin(memory_id, reason)` — anchor a **consolidated** memory (reason required; must `promote()` first)
 - `unpin(memory_id)` — remove anchor status (memory itself is kept)
-- `recall(query?, limit?)` — anchors first, then consolidated, then working memories
-- `consolidation_log(limit?)` — full audit trail of every promote/pin decision
+- `corroborate(memory_id, source)` — record an independent source; `archive` → `testimony` on first call
+- `review(memory_id, note)` — re-confirm an `interpretation`-tier memory, resets its review clock
+- `due_for_review(days?)` — list `interpretation` memories overdue for re-examination (default: 30 days)
+- `recall(query?, limit?)` — anchors first, then consolidated, then working memories; also returns `stale_interpretations`
+- `audit_log(limit?)` — full trail of promote/pin/corroborate/review decisions, with reasons
 
 ## Related work
 
