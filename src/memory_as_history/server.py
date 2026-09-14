@@ -1,10 +1,11 @@
 """MCP Server exposing the Memory as History protocol.
 
 Modules:
-  Consolidation (Assmann) — remember() / promote(reason)
-  Anchors (Nora)          — pin(reason) / unpin() / list_anchors()
+  Consolidation (Assmann)    — remember() / promote(reason)
+  Anchors (Nora)             — pin(reason) / unpin() / list_anchors()
   Provenance tiers (Ricoeur) — tier at remember(), corroborate(), review(),
                                 due_for_review()
+  Forgetting (Ricoeur)       — forget(reason) / restore(reason) / list_forgotten()
 
 Tools:
   - remember(content, source?, tier?)   store a memory (tier: archive|testimony|interpretation)
@@ -14,8 +15,11 @@ Tools:
   - corroborate(memory_id, source)      record an independent source; archive -> testimony
   - review(memory_id, note)             re-confirm an interpretation-tier memory
   - due_for_review(days?)               list interpretation memories overdue for review
+  - forget(memory_id, reason)           tombstone a memory (requires reason; unpin first if anchored)
+  - restore(memory_id, reason)          reverse a forgetting decision (requires reason)
+  - list_forgotten(limit?)              list tombstoned memories and why
   - recall(query?, limit?)              anchors first, then consolidated/working memories
-  - audit_log(limit?)                   full trail of promote/pin/corroborate/review actions
+  - audit_log(limit?)                   full trail of promote/pin/corroborate/review/forget/restore
 
 Environment:
   MEMORY_AS_HISTORY_DB   path to the sqlite db (default: ~/.memory-as-history/memory.db)
@@ -98,6 +102,29 @@ def due_for_review(days: int | None = None) -> list[dict]:
     """List interpretation-tier memories overdue for re-examination (default
     threshold: 30 days since last review, or never reviewed)."""
     return store.due_for_review(days)
+
+
+@mcp.tool()
+def forget(memory_id: str, reason: str) -> dict:
+    """Deliberately forget a memory. Not a hard delete: content is retained
+    as a tombstone but disappears from `recall()` and `list_anchors()`.
+    `reason` is required and logged — forgetting is legitimate and
+    accountable, never a silent side-effect. An anchored memory must be
+    `unpin()`-ed first."""
+    return store.forget(memory_id, reason).to_dict()
+
+
+@mcp.tool()
+def restore(memory_id: str, reason: str) -> dict:
+    """Reverse a forgetting decision. Always possible, since forgetting is
+    a tombstone, not a delete. `reason` is required and logged."""
+    return store.restore(memory_id, reason).to_dict()
+
+
+@mcp.tool()
+def list_forgotten(limit: int = 50) -> list[dict]:
+    """List tombstoned memories — what was forgotten, and why."""
+    return store.list_forgotten(limit)
 
 
 @mcp.tool()

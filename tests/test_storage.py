@@ -207,3 +207,117 @@ def test_recall_surfaces_stale_interpretations(store: Store):
     # with default interpretation_review_days=30 and a freshly created memory,
     # it should NOT be stale yet
     assert result["stale_interpretations"] == []
+
+
+# -- forgetting (Ricoeur) -----------------------------------------------------
+
+
+def test_forget_requires_reason(store: Store):
+    mem = store.remember("temporary note")
+    with pytest.raises(ValueError):
+        store.forget(mem.id, reason="  ")
+
+
+def test_forget_unknown_memory_raises(store: Store):
+    with pytest.raises(KeyError):
+        store.forget("nope", reason="x")
+
+
+def test_forget_tombstones_without_deleting(store: Store):
+    mem = store.remember("outdated preference")
+    forgotten = store.forget(mem.id, reason="user explicitly said this no longer applies")
+    assert forgotten.is_forgotten
+    assert forgotten.forgotten_reason.startswith("user explicitly")
+    # content is retained, not deleted
+    assert store.get(mem.id) is not None
+    assert store.get(mem.id).content == "outdated preference"
+
+    log = store.audit_log()
+    assert any(e["action"] == "forget" and e["memory_id"] == mem.id for e in log)
+
+
+def test_forgotten_memory_excluded_from_recall(store: Store):
+    mem = store.remember("to be forgotten, contains keyword zzzsearch")
+    store.forget(mem.id, reason="no longer relevant")
+
+    result = store.recall(query="zzzsearch", limit=10)
+    ids = [m["id"] for m in result["memories"]]
+    assert mem.id not in ids
+
+
+def test_anchored_memory_cannot_be_forgotten_directly(store: Store):
+    mem = store.remember("core identity fact")
+    store.promote(mem.id, reason="r")
+    store.pin(mem.id, reason="identity anchor")
+    with pytest.raises(ValueError):
+        store.forget(mem.id, reason="trying to forget an anchor")
+
+
+def test_unpin_then_forget_works(store: Store):
+    mem = store.remember("core identity fact")
+    store.promote(mem.id, reason="r")
+    store.pin(mem.id, reason="identity anchor")
+    store.unpin(mem.id)
+    forgotten = store.forget(mem.id, reason="identity revised, no longer an anchor")
+    assert forgotten.is_forgotten
+
+
+def test_forgotten_anchor_excluded_from_list_anchors_defensively(store: Store):
+    # even if somehow forgotten while still anchored (shouldn't normally
+    # happen given the guard above), list_anchors must not surface it
+    mem = store.remember("edge case anchor")
+    store.promote(mem.id, reason="r")
+    store.pin(mem.id, reason="anchor")
+    store.unpin(mem.id)
+    store.forget(mem.id, reason="cleanup")
+    assert store.list_anchors() == []
+
+
+def test_forget_twice_updates_reason_without_resetting_timestamp(store: Store):
+    mem = store.remember("x")
+    first = store.forget(mem.id, reason="first reason")
+    second = store.forget(mem.id, reason="better reason")
+    assert first.forgotten_at == second.forgotten_at
+    assert second.forgotten_reason == "better reason"
+
+
+def test_restore_requires_reason(store: Store):
+    mem = store.remember("x")
+    store.forget(mem.id, reason="r")
+    with pytest.raises(ValueError):
+        store.restore(mem.id, reason="")
+
+
+def test_restore_reverses_forgetting_and_logs(store: Store):
+    mem = store.remember("to be restored, contains keyword yyysearch")
+    store.forget(mem.id, reason="mistakenly thought obsolete")
+    restored = store.restore(mem.id, reason="turned out still relevant")
+    assert not restored.is_forgotten
+    assert restored.forgotten_at is None
+
+    result = store.recall(query="yyysearch", limit=10)
+    ids = [m["id"] for m in result["memories"]]
+    assert mem.id in ids
+
+    log = store.audit_log()
+    assert any(e["action"] == "restore" and e["memory_id"] == mem.id for e in log)
+
+
+def test_restore_non_forgotten_memory_raises(store: Store):
+    mem = store.remember("never forgotten")
+    with pytest.raises(ValueError):
+        store.restore(mem.id, reason="x")
+
+
+def test_list_forgotten_returns_tombstones(store: Store):
+    mem = store.remember("gone")
+    store.forget(mem.id, reason="cleanup")
+    tombstones = store.list_forgotten()
+    assert any(t["id"] == mem.id for t in tombstones)
+
+
+def test_due_for_review_excludes_forgotten_interpretations(store: Store):
+    mem = store.remember("inferred summary", tier="interpretation")
+    store.forget(mem.id, reason="superseded by a better summary")
+    stale = store.due_for_review(days=0)
+    assert not any(r["id"] == mem.id for r in stale)

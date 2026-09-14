@@ -16,10 +16,18 @@ Three modules for v0.2:
   inference, which is not self-evidently true and must be periodically
   re-examined). Archive memories can be upgraded to testimony by
   corroboration; interpretation memories must be reviewed on a cadence.
+- Accountable forgetting (Ricoeur): forgetting is treated as a legitimate,
+  deliberate act — not silent deletion and not passive decay. `forget()`
+  requires a reason and leaves a tombstone (the content is retained, not
+  hard-deleted, but disappears from `recall()` and listings). An anchored
+  memory cannot be forgotten directly — it must be `unpin()`-ed first, since
+  identity cornerstones should not quietly disappear. Forgetting is
+  reversible via `restore()`, itself logged with its own reason.
 
 Design principle: every state change that matters (promote, pin, corroborate,
-review) is recorded with a reason/note and a timestamp in a single audit log.
-Nothing is silently reclassified.
+review, forget, restore) is recorded with a reason/note and a timestamp in a
+single audit log. Nothing is silently reclassified, and nothing is silently
+deleted.
 """
 
 from __future__ import annotations
@@ -47,7 +55,9 @@ CREATE TABLE IF NOT EXISTS memories (
     consolidated_at TEXT,
     consolidation_reason TEXT,
     last_reviewed_at TEXT,
-    review_status TEXT                              -- 'current' | 'stale' | NULL
+    review_status TEXT,                             -- 'current' | 'stale' | NULL
+    forgotten_at TEXT,
+    forgotten_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS anchors (
@@ -66,7 +76,7 @@ CREATE TABLE IF NOT EXISTS corroborations (
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
 );
@@ -99,6 +109,12 @@ class Memory:
     consolidation_reason: str | None
     last_reviewed_at: str | None
     review_status: str | None
+    forgotten_at: str | None
+    forgotten_reason: str | None
+
+    @property
+    def is_forgotten(self) -> bool:
+        return self.forgotten_at is not None
 
     def to_dict(self) -> dict:
         return {
@@ -112,6 +128,8 @@ class Memory:
             "consolidation_reason": self.consolidation_reason,
             "last_reviewed_at": self.last_reviewed_at,
             "review_status": self.review_status,
+            "forgotten_at": self.forgotten_at,
+            "forgotten_reason": self.forgotten_reason,
         }
 
 class Store:
@@ -247,11 +265,86 @@ class Store:
         self._conn.execute("DELETE FROM anchors WHERE memory_id=?", (memory_id,))
         self._conn.commit()
 
+    def is_anchored(self, memory_id: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM anchors WHERE memory_id=?", (memory_id,)
+        ).fetchone()
+        return row is not None
+
     def list_anchors(self) -> list[dict]:
         rows = self._conn.execute(
             "SELECT m.*, a.reason AS anchor_reason, a.pinned_at "
             "FROM anchors a JOIN memories m ON m.id = a.memory_id "
+            "WHERE m.forgotten_at IS NULL "
             "ORDER BY a.pinned_at ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- forgetting module (Ricoeur: forgetting as legitimate, not failure) ----
+
+    def forget(self, memory_id: str, reason: str) -> Memory:
+        """Deliberately forget a memory. This is not deletion: the content
+        is retained (a tombstone), but the memory disappears from `recall()`
+        and `list_anchors()`. Requires a non-empty reason, logged in the
+        audit trail — forgetting is a legitimate, accountable act, not a
+        silent side-effect of storage pressure.
+
+        An anchored memory cannot be forgotten directly: call `unpin()`
+        first. Identity cornerstones should not quietly vanish alongside
+        an unrelated forgetting decision — removing an anchor has to be its
+        own, separately reasoned step.
+
+        Forgetting an already-forgotten memory is idempotent-ish: it updates
+        the reason and re-logs the action, but does not change the original
+        `forgotten_at` timestamp."""
+        reason = _require_text(reason, "reason")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        if self.is_anchored(memory_id):
+            raise ValueError(
+                "memory is pinned as an anchor; call unpin() first before "
+                "it can be forgotten"
+            )
+        now = _now()
+        if mem.forgotten_at is None:
+            self._conn.execute(
+                "UPDATE memories SET forgotten_at=?, forgotten_reason=? WHERE id=?",
+                (now, reason, memory_id),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE memories SET forgotten_reason=? WHERE id=?",
+                (reason, memory_id),
+            )
+        self._log(memory_id, "forget", reason)
+        self._conn.commit()
+        return self.get(memory_id)
+
+    def restore(self, memory_id: str, reason: str) -> Memory:
+        """Reverse a forgetting decision. Forgetting in this protocol is not
+        a hard delete, so restoration is always possible and is itself a
+        deliberate, reasoned, logged act — not a bug fix."""
+        reason = _require_text(reason, "reason")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        if mem.forgotten_at is None:
+            raise ValueError("memory is not currently forgotten")
+        self._conn.execute(
+            "UPDATE memories SET forgotten_at=NULL, forgotten_reason=NULL WHERE id=?",
+            (memory_id,),
+        )
+        self._log(memory_id, "restore", reason)
+        self._conn.commit()
+        return self.get(memory_id)
+
+    def list_forgotten(self, limit: int = 50) -> list[dict]:
+        """List tombstoned memories — what was forgotten, and why."""
+        rows = self._conn.execute(
+            "SELECT * FROM memories WHERE forgotten_at IS NOT NULL "
+            "ORDER BY forgotten_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -317,6 +410,7 @@ class Store:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE tier='interpretation' AND "
+            "forgotten_at IS NULL AND "
             "(last_reviewed_at IS NULL OR last_reviewed_at < ?)",
             (cutoff,),
         ).fetchall()
@@ -370,7 +464,7 @@ class Store:
         rest: list[dict] = []
         if remaining:
             rows = self._conn.execute(
-                "SELECT * FROM memories WHERE id NOT IN "
+                "SELECT * FROM memories WHERE forgotten_at IS NULL AND id NOT IN "
                 "(SELECT memory_id FROM anchors) "
                 "ORDER BY status='consolidated' DESC, created_at DESC"
             ).fetchall()

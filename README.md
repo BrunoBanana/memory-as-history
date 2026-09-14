@@ -2,7 +2,7 @@
 
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Status: v0.2 — local prototype, not yet published.**
+**Status: v0.3 — local prototype, not yet published.**
 
 ## Why
 
@@ -17,19 +17,18 @@ Memory studies (Halbwachs, Nora, Assmann, Ricoeur) has spent a century describin
 
 Agent memory today has the storage. It is missing the historiography — the accountable process by which something becomes "remembered" rather than just "logged."
 
-## What (v0.2 scope)
+## What (v0.3 scope)
 
-Three modules, deliberately small and composable:
+Four modules, deliberately small and composable:
 
 | Module | Mechanism | Source theory |
 |---|---|---|
 | **Consolidation** | Memories start as `working`. They only become `consolidated` through an explicit `promote(reason)` call — never automatically, and `reason` cannot be empty. Re-promoting an already-consolidated memory updates the reason without resetting `consolidated_at`. | Assmann: communicative → cultural memory |
 | **Anchors** | A small set of `pin(reason)`-ed memories. Anchors are always surfaced on recall, in full, regardless of query — they do not compete on relevance or recency. **A memory must already be `consolidated` before it can be pinned** — you can't skip from a passing remark to a monument. Exceeding a soft limit (default 12) doesn't block pinning but returns a `warning`, since a large set of "anchors" stops functioning as anchors. | Nora: *lieux de mémoire* |
-| **Provenance tiers** | Every memory carries a tier: `archive` (captured as-is), `testimony` (corroborated by an independent second source — `archive` auto-upgrades to `testimony` on first `corroborate()`), or `interpretation` (the agent's own inference — never auto-upgraded by corroboration; must be periodically re-confirmed via `review()`, and `due_for_review()` surfaces anything overdue). | Ricoeur: archive / testimony / interpretation, forgetting/revision as legitimate |
+| **Provenance tiers** | Every memory carries a tier: `archive` (captured as-is), `testimony` (corroborated by an independent second source — `archive` auto-upgrades to `testimony` on first `corroborate()`), or `interpretation` (the agent's own inference — never auto-upgraded by corroboration; must be periodically re-confirmed via `review()`, and `due_for_review()` surfaces anything overdue). | Ricoeur: archive / testimony / interpretation |
+| **Forgetting** | `forget(reason)` tombstones a memory: content is retained, not hard-deleted, but it disappears from `recall()`, `list_anchors()`, and `due_for_review()`. Requires a non-empty reason. **An anchored memory cannot be forgotten directly** — `unpin()` first, since removing an identity cornerstone should be its own separately-reasoned step, not a side-effect of an unrelated cleanup. Always reversible via `restore(reason)`, itself logged. | Ricoeur: forgetting as necessary and legitimate, not failure |
 
-All state-changing actions (`promote`, `pin`, `corroborate` when it upgrades, `review`) are written to a single `audit_log` with the reason/note and timestamp — every accountable decision about what became history, and why, is queryable.
-
-Not yet built: active/accountable forgetting (tombstoned removal). Provenance tiers currently cover corroboration-based upgrade and interpretation review; forgetting is a natural next module using the same "requires a reason, logged" pattern.
+All state-changing actions (`promote`, `pin`, `corroborate` when it upgrades, `review`, `forget`, `restore`) are written to a single `audit_log` with the reason/note and timestamp — every accountable decision about what became history, and why, is queryable.
 
 ## Distribution
 
@@ -60,8 +59,11 @@ Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 - `corroborate(memory_id, source)` — record an independent source; `archive` → `testimony` on first call
 - `review(memory_id, note)` — re-confirm an `interpretation`-tier memory, resets its review clock
 - `due_for_review(days?)` — list `interpretation` memories overdue for re-examination (default: 30 days)
+- `forget(memory_id, reason)` — tombstone a memory (reason required; must `unpin()` first if anchored)
+- `restore(memory_id, reason)` — reverse a forgetting decision (reason required)
+- `list_forgotten(limit?)` — list tombstoned memories and why
 - `recall(query?, limit?)` — anchors first, then consolidated, then working memories; also returns `stale_interpretations`
-- `audit_log(limit?)` — full trail of promote/pin/corroborate/review decisions, with reasons
+- `audit_log(limit?)` — full trail of promote/pin/corroborate/review/forget/restore decisions, with reasons
 
 ## Related work
 
