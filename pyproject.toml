@@ -1,0 +1,20 @@
+[project]
+name = "memory-as-history"
+version = "0.1.0"
+description = "Agent memory as history: consolidation and anchor memory, grounded in memory studies (Halbwachs, Nora, Assmann, Ricoeur). MCP Server for Claude Code / Cursor."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "mcp>=1.2.0",
+]
+
+[project.scripts]
+memory-as-history = "memory_as_history.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/memory_as_history"]
