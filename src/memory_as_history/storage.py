@@ -45,6 +45,16 @@ Three modules for v0.2:
   has a history: not just who the user currently is, but how that account
   changed over time, and why. `recall()` surfaces the current narrative
   alongside the discrete memory list.
+- Canon / archive circulation (Assmann: Kanon/Archiv — distinct from Nora's
+  permanent anchors): a *task-scoped*, rotating "canon" — the small, active
+  set of memories relevant to whatever the current task/phase is.
+  `canonize(memory_id, scope, reason)` marks a memory active within a named
+  scope; when the task shifts, `end_scope(scope, reason)` (or
+  `rotate_canon()`) moves the scope's members out of the canon back into
+  ordinary long-term memory — not forgotten, not downgraded to working,
+  just no longer prioritized on `recall()`. Solves the context-bloat
+  problem that permanent anchors can't: "prioritize what's relevant right
+  now", without the everything-is-an-anchor trap.
 
 Design principle: every state change that matters (promote, pin, corroborate,
 review, forget, restore, narrate) is recorded with a reason/note and a
@@ -81,6 +91,7 @@ def _locked(method):
 DEFAULT_DB_PATH = Path.home() / ".memory-as-history" / "memory.db"
 DEFAULT_ANCHOR_SOFT_LIMIT = 12
 DEFAULT_INTERPRETATION_REVIEW_DAYS = 30
+DEFAULT_CANON_SOFT_LIMIT = 8
 
 TIERS = ("archive", "testimony", "interpretation")
 
@@ -117,7 +128,7 @@ CREATE TABLE IF NOT EXISTS corroborations (
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied' | 'narrate'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied' | 'narrate' | 'canonize' | 'end_scope' | 'decanonize'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
 );
@@ -130,6 +141,15 @@ CREATE TABLE IF NOT EXISTS narratives (
     created_at TEXT NOT NULL,
     superseded_at TEXT,          -- NULL while this is the current narrative
     superseded_by TEXT REFERENCES narratives(id)
+);
+
+CREATE TABLE IF NOT EXISTS canon_entries (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL REFERENCES memories(id),
+    scope TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    canonized_at TEXT NOT NULL,
+    decommissioned_at TEXT          -- NULL while this entry is in the active canon
 );
 """
 
@@ -195,6 +215,7 @@ class Store:
         db_path: Path | str = DEFAULT_DB_PATH,
         anchor_soft_limit: int = DEFAULT_ANCHOR_SOFT_LIMIT,
         interpretation_review_days: int = DEFAULT_INTERPRETATION_REVIEW_DAYS,
+        canon_soft_limit: int = DEFAULT_CANON_SOFT_LIMIT,
     ):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -212,6 +233,7 @@ class Store:
         self._lock = threading.RLock()
         self.anchor_soft_limit = anchor_soft_limit
         self.interpretation_review_days = interpretation_review_days
+        self.canon_soft_limit = canon_soft_limit
 
     def close(self) -> None:
         with self._lock:
@@ -654,6 +676,165 @@ class Store:
         ).fetchall()
         return [self._narrative_to_dict(r) for r in rows]
 
+    # -- canon / archive circulation module (Assmann: Kanon/Archiv) -------------
+
+    @_locked
+    def canonize(self, memory_id: str, scope: str, reason: str) -> dict:
+        """Add a memory to the active canon within a named task scope. The
+        canon is the small, rotating set of memories relevant to whatever
+        the current task/phase is — distinct from permanent anchors (Nora),
+        which never compete on recency. When the task shifts, entries exit
+        the canon back into ordinary long-term memory via `end_scope()` —
+        not forgotten, not downgraded to working, just no longer prioritized.
+
+        Requires a `consolidated` memory (same prerequisite as anchors:
+        the canon draws from things that have already become history, not
+        from passing remarks). Requires a non-empty reason, logged.
+
+        Exceeding `canon_soft_limit` does not block, but returns a warning —
+        a large canon stops functioning as a focused, active set."""
+        scope = _require_text(scope, "scope")
+        reason = _require_text(reason, "reason")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        if mem.is_forgotten:
+            raise ValueError("cannot canonize a forgotten memory; restore() it first")
+        if mem.status != "consolidated":
+            raise ValueError(
+                "memory must be consolidated (call promote() first) before "
+                "it can enter the canon"
+            )
+        # already in the canon for this scope?
+        existing = self._conn.execute(
+            "SELECT id FROM canon_entries WHERE memory_id=? AND scope=? AND "
+            "decommissioned_at IS NULL",
+            (memory_id, scope),
+        ).fetchone()
+        if existing:
+            raise ValueError(
+                f"memory is already in the active canon for scope {scope!r}"
+            )
+        now = _now()
+        self._conn.execute(
+            "INSERT INTO canon_entries (id, memory_id, scope, reason, canonized_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (_new_id(), memory_id, scope, reason, now),
+        )
+        self._log(memory_id, "canonize", f"scope={scope}: {reason}")
+        self._conn.commit()
+
+        count = self._conn.execute(
+            "SELECT COUNT(*) FROM canon_entries WHERE decommissioned_at IS NULL"
+        ).fetchone()[0]
+        result = {"memory_id": memory_id, "scope": scope, "reason": reason,
+                  "canonized_at": now}
+        if count > self.canon_soft_limit:
+            result["warning"] = (
+                f"{count} active canon entries, exceeding the soft limit of "
+                f"{self.canon_soft_limit}. The canon works as a focused active "
+                f"set only while it stays small — consider ending a scope or "
+                f"decannonizing entries that are no longer task-relevant."
+            )
+        return result
+
+    @_locked
+    def decanonize(self, memory_id: str, scope: str | None = None,
+                   reason: str = "") -> dict:
+        """Remove a memory from the active canon (all scopes, or a specific
+        one). The memory itself is untouched — it stays consolidated (or
+        whatever its status/tier was); only its prioritization ends.
+        Requires a reason, logged."""
+        reason = _require_text(reason, "reason")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        if scope is None:
+            rows = self._conn.execute(
+                "SELECT * FROM canon_entries WHERE memory_id=? AND "
+                "decommissioned_at IS NULL",
+                (memory_id,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM canon_entries WHERE memory_id=? AND scope=? AND "
+                "decommissioned_at IS NULL",
+                (memory_id, scope),
+            ).fetchall()
+        if not rows:
+            raise ValueError(
+                "memory has no active canon entries"
+                + (f" for scope {scope!r}" if scope else "")
+            )
+        now = _now()
+        self._conn.executemany(
+            "UPDATE canon_entries SET decommissioned_at=? WHERE id=?",
+            [(now, r["id"]) for r in rows],
+        )
+        self._log(
+            memory_id,
+            "decanonize",
+            (f"scope={scope}: " if scope else "all scopes: ") + reason,
+        )
+        self._conn.commit()
+        return {"memory_id": memory_id, "decommissioned": len(rows),
+                "scope": scope, "reason": reason}
+
+    @_locked
+    def end_scope(self, scope: str, reason: str) -> dict:
+        """Task/phase is over: move the entire scope's canon back into
+        ordinary long-term memory in one operation. Entries are not
+        forgotten or downgraded — they just stop being prioritized on
+        recall. Requires a reason, logged for each affected memory."""
+        scope = _require_text(scope, "scope")
+        reason = _require_text(reason, "reason")
+        rows = self._conn.execute(
+            "SELECT * FROM canon_entries WHERE scope=? AND decommissioned_at "
+            "IS NULL",
+            (scope,),
+        ).fetchall()
+        if not rows:
+            raise ValueError(f"scope {scope!r} has no active canon entries")
+        now = _now()
+        self._conn.executemany(
+            "UPDATE canon_entries SET decommissioned_at=? WHERE id=?",
+            [(now, r["id"]) for r in rows],
+        )
+        for r in rows:
+            self._log(r["memory_id"], "end_scope", f"scope={scope}: {reason}")
+        self._conn.commit()
+        return {"scope": scope, "decommissioned": len(rows), "reason": reason}
+
+    @_locked
+    def list_canon(self, scope: str | None = None) -> list[dict]:
+        """List active canon entries, optionally filtered by scope."""
+        if scope is None:
+            rows = self._conn.execute(
+                "SELECT c.*, m.content, m.status, m.tier "
+                "FROM canon_entries c JOIN memories m ON m.id = c.memory_id "
+                "WHERE c.decommissioned_at IS NULL AND m.forgotten_at IS NULL "
+                "ORDER BY c.canonized_at ASC"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT c.*, m.content, m.status, m.tier "
+                "FROM canon_entries c JOIN memories m ON m.id = c.memory_id "
+                "WHERE c.decommissioned_at IS NULL AND m.forgotten_at IS NULL "
+                "AND c.scope=? "
+                "ORDER BY c.canonized_at ASC",
+                (scope,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    @_locked
+    def active_scopes(self) -> list[str]:
+        """List distinct scopes that currently have active canon entries."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT scope FROM canon_entries WHERE decommissioned_at "
+            "IS NULL ORDER BY scope"
+        ).fetchall()
+        return [r["scope"] for r in rows]
+
     # -- audit ------------------------------------------------------------------
 
     @_locked
@@ -686,7 +867,10 @@ class Store:
         due for review, so callers can prompt for re-examination. And
         `narrative`: the current narrative synthesis from `narrate()`, if
         one has ever been submitted, alongside the discrete memory list —
-        recall gives both the story and the raw facts it was built from."""
+        recall gives both the story and the raw facts it was built from.
+        And `canon`: the active, task-scoped canon entries (Assmann), which
+        are prioritized like anchors but are expected to rotate as tasks
+        change — unlike permanent anchors."""
         anchors = self.list_anchors()
 
         def _match(row: sqlite3.Row) -> bool:
@@ -710,6 +894,7 @@ class Store:
 
         return {
             "anchors": anchors,
+            "canon": self.list_canon(),
             "memories": rest,
             "stale_interpretations": self.due_for_review(),
             "narrative": self.current_narrative(),

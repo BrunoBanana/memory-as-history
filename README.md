@@ -2,7 +2,7 @@
 
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Status: v0.6 — local prototype, not yet published.**
+**Status: v0.7 — local prototype, not yet published.**
 
 ## Why
 
@@ -17,9 +17,9 @@ Memory studies (Halbwachs, Nora, Assmann, Ricoeur) has spent a century describin
 
 Agent memory today has the storage. It is missing the historiography — the accountable process by which something becomes "remembered" rather than just "logged."
 
-## What (v0.6 scope)
+## What (v0.7 scope)
 
-Six modules, deliberately small and composable:
+Seven modules, deliberately small and composable:
 
 | Module | Mechanism | Source theory |
 |---|---|---|
@@ -29,6 +29,7 @@ Six modules, deliberately small and composable:
 | **Forgetting** | `forget(reason)` tombstones a memory: content is retained, not hard-deleted, but it disappears from `recall()`, `list_anchors()`, and `due_for_review()`. Requires a non-empty reason. **An anchored memory cannot be forgotten directly** — `unpin()` first, since removing an identity cornerstone should be its own separately-reasoned step, not a side-effect of an unrelated cleanup. Always reversible via `restore(reason)`, itself logged. | Ricoeur: forgetting as necessary and legitimate, not failure |
 | **Source criticism (memory-poisoning defense)** | A memory can be flagged `security_sensitive` (at `remember()` time, or later via `flag_sensitive(reason)`) when it touches identity, permissions, or standing instructions. `pin()` on a security-sensitive memory additionally requires at least one `corroborate()` from a source *distinct* from the memory's own `source` — otherwise it raises `PermissionError` and logs a `pin_denied` audit entry. A single untrusted claim (e.g. injected via a fetched document or tool output, asserting "the developer said...") can still be *remembered*, but cannot promote itself into a permanent, always-surfaced anchor on its own say-so. | Ricoeur: *l'abus de mémoire* — historiography does not take a single, uncorroborated testimony as settled fact |
 | **Narrative integration** | A plain store cannot compose a narrative itself — that requires judgment and language. `narrate(content, reason, memory_ids?)` gives the *synthesis* a first-class, versioned, accountable existence: an agent reads `recall()`, composes a coherent account of who the user is, and submits it here. The previous current narrative is not deleted, only marked superseded (linked via `superseded_by`) — so the story itself has a history, not just its latest version. `recall()` surfaces the current narrative alongside the discrete memory list. | Ricoeur: *identité narrative* — identity is not a pile of facts but a story that organizes them |
+| **Canon / archive circulation** | A *task-scoped*, rotating "canon" — distinct from permanent anchors. `canonize(memory_id, scope, reason)` adds a consolidated memory to the active canon for a named task/phase; `end_scope(scope, reason)` decommissions the whole scope at once when the task ends, and `decanonize(memory_id, scope?, reason)` removes a single memory. Exiting the canon is **not** forgetting and **not** downgrading to working — entries stay consolidated, they just stop being prioritized. Solves context bloat without the everything-is-an-anchor trap. | Assmann: *Kanon/Archiv* — a small active canon rotates as tasks change; leaving the canon means going to sleep in the archive, not being erased |
 
 All state-changing actions (`promote`, `pin`, `corroborate` when it upgrades, `review`, `forget`, `restore`) are written to a single `audit_log` with the reason/note and timestamp — every accountable decision about what became history, and why, is queryable.
 
@@ -67,6 +68,9 @@ Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 - `remember(..., security_sensitive?)` / `flag_sensitive(memory_id, reason)` — mark identity/permission/instruction-like content as sensitive; raises the bar for `pin()`
 - `narrate(content, reason, memory_ids?)` — submit the current narrative synthesis (reason required); previous narrative is superseded, not deleted
 - `current_narrative()` / `narrative_history(limit?)` — the current narrative, or the full version history of how the story has been told and re-told
+- `canonize(memory_id, scope, reason)` — add a consolidated memory to the task-scoped active canon (reason required)
+- `decanonize(memory_id, scope?, reason)` / `end_scope(scope, reason)` — remove memory(ies) from the canon; the memory itself is untouched
+- `list_canon(scope?)` / `active_scopes()` — inspect the active canon
 - `recall(query?, limit?)` — anchors first, then consolidated, then working memories; also returns `stale_interpretations`
 - `audit_log(limit?)` — full trail of promote/pin/corroborate/review/forget/restore decisions, with reasons
 
@@ -118,7 +122,6 @@ to calls that are actually made.
 
 ## Roadmap: further modules motivated by memory studies, not yet built
 
-- **Canon/archive circulation** (Assmann: *Kanon/Archiv*) — a *task-scoped*, rotating "canon" distinct from permanent anchors: memories currently active for the task at hand get priority, and roll back to dormant "archive" (not forgotten, not anchored) when the task shifts.
 - **Social framing / multi-perspective memory** (Halbwachs: *cadres sociaux*) — for future multi-agent/team scenarios, retaining multiple valid "framed" versions of a fact instead of silently overwriting on conflict.
 
 ## Related work

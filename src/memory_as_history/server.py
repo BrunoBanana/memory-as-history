@@ -10,6 +10,8 @@ Modules:
                                 security_sensitive flag + corroboration gate on pin()
   Narrative integration (Ricoeur: identité narrative) — narrate() / current_narrative()
                                 / narrative_history()
+  Canon / archive circulation (Assmann: Kanon/Archiv) — canonize(scope) / decanonize()
+                                / end_scope() / list_canon() / active_scopes()
 
 Tools:
   - remember(content, source?, tier?, security_sensitive?)  store a memory
@@ -28,7 +30,12 @@ Tools:
   - narrate(content, reason, memory_ids?)  submit the current narrative synthesis (requires reason)
   - current_narrative()                 the current narrative, or null if none submitted yet
   - narrative_history(limit?)           past narrative versions, most recent first
-  - recall(query?, limit?)              anchors first, then consolidated/working memories, plus current narrative
+  - canonize(memory_id, scope, reason)  add a consolidated memory to the active canon (requires reason)
+  - decanonize(memory_id, scope?, reason) remove a memory from the canon (requires reason)
+  - end_scope(scope, reason)            task over: decommission a whole scope's canon (requires reason)
+  - list_canon(scope?)                  active canon entries, optionally by scope
+  - active_scopes()                     scopes that currently have active canon entries
+  - recall(query?, limit?)              anchors + canon first, then consolidated/working memories, plus current narrative
   - audit_log(limit?)                   full trail of every accountable decision
 
 Environment:
@@ -198,12 +205,57 @@ def narrative_history(limit: int = 20) -> list[dict]:
 
 
 @mcp.tool()
+def canonize(memory_id: str, scope: str, reason: str) -> dict:
+    """Add a memory to the active canon within a named task scope. The canon
+    is the small, rotating set of memories relevant to the current task —
+    distinct from permanent anchors, which never compete on recency. When
+    the task shifts, entries exit the canon via `end_scope()` (or
+    `decanonize()` for a single memory) — not forgotten, not downgraded to
+    working, just no longer prioritized on recall.
+
+    Requires a consolidated memory (call `promote()` first — same
+    prerequisite as anchors). `reason` is required and logged. Exceeding the
+    canon soft limit returns a `warning` rather than blocking."""
+    return store.canonize(memory_id, scope, reason)
+
+
+@mcp.tool()
+def decanonize(memory_id: str, scope: str | None = None, reason: str = "") -> dict:
+    """Remove a memory from the active canon (all scopes, or a specific
+    one). The memory itself is untouched — only its prioritization ends.
+    `reason` is required and logged."""
+    return store.decanonize(memory_id, scope, reason)
+
+
+@mcp.tool()
+def end_scope(scope: str, reason: str) -> dict:
+    """Task/phase is over: move an entire scope's canon back into ordinary
+    long-term memory in one operation. Entries are not forgotten or
+    downgraded — they just stop being prioritized on recall. `reason` is
+    required and logged."""
+    return store.end_scope(scope, reason)
+
+
+@mcp.tool()
+def list_canon(scope: str | None = None) -> list[dict]:
+    """List active canon entries, optionally filtered by scope."""
+    return store.list_canon(scope)
+
+
+@mcp.tool()
+def active_scopes() -> list[str]:
+    """List distinct scopes that currently have active canon entries."""
+    return store.active_scopes()
+
+
+@mcp.tool()
 def recall(query: str | None = None, limit: int = 10) -> dict:
-    """Recall memories. Anchors are always returned in full regardless of
-    query. Remaining slots are filled by consolidated memories first, then
-    working memories, newest first, optionally filtered by `query`. Also
-    returns `stale_interpretations` due for review, and `narrative`: the
-    current narrative synthesis (or null if none has been submitted)."""
+    """Recall memories. Anchors and active canon entries are always returned
+    in full regardless of query. Remaining slots are filled by consolidated
+    memories first, then working memories, newest first, optionally filtered
+    by `query`. Also returns `stale_interpretations` due for review, and
+    `narrative`: the current narrative synthesis (or null if none has been
+    submitted)."""
     return store.recall(query, limit)
 
 

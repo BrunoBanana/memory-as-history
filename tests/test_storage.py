@@ -508,3 +508,184 @@ def test_recall_narrative_reflects_latest_after_supersede(store: Store):
     store.narrate("new story", reason="r2")
     result = store.recall(limit=5)
     assert result["narrative"]["content"] == "new story"
+
+
+# -- canon / archive circulation (Assmann: Kanon/Archiv) ----------------------
+
+
+@pytest.fixture()
+def store_canon():
+    with tempfile.TemporaryDirectory() as d:
+        s = Store(
+            Path(d) / "canon.db",
+            anchor_soft_limit=2,
+            canon_soft_limit=3,
+        )
+        yield s
+        s.close()
+
+
+def _promoted(store, content):
+    m = store.remember(content)
+    store.promote(m.id, reason="for canon test")
+    return m
+
+
+def test_canonize_requires_consolidation(store_canon: Store):
+    m = store_canon.remember("task-relevant detail")
+    with pytest.raises(ValueError):
+        store_canon.canonize(m.id, scope="proj-A", reason="relevant this sprint")
+
+
+def test_canonize_adds_to_active_canon_and_logs(store_canon: Store):
+    m = _promoted(store_canon, "A project deadline is Friday")
+    result = store_canon.canonize(m.id, scope="proj-A", reason="current sprint focus")
+    assert result["memory_id"] == m.id
+    assert result["scope"] == "proj-A"
+    assert "warning" not in result
+
+    canon = store_canon.list_canon()
+    assert len(canon) == 1
+    assert canon[0]["memory_id"] == m.id
+    assert canon[0]["content"] == "A project deadline is Friday"
+
+    log = store_canon.audit_log()
+    assert any(e["action"] == "canonize" and "proj-A" in e["reason"] for e in log)
+
+
+def test_canonize_unknown_memory_raises(store_canon: Store):
+    with pytest.raises(KeyError):
+        store_canon.canonize("nope", scope="s", reason="r")
+
+
+def test_canonize_forgotten_memory_raises(store_canon: Store):
+    m = _promoted(store_canon, "forgotten fact")
+    store_canon.forget(m.id, reason="no longer relevant")
+    with pytest.raises(ValueError):
+        store_canon.canonize(m.id, scope="proj-A", reason="trying to canonize forgotten")
+
+
+def test_canonize_duplicate_in_same_scope_raises(store_canon: Store):
+    m = _promoted(store_canon, "x")
+    store_canon.canonize(m.id, scope="proj-A", reason="first")
+    with pytest.raises(ValueError):
+        store_canon.canonize(m.id, scope="proj-A", reason="duplicate")
+
+
+def test_canonize_same_memory_in_different_scopes_ok(store_canon: Store):
+    m = _promoted(store_canon, "shared context")
+    store_canon.canonize(m.id, scope="proj-A", reason="r")
+    store_canon.canonize(m.id, scope="proj-B", reason="r")
+    canon = store_canon.list_canon()
+    assert len(canon) == 2
+    scopes = {c["scope"] for c in canon}
+    assert scopes == {"proj-A", "proj-B"}
+
+
+def test_canonize_requires_non_empty_scope_and_reason(store_canon: Store):
+    m = _promoted(store_canon, "x")
+    with pytest.raises(ValueError):
+        store_canon.canonize(m.id, scope="  ", reason="r")
+    with pytest.raises(ValueError):
+        store_canon.canonize(m.id, scope="s", reason="  ")
+
+
+def test_canonize_warns_past_soft_limit(store_canon: Store):
+    # fixture uses canon_soft_limit=3
+    ids = [_promoted(store_canon, f"task fact {i}").id for i in range(4)]
+    store_canon.canonize(ids[0], scope="s", reason="r")
+    store_canon.canonize(ids[1], scope="s", reason="r")
+    store_canon.canonize(ids[2], scope="s", reason="r")
+    result4 = store_canon.canonize(ids[3], scope="s", reason="r")
+    assert "warning" in result4
+
+
+def test_decanonize_removes_from_canon_but_keeps_memory(store_canon: Store):
+    m = _promoted(store_canon, "temporarily prioritized")
+    store_canon.canonize(m.id, scope="proj-A", reason="r")
+    result = store_canon.decanonize(m.id, scope="proj-A", reason="no longer relevant")
+    assert result["decommissioned"] == 1
+    assert store_canon.list_canon() == []
+    # memory itself untouched
+    fetched = store_canon.get(m.id)
+    assert fetched.status == "consolidated"
+
+
+def test_decanonize_all_scopes_when_scope_none(store_canon: Store):
+    m = _promoted(store_canon, "in two scopes")
+    store_canon.canonize(m.id, scope="proj-A", reason="r")
+    store_canon.canonize(m.id, scope="proj-B", reason="r")
+    result = store_canon.decanonize(m.id, reason="dropping from all")
+    assert result["decommissioned"] == 2
+    assert store_canon.list_canon() == []
+
+
+def test_decanonize_requires_reason(store_canon: Store):
+    m = _promoted(store_canon, "x")
+    store_canon.canonize(m.id, scope="s", reason="r")
+    with pytest.raises(ValueError):
+        store_canon.decanonize(m.id, reason="")
+
+
+def test_decanonize_not_in_canon_raises(store_canon: Store):
+    m = _promoted(store_canon, "never canonized")
+    with pytest.raises(ValueError):
+        store_canon.decanonize(m.id, reason="r")
+
+
+def test_end_scope_decommissions_entire_scope(store_canon: Store):
+    ids = [_promoted(store_canon, f"A fact {i}").id for i in range(3)]
+    other = _promoted(store_canon, "B fact")
+    for mid in ids:
+        store_canon.canonize(mid, scope="proj-A", reason="r")
+    store_canon.canonize(other.id, scope="proj-B", reason="r")
+
+    result = store_canon.end_scope("proj-A", reason="sprint ended")
+    assert result["decommissioned"] == 3
+
+    assert store_canon.list_canon(scope="proj-A") == []
+    remaining = store_canon.list_canon(scope="proj-B")
+    assert len(remaining) == 1
+    assert remaining[0]["memory_id"] == other.id
+
+    log = store_canon.audit_log()
+    assert sum(1 for e in log if e["action"] == "end_scope") == 3
+
+
+def test_end_scope_empty_scope_raises(store_canon: Store):
+    with pytest.raises(ValueError):
+        store_canon.end_scope("nonexistent", reason="r")
+
+
+def test_end_scope_requires_reason(store_canon: Store):
+    m = _promoted(store_canon, "x")
+    store_canon.canonize(m.id, scope="s", reason="r")
+    with pytest.raises(ValueError):
+        store_canon.end_scope("s", reason="  ")
+
+
+def test_active_scopes(store_canon: Store):
+    a = _promoted(store_canon, "a")
+    b = _promoted(store_canon, "b")
+    store_canon.canonize(a.id, scope="proj-A", reason="r")
+    store_canon.canonize(b.id, scope="proj-B", reason="r")
+    assert sorted(store_canon.active_scopes()) == ["proj-A", "proj-B"]
+    store_canon.end_scope("proj-A", reason="done")
+    assert store_canon.active_scopes() == ["proj-B"]
+
+
+def test_recall_surfaces_canon_entries(store_canon: Store):
+    m = _promoted(store_canon, "current task context: analyzing Q3 metrics")
+    store_canon.canonize(m.id, scope="q3-analysis", reason="active task")
+    result = store_canon.recall(limit=5)
+    assert "canon" in result
+    canon_ids = [c["memory_id"] for c in result["canon"]]
+    assert m.id in canon_ids
+
+
+def test_recall_canon_excludes_forgotten_entries(store_canon: Store):
+    m = _promoted(store_canon, "will be forgotten")
+    store_canon.canonize(m.id, scope="s", reason="r")
+    store_canon.forget(m.id, reason="no longer true")
+    canon = store_canon.list_canon()
+    assert not any(c["memory_id"] == m.id for c in canon)
