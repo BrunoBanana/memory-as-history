@@ -2,7 +2,7 @@
 
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Status: v0.7 — local prototype, not yet published.**
+**Status: v0.8 — local prototype, not yet published.**
 
 ## Why
 
@@ -17,9 +17,9 @@ Memory studies (Halbwachs, Nora, Assmann, Ricoeur) has spent a century describin
 
 Agent memory today has the storage. It is missing the historiography — the accountable process by which something becomes "remembered" rather than just "logged."
 
-## What (v0.7 scope)
+## What (v0.8 scope)
 
-Seven modules, deliberately small and composable:
+Eight modules, deliberately small and composable:
 
 | Module | Mechanism | Source theory |
 |---|---|---|
@@ -30,6 +30,7 @@ Seven modules, deliberately small and composable:
 | **Source criticism (memory-poisoning defense)** | A memory can be flagged `security_sensitive` (at `remember()` time, or later via `flag_sensitive(reason)`) when it touches identity, permissions, or standing instructions. `pin()` on a security-sensitive memory additionally requires at least one `corroborate()` from a source *distinct* from the memory's own `source` — otherwise it raises `PermissionError` and logs a `pin_denied` audit entry. A single untrusted claim (e.g. injected via a fetched document or tool output, asserting "the developer said...") can still be *remembered*, but cannot promote itself into a permanent, always-surfaced anchor on its own say-so. | Ricoeur: *l'abus de mémoire* — historiography does not take a single, uncorroborated testimony as settled fact |
 | **Narrative integration** | A plain store cannot compose a narrative itself — that requires judgment and language. `narrate(content, reason, memory_ids?)` gives the *synthesis* a first-class, versioned, accountable existence: an agent reads `recall()`, composes a coherent account of who the user is, and submits it here. The previous current narrative is not deleted, only marked superseded (linked via `superseded_by`) — so the story itself has a history, not just its latest version. `recall()` surfaces the current narrative alongside the discrete memory list. | Ricoeur: *identité narrative* — identity is not a pile of facts but a story that organizes them |
 | **Canon / archive circulation** | A *task-scoped*, rotating "canon" — distinct from permanent anchors. `canonize(memory_id, scope, reason)` adds a consolidated memory to the active canon for a named task/phase; `end_scope(scope, reason)` decommissions the whole scope at once when the task ends, and `decanonize(memory_id, scope?, reason)` removes a single memory. Exiting the canon is **not** forgetting and **not** downgrading to working — entries stay consolidated, they just stop being prioritized. Solves context bloat without the everything-is-an-anchor trap. | Assmann: *Kanon/Archiv* — a small active canon rotates as tasks change; leaving the canon means going to sleep in the archive, not being erased |
+| **Social framing / multi-perspective memory** | Memories can carry a `frame` (at `remember()` time, or later via `set_frame(id, frame, reason)`) — the social/relational context they belong to. When two framed memories disagree, `mark_conflict(a, b, reason)` records the pair as conflicting versions; **neither is deleted or overwritten**. `resolve_conflict(reason, adopted_memory_id?)` closes the conflict record (which version adopted, or merged, or deferred) while both versions stay in the store. `recall()` surfaces open conflicts explicitly, and supports a `frame` filter. | Halbwachs: *cadres sociaux* — memory is always framed by the group/context it was formed in; disagreement across frames is legitimate and should be surfaced, not silently overwritten |
 
 All state-changing actions (`promote`, `pin`, `corroborate` when it upgrades, `review`, `forget`, `restore`) are written to a single `audit_log` with the reason/note and timestamp — every accountable decision about what became history, and why, is queryable.
 
@@ -71,6 +72,9 @@ Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 - `canonize(memory_id, scope, reason)` — add a consolidated memory to the task-scoped active canon (reason required)
 - `decanonize(memory_id, scope?, reason)` / `end_scope(scope, reason)` — remove memory(ies) from the canon; the memory itself is untouched
 - `list_canon(scope?)` / `active_scopes()` — inspect the active canon
+- `remember(..., frame?)` / `set_frame(memory_id, frame, reason)` — assign a memory's social frame (reason required for re-framing)
+- `list_frames()` — distinct frames currently in use
+- `mark_conflict(a, b, reason)` / `resolve_conflict(conflict_id, reason, adopted_memory_id?)` / `list_conflicts(resolved?)` — declare and settle conflicting framed versions without deleting either
 - `recall(query?, limit?)` — anchors first, then consolidated, then working memories; also returns `stale_interpretations`
 - `audit_log(limit?)` — full trail of promote/pin/corroborate/review/forget/restore decisions, with reasons
 
@@ -120,9 +124,13 @@ limitation of relying on agent judgment rather than deterministic rules to
 decide *when* to invoke the protocol — the protocol's guarantees only apply
 to calls that are actually made.
 
-## Roadmap: further modules motivated by memory studies, not yet built
+## Roadmap
 
-- **Social framing / multi-perspective memory** (Halbwachs: *cadres sociaux*) — for future multi-agent/team scenarios, retaining multiple valid "framed" versions of a fact instead of silently overwriting on conflict.
+All four planned memory-studies modules are now built (consolidation, anchors, provenance tiers, forgetting, source criticism, narrative integration, canon circulation, social framing). Open next steps are engineering-facing rather than conceptual: embedding-backed recall (replace the naive substring match), client-side distribution polish, and evaluating whether agent-side invocation guidance can be made more reliable than trigger-word heuristics.
+
+### Note on schema migrations
+
+Databases created by older versions are upgraded in place on first open (additive columns only, checked via `PRAGMA table_info` — never destructive). This path is covered by a test that builds a pre-v0.5 database by hand and verifies it opens cleanly.
 
 ## Related work
 

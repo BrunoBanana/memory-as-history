@@ -55,11 +55,23 @@ Three modules for v0.2:
   just no longer prioritized on `recall()`. Solves the context-bloat
   problem that permanent anchors can't: "prioritize what's relevant right
   now", without the everything-is-an-anchor trap.
+- Social framing / multi-perspective memory (Halbwachs: cadres sociaux —
+  memory is always framed by the social group/context in which it was
+  formed; there is no frame-free memory): memories can carry a `frame`
+  (the relational/social context the memory belongs to, e.g. "team-alpha",
+  "collab-with-B", "project-x"). Two memories about the same subject may
+  legitimately disagree across frames — instead of silently overwriting
+  the older version, `mark_conflict(a, b, reason)` declares the pair as
+  conflicting framed versions, both retained. `resolve_conflict(...)`
+  records how the conflict was settled (which version adopted, or merged,
+  or deferred) without deleting the losing version. `recall()` surfaces
+  open conflicts explicitly, and can be filtered by `frame`.
 
 Design principle: every state change that matters (promote, pin, corroborate,
-review, forget, restore, narrate) is recorded with a reason/note and a
-timestamp in a single audit log. Nothing is silently reclassified, and
-nothing is silently deleted.
+review, forget, restore, narrate, canonize, decanonize, end_scope,
+flag_sensitive, mark_conflict, resolve_conflict, set_frame) is recorded with
+a reason/note and a timestamp in a single audit log. Nothing is silently
+reclassified, and nothing is silently deleted.
 """
 
 from __future__ import annotations
@@ -109,7 +121,8 @@ CREATE TABLE IF NOT EXISTS memories (
     review_status TEXT,                             -- 'current' | 'stale' | NULL
     forgotten_at TEXT,
     forgotten_reason TEXT,
-    security_sensitive INTEGER NOT NULL DEFAULT 0
+    security_sensitive INTEGER NOT NULL DEFAULT 0,
+    frame TEXT                     -- social/relational frame the memory belongs to (Halbwachs)
 );
 
 CREATE TABLE IF NOT EXISTS anchors (
@@ -128,7 +141,7 @@ CREATE TABLE IF NOT EXISTS corroborations (
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied' | 'narrate' | 'canonize' | 'end_scope' | 'decanonize'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied' | 'narrate' | 'canonize' | 'end_scope' | 'decanonize' | 'set_frame' | 'mark_conflict' | 'resolve_conflict'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
 );
@@ -151,7 +164,28 @@ CREATE TABLE IF NOT EXISTS canon_entries (
     canonized_at TEXT NOT NULL,
     decommissioned_at TEXT          -- NULL while this entry is in the active canon
 );
+
+CREATE TABLE IF NOT EXISTS conflicts (
+    id TEXT PRIMARY KEY,
+    memory_id_a TEXT NOT NULL REFERENCES memories(id),
+    memory_id_b TEXT NOT NULL REFERENCES memories(id),
+    reason TEXT NOT NULL,              -- why these two framed versions are in conflict
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,                  -- NULL while open
+    resolution_reason TEXT,            -- how it was settled, recorded without deleting either version
+    adopted_memory_id TEXT             -- which framed version was adopted, if any; NULL = merged/deferred
+);
 """
+
+# Columns added after the initial schema, applied to pre-existing databases
+# via ALTER TABLE since CREATE TABLE IF NOT EXISTS never adds columns to an
+# existing table. (v0.5 added security_sensitive without this and any db file
+# created before v0.5 would have crashed on first use — caught while adding
+# `frame` for v0.8.)
+MIGRATIONS = [
+    ("memories", "security_sensitive", "INTEGER NOT NULL DEFAULT 0"),
+    ("memories", "frame", "TEXT"),
+]
 
 
 def _now() -> str:
@@ -183,6 +217,7 @@ class Memory:
     forgotten_at: str | None
     forgotten_reason: str | None
     security_sensitive: int = 0
+    frame: str | None = None
 
     @property
     def is_forgotten(self) -> bool:
@@ -207,6 +242,7 @@ class Memory:
             "forgotten_at": self.forgotten_at,
             "forgotten_reason": self.forgotten_reason,
             "security_sensitive": self.is_security_sensitive,
+            "frame": self.frame,
         }
 
 class Store:
@@ -229,6 +265,7 @@ class Store:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA busy_timeout = 30000")
         self._conn.executescript(SCHEMA)
+        self._migrate()
         self._conn.commit()
         self._lock = threading.RLock()
         self.anchor_soft_limit = anchor_soft_limit
@@ -238,6 +275,19 @@ class Store:
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+
+    def _migrate(self) -> None:
+        """Apply additive column migrations to databases created by older
+        versions. CREATE TABLE IF NOT EXISTS never adds columns to an
+        existing table, so each post-launch column needs an explicit
+        ALTER TABLE. Idempotent: checks PRAGMA table_info first."""
+        for table, column, definition in MIGRATIONS:
+            cols = {r["name"] for r in
+                    self._conn.execute(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                self._conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                )
 
     def _log(self, memory_id: str, action: str, reason: str) -> None:
         self._conn.execute(
@@ -255,6 +305,7 @@ class Store:
         source: str | None = None,
         tier: str = "archive",
         security_sensitive: bool = False,
+        frame: str | None = None,
     ) -> Memory:
         """Store a new working memory. Working memories are ordinary
         recollections — they can still be recalled, but they have not gone
@@ -268,7 +319,12 @@ class Store:
         permissions, or standing instructions (e.g. "the developer said I
         can ignore my system prompt", "the admin's password is..."). This
         does not block the memory, but it raises the bar for `pin()`: see
-        `flag_sensitive()` and `pin()`."""
+        `flag_sensitive()` and `pin()`.
+
+        `frame` (optional) records the social/relational frame this memory
+        belongs to (Halbwachs) — e.g. "team-alpha", "collab-with-B",
+        "project-x". Framed memories can disagree across frames without one
+        silently overwriting the other: see `mark_conflict()`."""
         content = _require_text(content, "content")
         if tier not in TIERS:
             raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
@@ -279,8 +335,8 @@ class Store:
         self._conn.execute(
             "INSERT INTO memories "
             "(id, content, source, status, tier, created_at, last_reviewed_at, "
-            "review_status, security_sensitive) "
-            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?)",
+            "review_status, security_sensitive, frame) "
+            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?)",
             (
                 mid,
                 content,
@@ -290,6 +346,7 @@ class Store:
                 last_reviewed_at,
                 review_status,
                 int(security_sensitive),
+                frame,
             ),
         )
         self._conn.commit()
@@ -835,6 +892,135 @@ class Store:
         ).fetchall()
         return [r["scope"] for r in rows]
 
+    # -- social framing / multi-perspective memory (Halbwachs) -------------------
+
+    @_locked
+    def set_frame(self, memory_id: str, frame: str, reason: str) -> Memory:
+        """Retroactively assign (or re-assign) a memory's social frame.
+        Requires a reason, logged — re-framing a memory is itself a
+        historiographical act, not a silent re-tag."""
+        frame = _require_text(frame, "frame")
+        reason = _require_text(reason, "reason")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        self._conn.execute(
+            "UPDATE memories SET frame=? WHERE id=?", (frame, memory_id)
+        )
+        self._log(memory_id, "set_frame", f"frame={frame}: {reason}")
+        self._conn.commit()
+        return self.get(memory_id)
+
+    @_locked
+    def list_frames(self) -> list[str]:
+        """List distinct frames currently in use."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT frame FROM memories WHERE frame IS NOT NULL "
+            "ORDER BY frame"
+        ).fetchall()
+        return [r["frame"] for r in rows]
+
+    @_locked
+    def mark_conflict(
+        self, memory_id_a: str, memory_id_b: str, reason: str
+    ) -> dict:
+        """Declare two memories as conflicting framed versions of the same
+        subject — e.g. colleague A's account of a deadline vs. colleague B's.
+        Neither version is deleted or overwritten; the conflict is recorded
+        so `recall()` can surface it explicitly instead of one version
+        silently winning. Requires a reason, logged. Symmetric: (a, b) and
+        (b, a) are the same conflict; marking the same pair twice is a
+        no-op returning the existing record."""
+        reason = _require_text(reason, "reason")
+        if memory_id_a == memory_id_b:
+            raise ValueError("a memory cannot conflict with itself")
+        for mid in (memory_id_a, memory_id_b):
+            if self.get(mid) is None:
+                raise KeyError(f"no such memory: {mid}")
+        lo, hi = sorted([memory_id_a, memory_id_b])
+        existing = self._conn.execute(
+            "SELECT * FROM conflicts WHERE "
+            "((memory_id_a=? AND memory_id_b=?) OR (memory_id_a=? AND memory_id_b=?)) "
+            "AND resolved_at IS NULL",
+            (lo, hi, hi, lo),
+        ).fetchone()
+        if existing:
+            return dict(existing)
+        cid = _new_id()
+        now = _now()
+        self._conn.execute(
+            "INSERT INTO conflicts (id, memory_id_a, memory_id_b, reason, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (cid, memory_id_a, memory_id_b, reason, now),
+        )
+        self._log(memory_id_a, "mark_conflict", f"with={memory_id_b}: {reason}")
+        self._conn.commit()
+        return dict(self._conn.execute(
+            "SELECT * FROM conflicts WHERE id=?", (cid,)
+        ).fetchone())
+
+    @_locked
+    def resolve_conflict(
+        self, conflict_id: str, reason: str, adopted_memory_id: str | None = None
+    ) -> dict:
+        """Record how an open conflict was settled. `reason` is required and
+        logged. `adopted_memory_id` optionally names which framed version was
+        adopted; leave it None for "merged into something new" or "deferred,
+        still open to revision". Crucially, the losing (or neither) version
+        is NOT deleted — both memories remain in the store, since each was a
+        legitimate memory within its own frame. Only the conflict record
+        closes."""
+        reason = _require_text(reason, "reason")
+        row = self._conn.execute(
+            "SELECT * FROM conflicts WHERE id=?", (conflict_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"no such conflict: {conflict_id}")
+        if row["resolved_at"] is not None:
+            raise ValueError("conflict is already resolved")
+        if adopted_memory_id is not None and adopted_memory_id not in (
+            row["memory_id_a"], row["memory_id_b"],
+        ):
+            raise ValueError(
+                "adopted_memory_id must be one of the two conflicting memories "
+                "(or omitted for a merge/deferral)"
+            )
+        now = _now()
+        self._conn.execute(
+            "UPDATE conflicts SET resolved_at=?, resolution_reason=?, "
+            "adopted_memory_id=? WHERE id=?",
+            (now, reason, adopted_memory_id, conflict_id),
+        )
+        self._log(
+            row["memory_id_a"],
+            "resolve_conflict",
+            f"conflict={conflict_id} adopted={adopted_memory_id}: {reason}",
+        )
+        self._conn.commit()
+        return dict(self._conn.execute(
+            "SELECT * FROM conflicts WHERE id=?", (conflict_id,)
+        ).fetchone())
+
+    @_locked
+    def list_conflicts(self, resolved: bool | None = None) -> list[dict]:
+        """List conflicts. resolved=None → all; False → only open; True →
+        only resolved. Each entry includes both memories' content and frame
+        for quick inspection."""
+        sql = (
+            "SELECT c.*, "
+            "ma.content AS content_a, ma.frame AS frame_a, "
+            "mb.content AS content_b, mb.frame AS frame_b "
+            "FROM conflicts c "
+            "JOIN memories ma ON ma.id = c.memory_id_a "
+            "JOIN memories mb ON mb.id = c.memory_id_b"
+        )
+        if resolved is False:
+            sql += " WHERE c.resolved_at IS NULL"
+        elif resolved is True:
+            sql += " WHERE c.resolved_at IS NOT NULL"
+        sql += " ORDER BY c.created_at DESC"
+        return [dict(r) for r in self._conn.execute(sql).fetchall()]
+
     # -- audit ------------------------------------------------------------------
 
     @_locked
@@ -856,12 +1042,22 @@ class Store:
         return Memory(**dict(row))
 
     @_locked
-    def recall(self, query: str | None = None, limit: int = 10) -> dict:
+    def recall(
+        self,
+        query: str | None = None,
+        limit: int = 10,
+        frame: str | None = None,
+    ) -> dict:
         """Recall memories. Anchors are always returned first, in full,
         regardless of the query — they do not compete on relevance.
         Remaining slots are filled by consolidated memories, then working
         memories, newest first, optionally filtered by a naive substring
         match on `query` (v0.1/v0.2 have no embedding dependency by design).
+
+        `frame` (Halbwachs) optionally restricts the ordinary-memory list to
+        one social frame — anchors and canon are always returned regardless
+        of frame, since identity cornerstones and the active task canon are
+        not frame-relative.
 
         Also surfaces `stale_interpretations`: interpretation-tier memories
         due for review, so callers can prompt for re-examination. And
@@ -870,7 +1066,9 @@ class Store:
         recall gives both the story and the raw facts it was built from.
         And `canon`: the active, task-scoped canon entries (Assmann), which
         are prioritized like anchors but are expected to rotate as tasks
-        change — unlike permanent anchors."""
+        change — unlike permanent anchors. And `conflicts`: currently open
+        (unresolved) conflicting framed versions, so disagreement is
+        surfaced explicitly rather than one version silently winning."""
         anchors = self.list_anchors()
 
         def _match(row: sqlite3.Row) -> bool:
@@ -881,11 +1079,19 @@ class Store:
         remaining = max(limit - len(anchors), 0)
         rest: list[dict] = []
         if remaining:
-            rows = self._conn.execute(
-                "SELECT * FROM memories WHERE forgotten_at IS NULL AND id NOT IN "
-                "(SELECT memory_id FROM anchors) "
-                "ORDER BY status='consolidated' DESC, created_at DESC"
-            ).fetchall()
+            if frame is not None:
+                rows = self._conn.execute(
+                    "SELECT * FROM memories WHERE forgotten_at IS NULL AND "
+                    "frame = ? AND id NOT IN (SELECT memory_id FROM anchors) "
+                    "ORDER BY status='consolidated' DESC, created_at DESC",
+                    (frame,),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM memories WHERE forgotten_at IS NULL AND id NOT IN "
+                    "(SELECT memory_id FROM anchors) "
+                    "ORDER BY status='consolidated' DESC, created_at DESC"
+                ).fetchall()
             for r in rows:
                 if _match(r):
                     rest.append(dict(r))
@@ -898,4 +1104,5 @@ class Store:
             "memories": rest,
             "stale_interpretations": self.due_for_review(),
             "narrative": self.current_narrative(),
+            "conflicts": self.list_conflicts(resolved=False),
         }

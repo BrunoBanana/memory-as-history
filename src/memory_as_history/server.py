@@ -12,6 +12,9 @@ Modules:
                                 / narrative_history()
   Canon / archive circulation (Assmann: Kanon/Archiv) — canonize(scope) / decanonize()
                                 / end_scope() / list_canon() / active_scopes()
+  Social framing / multi-perspective memory (Halbwachs: cadres sociaux) —
+                                frame at remember() / set_frame() / list_frames()
+                                / mark_conflict() / resolve_conflict() / list_conflicts()
 
 Tools:
   - remember(content, source?, tier?, security_sensitive?)  store a memory
@@ -35,7 +38,12 @@ Tools:
   - end_scope(scope, reason)            task over: decommission a whole scope's canon (requires reason)
   - list_canon(scope?)                  active canon entries, optionally by scope
   - active_scopes()                     scopes that currently have active canon entries
-  - recall(query?, limit?)              anchors + canon first, then consolidated/working memories, plus current narrative
+  - set_frame(memory_id, frame, reason) assign a memory's social frame (requires reason)
+  - list_frames()                       distinct frames currently in use
+  - mark_conflict(a, b, reason)         declare two memories as conflicting framed versions
+  - resolve_conflict(conflict_id, reason, adopted_memory_id?)  record how a conflict settled
+  - list_conflicts(resolved?)           conflicts (None=all, False=open, True=resolved)
+  - recall(query?, limit?, frame?)      anchors + canon first, then consolidated/working memories, plus current narrative and open conflicts
   - audit_log(limit?)                   full trail of every accountable decision
 
 Environment:
@@ -62,6 +70,7 @@ def remember(
     source: str | None = None,
     tier: str = "archive",
     security_sensitive: bool = False,
+    frame: str | None = None,
 ) -> dict:
     """Store a new working memory. Working memories are ordinary recollections
     that have not yet gone through consolidation — they can still be recalled,
@@ -77,8 +86,13 @@ def remember(
     agent should always follow. This does not block storage, but a
     security-sensitive memory cannot later be `pin()`-ed without
     independent corroboration — a defense against a single injected message
-    promoting itself straight into the agent's permanent identity anchors."""
-    return store.remember(content, source, tier, security_sensitive).to_dict()
+    promoting itself straight into the agent's permanent identity anchors.
+
+    `frame` (optional) records the social/relational frame this memory
+    belongs to (Halbwachs) — e.g. "team-alpha", "collab-with-B",
+    "project-x". Framed memories can disagree across frames without one
+    silently overwriting the other: see `mark_conflict()`."""
+    return store.remember(content, source, tier, security_sensitive, frame).to_dict()
 
 
 @mcp.tool()
@@ -249,14 +263,69 @@ def active_scopes() -> list[str]:
 
 
 @mcp.tool()
-def recall(query: str | None = None, limit: int = 10) -> dict:
+def set_frame(memory_id: str, frame: str, reason: str) -> dict:
+    """Assign (or re-assign) a memory's social frame (Halbwachs) — the
+    relational/social context this memory belongs to, e.g. "team-alpha",
+    "collab-with-B", "project-x". `reason` is required and logged —
+    re-framing a memory is itself a historiographical act, not a silent
+    re-tag."""
+    return store.set_frame(memory_id, frame, reason).to_dict()
+
+
+@mcp.tool()
+def list_frames() -> list[str]:
+    """List distinct social frames currently in use across memories."""
+    return store.list_frames()
+
+
+@mcp.tool()
+def mark_conflict(memory_id_a: str, memory_id_b: str, reason: str) -> dict:
+    """Declare two memories as conflicting framed versions of the same
+    subject — e.g. colleague A's account of a deadline vs. colleague B's.
+    Neither version is deleted or overwritten; the conflict is recorded so
+    `recall()` can surface it explicitly instead of one version silently
+    winning. `reason` is required and logged. Marking the same open pair
+    twice returns the existing record rather than duplicating it."""
+    return store.mark_conflict(memory_id_a, memory_id_b, reason)
+
+
+@mcp.tool()
+def resolve_conflict(
+    conflict_id: str, reason: str, adopted_memory_id: str | None = None
+) -> dict:
+    """Record how an open conflict was settled. `reason` is required and
+    logged. `adopted_memory_id` optionally names which framed version was
+    adopted; omit it for "merged into something new" or "deferred". The
+    losing (or neither) version is NOT deleted — both memories remain, since
+    each was legitimate within its own frame. Only the conflict record
+    closes."""
+    return store.resolve_conflict(conflict_id, reason, adopted_memory_id)
+
+
+@mcp.tool()
+def list_conflicts(resolved: bool | None = None) -> list[dict]:
+    """List conflicts: resolved=null → all, false → only open, true → only
+    resolved. Each entry includes both memories' content and frame."""
+    return store.list_conflicts(resolved)
+
+
+@mcp.tool()
+def recall(
+    query: str | None = None, limit: int = 10, frame: str | None = None
+) -> dict:
     """Recall memories. Anchors and active canon entries are always returned
     in full regardless of query. Remaining slots are filled by consolidated
     memories first, then working memories, newest first, optionally filtered
-    by `query`. Also returns `stale_interpretations` due for review, and
-    `narrative`: the current narrative synthesis (or null if none has been
-    submitted)."""
-    return store.recall(query, limit)
+    by `query`. Also returns `stale_interpretations` due for review,
+    `narrative` (the current narrative synthesis, or null), and `conflicts`
+    (currently open conflicting framed versions, surfaced explicitly rather
+    than letting one version silently win).
+
+    `frame` optionally restricts the ordinary-memory list to one social
+    frame (Halbwachs) — anchors and canon are always returned regardless,
+    since identity cornerstones and the active task canon are not
+    frame-relative."""
+    return store.recall(query, limit, frame)
 
 
 @mcp.tool()

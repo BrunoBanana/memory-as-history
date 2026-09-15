@@ -689,3 +689,216 @@ def test_recall_canon_excludes_forgotten_entries(store_canon: Store):
     store_canon.forget(m.id, reason="no longer true")
     canon = store_canon.list_canon()
     assert not any(c["memory_id"] == m.id for c in canon)
+
+
+# -- social framing / multi-perspective memory (Halbwachs: cadres sociaux) -----
+
+
+def test_remember_with_frame(store: Store):
+    m = store.remember("deadline is Friday", frame="team-alpha")
+    assert m.frame == "team-alpha"
+    assert store.get(m.id).to_dict()["frame"] == "team-alpha"
+
+
+def test_remember_without_frame_defaults_none(store: Store):
+    m = store.remember("no frame")
+    assert m.frame is None
+
+
+def test_set_frame_retroactively(store: Store):
+    m = store.remember("some fact")
+    updated = store.set_frame(m.id, "project-x", reason="this was said in the project-x context")
+    assert updated.frame == "project-x"
+    log = store.audit_log()
+    assert any(e["action"] == "set_frame" and "project-x" in e["reason"] for e in log)
+
+
+def test_set_frame_requires_reason_and_known_memory(store: Store):
+    m = store.remember("x")
+    with pytest.raises(ValueError):
+        store.set_frame(m.id, "f", reason="  ")
+    with pytest.raises(ValueError):
+        store.set_frame(m.id, "  ", reason="r")
+    with pytest.raises(KeyError):
+        store.set_frame("nope", "f", reason="r")
+
+
+def test_list_frames(store: Store):
+    store.remember("a", frame="team-alpha")
+    store.remember("b", frame="team-beta")
+    store.remember("c")  # no frame
+    assert store.list_frames() == ["team-alpha", "team-beta"]
+
+
+def test_recall_frame_filter(store: Store):
+    store.remember("alpha fact", frame="team-alpha")
+    store.remember("beta fact", frame="team-beta")
+    store.remember("unframed fact")
+
+    result = store.recall(frame="team-alpha", limit=10)
+    contents = [m["content"] for m in result["memories"]]
+    assert "alpha fact" in contents
+    assert "beta fact" not in contents
+    assert "unframed fact" not in contents  # frame filter excludes unframed
+
+
+def test_recall_frame_filter_does_not_hide_anchors(store: Store):
+    m = store.remember("identity fact", frame="team-alpha")
+    store.promote(m.id, reason="r")
+    store.pin(m.id, reason="identity")
+    result = store.recall(frame="team-beta", limit=10)
+    anchor_ids = [a["id"] for a in result["anchors"]]
+    assert m.id in anchor_ids
+
+
+def test_mark_conflict_basic(store: Store):
+    a = store.remember("deadline is Friday", frame="team-alpha")
+    b = store.remember("deadline is Monday", frame="team-beta")
+    c = store.mark_conflict(a.id, b.id, reason="two teams report different deadlines")
+    assert c["resolved_at"] is None
+    log = store.audit_log()
+    assert any(e["action"] == "mark_conflict" for e in log)
+
+
+def test_mark_conflict_symmetric_dedup(store: Store):
+    a = store.remember("v1")
+    b = store.remember("v2")
+    c1 = store.mark_conflict(a.id, b.id, reason="r")
+    c2 = store.mark_conflict(b.id, a.id, reason="r again")
+    assert c1["id"] == c2["id"]
+    assert len(store.list_conflicts()) == 1
+
+
+def test_mark_conflict_self_raises(store: Store):
+    a = store.remember("x")
+    with pytest.raises(ValueError):
+        store.mark_conflict(a.id, a.id, reason="r")
+
+
+def test_mark_conflict_unknown_memory_raises(store: Store):
+    a = store.remember("x")
+    with pytest.raises(KeyError):
+        store.mark_conflict(a.id, "nope", reason="r")
+
+
+def test_mark_conflict_requires_reason(store: Store):
+    a = store.remember("x")
+    b = store.remember("y")
+    with pytest.raises(ValueError):
+        store.mark_conflict(a.id, b.id, reason="  ")
+
+
+def test_resolve_conflict_keeps_both_versions(store: Store):
+    a = store.remember("deadline is Friday", frame="team-alpha")
+    b = store.remember("deadline is Monday", frame="team-beta")
+    c = store.mark_conflict(a.id, b.id, reason="conflicting deadlines")
+    resolved = store.resolve_conflict(
+        c["id"], reason="confirmed with PM: Friday is correct",
+        adopted_memory_id=a.id,
+    )
+    assert resolved["resolved_at"] is not None
+    assert resolved["adopted_memory_id"] == a.id
+    # the losing version is retained, not deleted
+    assert store.get(b.id) is not None
+    assert store.get(b.id).is_forgotten is False
+
+
+def test_resolve_conflict_without_adopted(store: Store):
+    a = store.remember("v1")
+    b = store.remember("v2")
+    c = store.mark_conflict(a.id, b.id, reason="r")
+    resolved = store.resolve_conflict(c["id"], reason="merged into a new account")
+    assert resolved["adopted_memory_id"] is None
+
+
+def test_resolve_conflict_twice_raises(store: Store):
+    a = store.remember("v1")
+    b = store.remember("v2")
+    c = store.mark_conflict(a.id, b.id, reason="r")
+    store.resolve_conflict(c["id"], reason="settled", adopted_memory_id=a.id)
+    with pytest.raises(ValueError):
+        store.resolve_conflict(c["id"], reason="again")
+
+
+def test_resolve_conflict_invalid_adopted_id_raises(store: Store):
+    a = store.remember("v1")
+    b = store.remember("v2")
+    other = store.remember("v3")
+    c = store.mark_conflict(a.id, b.id, reason="r")
+    with pytest.raises(ValueError):
+        store.resolve_conflict(c["id"], reason="r", adopted_memory_id=other.id)
+
+
+def test_resolve_conflict_unknown_raises(store: Store):
+    with pytest.raises(KeyError):
+        store.resolve_conflict("nope", reason="r")
+
+
+def test_list_conflicts_filter(store: Store):
+    a = store.remember("v1")
+    b = store.remember("v2")
+    c1 = store.mark_conflict(a.id, b.id, reason="open one")
+    e = store.remember("v3")
+    f = store.remember("v4")
+    c2 = store.mark_conflict(e.id, f.id, reason="will be resolved")
+    store.resolve_conflict(c2["id"], reason="settled", adopted_memory_id=e.id)
+
+    assert len(store.list_conflicts()) == 2
+    open_ones = store.list_conflicts(resolved=False)
+    assert len(open_ones) == 1 and open_ones[0]["id"] == c1["id"]
+    resolved_ones = store.list_conflicts(resolved=True)
+    assert len(resolved_ones) == 1 and resolved_ones[0]["id"] == c2["id"]
+
+
+def test_list_conflicts_includes_content_and_frame(store: Store):
+    a = store.remember("deadline is Friday", frame="team-alpha")
+    b = store.remember("deadline is Monday", frame="team-beta")
+    store.mark_conflict(a.id, b.id, reason="r")
+    c = store.list_conflicts()[0]
+    assert c["content_a"] == "deadline is Friday"
+    assert c["frame_a"] == "team-alpha"
+    assert c["content_b"] == "deadline is Monday"
+    assert c["frame_b"] == "team-beta"
+
+
+def test_recall_surfaces_open_conflicts(store: Store):
+    a = store.remember("deadline is Friday", frame="team-alpha")
+    b = store.remember("deadline is Monday", frame="team-beta")
+    assert store.recall(limit=10)["conflicts"] == []
+    store.mark_conflict(a.id, b.id, reason="conflicting deadlines")
+    result = store.recall(limit=10)
+    assert len(result["conflicts"]) == 1
+    # once resolved, no longer surfaced as open
+    cid = result["conflicts"][0]["id"]
+    store.resolve_conflict(cid, reason="settled", adopted_memory_id=a.id)
+    assert store.recall(limit=10)["conflicts"] == []
+
+
+def test_migration_adds_columns_to_old_db(tmp_path):
+    """A database created by an older schema (no security_sensitive / frame
+    columns) must be upgraded in place, not crash."""
+    import sqlite3 as _sqlite3
+
+    db = tmp_path / "old.db"
+    conn = _sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE memories (id TEXT PRIMARY KEY, content TEXT NOT NULL, "
+        "source TEXT, status TEXT NOT NULL DEFAULT 'working', "
+        "tier TEXT NOT NULL DEFAULT 'archive', created_at TEXT NOT NULL, "
+        "consolidated_at TEXT, consolidation_reason TEXT, "
+        "last_reviewed_at TEXT, review_status TEXT, forgotten_at TEXT, "
+        "forgotten_reason TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO memories (id, content, created_at) VALUES ('old1', 'legacy fact', '2026-01-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    s = Store(db)  # should not raise
+    fetched = s.get("old1")
+    assert fetched is not None
+    assert fetched.content == "legacy fact"
+    assert fetched.is_security_sensitive is False
+    assert fetched.frame is None
+    s.close()
