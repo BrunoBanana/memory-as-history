@@ -32,11 +32,28 @@ deleted.
 
 from __future__ import annotations
 
+import functools
 import sqlite3
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+
+def _locked(method):
+    """Serialize all access to a Store's sqlite connection. sqlite3
+    connections (even with check_same_thread=False) are not safe for
+    concurrent use from multiple threads — a single Store instance may be
+    shared across an MCP server's concurrent tool-call handlers, so every
+    public method takes this instance-level lock before touching self._conn."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 DEFAULT_DB_PATH = Path.home() / ".memory-as-history" / "memory.db"
 DEFAULT_ANCHOR_SOFT_LIMIT = 12
@@ -141,16 +158,24 @@ class Store:
     ):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        # check_same_thread=False: a single Store instance may legitimately be
+        # called from multiple threads (e.g. an MCP server handling concurrent
+        # tool calls). We serialize all access ourselves via `self._lock`,
+        # since sqlite3 connections are not safe for concurrent use even with
+        # check_same_thread=False.
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
+        self._conn.execute("PRAGMA busy_timeout = 30000")
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+        self._lock = threading.RLock()
         self.anchor_soft_limit = anchor_soft_limit
         self.interpretation_review_days = interpretation_review_days
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def _log(self, memory_id: str, action: str, reason: str) -> None:
         self._conn.execute(
@@ -161,6 +186,7 @@ class Store:
 
     # -- capture --------------------------------------------------------------
 
+    @_locked
     def remember(
         self, content: str, source: str | None = None, tier: str = "archive"
     ) -> Memory:
@@ -189,6 +215,7 @@ class Store:
 
     # -- consolidation module (Assmann) ---------------------------------------
 
+    @_locked
     def promote(self, memory_id: str, reason: str) -> Memory:
         """Explicitly consolidate a working memory. This is a deliberate act,
         not an automatic score threshold. A non-empty reason is required —
@@ -218,6 +245,7 @@ class Store:
 
     # -- anchor module (Nora) --------------------------------------------------
 
+    @_locked
     def pin(self, memory_id: str, reason: str) -> dict:
         """Mark a memory as an anchor: a 'site of memory' that is always
         surfaced on recall and never competes with ordinary memories on
@@ -261,16 +289,19 @@ class Store:
             )
         return result
 
+    @_locked
     def unpin(self, memory_id: str) -> None:
         self._conn.execute("DELETE FROM anchors WHERE memory_id=?", (memory_id,))
         self._conn.commit()
 
+    @_locked
     def is_anchored(self, memory_id: str) -> bool:
         row = self._conn.execute(
             "SELECT 1 FROM anchors WHERE memory_id=?", (memory_id,)
         ).fetchone()
         return row is not None
 
+    @_locked
     def list_anchors(self) -> list[dict]:
         rows = self._conn.execute(
             "SELECT m.*, a.reason AS anchor_reason, a.pinned_at "
@@ -282,6 +313,7 @@ class Store:
 
     # -- forgetting module (Ricoeur: forgetting as legitimate, not failure) ----
 
+    @_locked
     def forget(self, memory_id: str, reason: str) -> Memory:
         """Deliberately forget a memory. This is not deletion: the content
         is retained (a tombstone), but the memory disappears from `recall()`
@@ -321,6 +353,7 @@ class Store:
         self._conn.commit()
         return self.get(memory_id)
 
+    @_locked
     def restore(self, memory_id: str, reason: str) -> Memory:
         """Reverse a forgetting decision. Forgetting in this protocol is not
         a hard delete, so restoration is always possible and is itself a
@@ -339,6 +372,7 @@ class Store:
         self._conn.commit()
         return self.get(memory_id)
 
+    @_locked
     def list_forgotten(self, limit: int = 50) -> list[dict]:
         """List tombstoned memories — what was forgotten, and why."""
         rows = self._conn.execute(
@@ -350,6 +384,7 @@ class Store:
 
     # -- provenance tiers module (Ricoeur) --------------------------------------
 
+    @_locked
     def corroborate(self, memory_id: str, source: str) -> Memory:
         """Record that an independent additional source corroborates this
         memory. An 'archive' (raw, single-source) memory is automatically
@@ -378,6 +413,7 @@ class Store:
         self._conn.commit()
         return self.get(memory_id)
 
+    @_locked
     def review(self, memory_id: str, note: str) -> Memory:
         """Re-examine an 'interpretation' memory and confirm it still holds.
         Ricoeur treats interpretation as inherently provisional — it must be
@@ -401,6 +437,7 @@ class Store:
         self._conn.commit()
         return self.get(memory_id)
 
+    @_locked
     def due_for_review(self, days: int | None = None) -> list[dict]:
         """Return interpretation-tier memories whose last review is older
         than `days` (default: interpretation_review_days), or that have
@@ -428,6 +465,7 @@ class Store:
 
     # -- audit ------------------------------------------------------------------
 
+    @_locked
     def audit_log(self, limit: int = 50) -> list[dict]:
         rows = self._conn.execute(
             "SELECT * FROM audit_log ORDER BY at DESC LIMIT ?", (limit,)
@@ -436,6 +474,7 @@ class Store:
 
     # -- retrieval ----------------------------------------------------------
 
+    @_locked
     def get(self, memory_id: str) -> Memory | None:
         row = self._conn.execute(
             "SELECT * FROM memories WHERE id=?", (memory_id,)
@@ -444,6 +483,7 @@ class Store:
             return None
         return Memory(**dict(row))
 
+    @_locked
     def recall(self, query: str | None = None, limit: int = 10) -> dict:
         """Recall memories. Anchors are always returned first, in full,
         regardless of the query — they do not compete on relevance.

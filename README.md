@@ -65,6 +65,22 @@ Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 - `recall(query?, limit?)` — anchors first, then consolidated, then working memories; also returns `stale_interpretations`
 - `audit_log(limit?)` — full trail of promote/pin/corroborate/review/forget/restore decisions, with reasons
 
+## Reliability
+
+`reliability_test.py` runs a battery of robustness checks beyond the unit tests:
+thread-safety (concurrent tool calls against one `Store`), multi-process
+concurrency (same sqlite file from separate processes), persistence across
+connection restarts, scale (5,000 memories, sub-50ms `recall()`), and an edge-case
+suite (1MB content, unicode, SQL-injection-shaped strings, empty/negative inputs,
+nonexistent ids, double-forget). All 6 checks pass.
+
+One real bug was found and fixed this way: the original `Store` used a bare
+`sqlite3.connect()`, which raised `ProgrammingError` under concurrent access from
+multiple threads (a single `Store` instance is shared across an MCP server's
+concurrent tool-call handlers). Fixed with `check_same_thread=False` plus an
+instance-level `threading.RLock()` serializing all public methods — sqlite3
+connections are not safe for concurrent use even with that flag alone.
+
 ## Related work
 
 - **HistoRAG** (2026) — applies historiographical method to RAG for *human history research*. This project applies memory studies to *agent memory architecture itself* — a different target.
