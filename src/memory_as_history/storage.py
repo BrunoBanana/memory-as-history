@@ -34,16 +34,28 @@ Three modules for v0.2:
   motivates: prompt-injected content that claims to be an identity fact or
   a standing instruction should not be able to promote itself straight into
   the anchor set just by asserting itself once.
+- Narrative integration (Ricoeur: identité narrative — identity is not a
+  pile of discrete facts but a story that organizes them): a plain store
+  cannot itself compose a narrative — that requires judgment and language a
+  database doesn't have. What it CAN do is give the synthesis a first-class,
+  versioned, accountable existence: `narrate(content, reason, memory_ids?)`
+  lets a caller (typically an agent that just read `recall()` and composed
+  a summary) submit the current narrative. The previous current narrative,
+  if any, is not deleted — it is marked superseded, so the *story itself*
+  has a history: not just who the user currently is, but how that account
+  changed over time, and why. `recall()` surfaces the current narrative
+  alongside the discrete memory list.
 
 Design principle: every state change that matters (promote, pin, corroborate,
-review, forget, restore) is recorded with a reason/note and a timestamp in a
-single audit log. Nothing is silently reclassified, and nothing is silently
-deleted.
+review, forget, restore, narrate) is recorded with a reason/note and a
+timestamp in a single audit log. Nothing is silently reclassified, and
+nothing is silently deleted.
 """
 
 from __future__ import annotations
 
 import functools
+import json
 import sqlite3
 import threading
 import uuid
@@ -105,9 +117,19 @@ CREATE TABLE IF NOT EXISTS corroborations (
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied' | 'narrate'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS narratives (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    memory_ids TEXT,             -- JSON array of memory ids this narrative draws on, or NULL
+    created_at TEXT NOT NULL,
+    superseded_at TEXT,          -- NULL while this is the current narrative
+    superseded_by TEXT REFERENCES narratives(id)
 );
 """
 
@@ -558,6 +580,80 @@ class Store:
                 r["review_status"] = "stale"
         return stale
 
+    # -- narrative integration module (Ricoeur: identité narrative) -------------
+
+    @_locked
+    def narrate(
+        self, content: str, reason: str, memory_ids: list[str] | None = None
+    ) -> dict:
+        """Submit the current narrative synthesis: a coherent account of who
+        the user is / where the relationship stands, composed (typically by
+        an agent) from the discrete memories in `recall()`. This method does
+        not compose the narrative itself — a plain store has no judgment or
+        language to do that; it only gives the synthesis a first-class,
+        accountable existence.
+
+        The previous current narrative, if any, is not deleted: it is marked
+        superseded (linked via `superseded_by`), so the narrative itself has
+        a history — not just who the user currently is, but how that account
+        changed over time, and why. `reason` is required and logged.
+
+        `memory_ids`, if given, are recorded as the discrete memories this
+        narrative draws on (for traceability back to the archive/testimony/
+        interpretation-tier facts underlying the story) — they are not
+        validated against existing memory ids, since a narrative may also
+        synthesize across already-forgotten or since-superseded memories."""
+        content = _require_text(content, "content")
+        reason = _require_text(reason, "reason")
+        now = _now()
+        nid = _new_id()
+        prev = self._current_narrative_row()
+        self._conn.execute(
+            "INSERT INTO narratives (id, content, reason, memory_ids, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (nid, content, reason, json.dumps(memory_ids) if memory_ids else None, now),
+        )
+        if prev is not None:
+            self._conn.execute(
+                "UPDATE narratives SET superseded_at=?, superseded_by=? WHERE id=?",
+                (now, nid, prev["id"]),
+            )
+        self._log(nid, "narrate", reason)
+        self._conn.commit()
+        return self._narrative_to_dict(self._conn.execute(
+            "SELECT * FROM narratives WHERE id=?", (nid,)
+        ).fetchone())
+
+    def _current_narrative_row(self) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM narratives WHERE superseded_at IS NULL "
+            "ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+
+    @staticmethod
+    def _narrative_to_dict(row: sqlite3.Row | None) -> dict | None:
+        if row is None:
+            return None
+        d = dict(row)
+        d["memory_ids"] = json.loads(d["memory_ids"]) if d["memory_ids"] else []
+        return d
+
+    @_locked
+    def current_narrative(self) -> dict | None:
+        """Return the current narrative synthesis, or None if `narrate()`
+        has never been called."""
+        return self._narrative_to_dict(self._current_narrative_row())
+
+    @_locked
+    def narrative_history(self, limit: int = 20) -> list[dict]:
+        """Return past narrative versions, most recent first, including the
+        current one — the history of how the story of the user has been
+        told and re-told, not just its latest version."""
+        rows = self._conn.execute(
+            "SELECT * FROM narratives ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [self._narrative_to_dict(r) for r in rows]
+
     # -- audit ------------------------------------------------------------------
 
     @_locked
@@ -587,7 +683,10 @@ class Store:
         match on `query` (v0.1/v0.2 have no embedding dependency by design).
 
         Also surfaces `stale_interpretations`: interpretation-tier memories
-        due for review, so callers can prompt for re-examination."""
+        due for review, so callers can prompt for re-examination. And
+        `narrative`: the current narrative synthesis from `narrate()`, if
+        one has ever been submitted, alongside the discrete memory list —
+        recall gives both the story and the raw facts it was built from."""
         anchors = self.list_anchors()
 
         def _match(row: sqlite3.Row) -> bool:
@@ -613,4 +712,5 @@ class Store:
             "anchors": anchors,
             "memories": rest,
             "stale_interpretations": self.due_for_review(),
+            "narrative": self.current_narrative(),
         }

@@ -419,3 +419,92 @@ def test_recall_and_to_dict_expose_security_sensitive_flag(store: Store):
 
     ordinary = store.remember("ordinary content")
     assert store.get(ordinary.id).to_dict()["security_sensitive"] is False
+
+
+# -- narrative integration (Ricoeur: identité narrative) ----------------------
+
+
+def test_narrate_requires_content_and_reason(store: Store):
+    with pytest.raises(ValueError):
+        store.narrate("", reason="x")
+    with pytest.raises(ValueError):
+        store.narrate("some content", reason="  ")
+
+
+def test_current_narrative_none_before_first_narrate(store: Store):
+    assert store.current_narrative() is None
+
+
+def test_narrate_sets_current_narrative(store: Store):
+    m = store.remember("Bruno works in game publishing operations")
+    result = store.narrate(
+        "Bruno is a game publishing operations professional, currently "
+        "exploring an agent-memory side project.",
+        reason="first synthesis after initial conversation",
+        memory_ids=[m.id],
+    )
+    assert result["content"].startswith("Bruno is a game")
+    current = store.current_narrative()
+    assert current["id"] == result["id"]
+    assert current["memory_ids"] == [m.id]
+    assert current["superseded_at"] is None
+
+
+def test_narrate_again_supersedes_previous_without_deleting(store: Store):
+    first = store.narrate("v1 of the story", reason="initial")
+    second = store.narrate("v2 of the story, updated", reason="learned more about the user")
+
+    current = store.current_narrative()
+    assert current["id"] == second["id"]
+    assert current["content"] == "v2 of the story, updated"
+
+    history = store.narrative_history()
+    assert len(history) == 2
+    by_id = {h["id"]: h for h in history}
+    assert by_id[first["id"]]["superseded_at"] is not None
+    assert by_id[first["id"]]["superseded_by"] == second["id"]
+    assert by_id[second["id"]]["superseded_at"] is None
+
+
+def test_narrate_logs_to_audit_trail(store: Store):
+    store.narrate("story", reason="why this narrative now")
+    log = store.audit_log()
+    assert any(e["action"] == "narrate" and e["reason"] == "why this narrative now" for e in log)
+
+
+def test_narrate_without_memory_ids_defaults_to_empty_list(store: Store):
+    result = store.narrate("story with no explicit memory_ids", reason="r")
+    assert result["memory_ids"] == []
+
+
+def test_narrative_history_most_recent_first(store: Store):
+    store.narrate("v1", reason="r1")
+    store.narrate("v2", reason="r2")
+    store.narrate("v3", reason="r3")
+    history = store.narrative_history()
+    contents = [h["content"] for h in history]
+    assert contents == ["v3", "v2", "v1"]
+
+
+def test_narrative_history_respects_limit(store: Store):
+    for i in range(5):
+        store.narrate(f"v{i}", reason="r")
+    history = store.narrative_history(limit=2)
+    assert len(history) == 2
+    assert history[0]["content"] == "v4"
+
+
+def test_recall_includes_current_narrative(store: Store):
+    store.remember("some fact")
+    assert store.recall(limit=5)["narrative"] is None
+
+    store.narrate("the story so far", reason="synthesis")
+    result = store.recall(limit=5)
+    assert result["narrative"]["content"] == "the story so far"
+
+
+def test_recall_narrative_reflects_latest_after_supersede(store: Store):
+    store.narrate("old story", reason="r1")
+    store.narrate("new story", reason="r2")
+    result = store.recall(limit=5)
+    assert result["narrative"]["content"] == "new story"
