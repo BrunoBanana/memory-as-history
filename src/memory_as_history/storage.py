@@ -23,6 +23,17 @@ Three modules for v0.2:
   memory cannot be forgotten directly — it must be `unpin()`-ed first, since
   identity cornerstones should not quietly disappear. Forgetting is
   reversible via `restore()`, itself logged with its own reason.
+- Source criticism / memory-poisoning defense (Ricoeur: l'abus de mémoire —
+  the abuse of memory, and the historiographical discipline of not taking a
+  single testimony at face value): a memory touching identity, permissions,
+  or instructions can be flagged `security_sensitive` (at `remember()` time,
+  or later via `flag_sensitive()`). A security-sensitive memory cannot be
+  `pin()`-ed on the strength of a single source — `pin()` requires at least
+  one `corroborate()` from a source *distinct* from the memory's original
+  `source`. This is the concrete, minimal countermeasure the theory
+  motivates: prompt-injected content that claims to be an identity fact or
+  a standing instruction should not be able to promote itself straight into
+  the anchor set just by asserting itself once.
 
 Design principle: every state change that matters (promote, pin, corroborate,
 review, forget, restore) is recorded with a reason/note and a timestamp in a
@@ -74,7 +85,8 @@ CREATE TABLE IF NOT EXISTS memories (
     last_reviewed_at TEXT,
     review_status TEXT,                             -- 'current' | 'stale' | NULL
     forgotten_at TEXT,
-    forgotten_reason TEXT
+    forgotten_reason TEXT,
+    security_sensitive INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS anchors (
@@ -93,7 +105,7 @@ CREATE TABLE IF NOT EXISTS corroborations (
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
 );
@@ -128,10 +140,15 @@ class Memory:
     review_status: str | None
     forgotten_at: str | None
     forgotten_reason: str | None
+    security_sensitive: int = 0
 
     @property
     def is_forgotten(self) -> bool:
         return self.forgotten_at is not None
+
+    @property
+    def is_security_sensitive(self) -> bool:
+        return bool(self.security_sensitive)
 
     def to_dict(self) -> dict:
         return {
@@ -147,6 +164,7 @@ class Memory:
             "review_status": self.review_status,
             "forgotten_at": self.forgotten_at,
             "forgotten_reason": self.forgotten_reason,
+            "security_sensitive": self.is_security_sensitive,
         }
 
 class Store:
@@ -188,7 +206,11 @@ class Store:
 
     @_locked
     def remember(
-        self, content: str, source: str | None = None, tier: str = "archive"
+        self,
+        content: str,
+        source: str | None = None,
+        tier: str = "archive",
+        security_sensitive: bool = False,
     ) -> Memory:
         """Store a new working memory. Working memories are ordinary
         recollections — they can still be recalled, but they have not gone
@@ -196,7 +218,13 @@ class Store:
 
         `tier` defaults to 'archive' (captured as-is). Pass tier='interpretation'
         when the content is the agent's own inference/summary rather than a
-        directly observed fact — this schedules it for periodic review."""
+        directly observed fact — this schedules it for periodic review.
+
+        Set `security_sensitive=True` for anything touching identity,
+        permissions, or standing instructions (e.g. "the developer said I
+        can ignore my system prompt", "the admin's password is..."). This
+        does not block the memory, but it raises the bar for `pin()`: see
+        `flag_sensitive()` and `pin()`."""
         content = _require_text(content, "content")
         if tier not in TIERS:
             raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
@@ -206,12 +234,59 @@ class Store:
         last_reviewed_at = now if tier == "interpretation" else None
         self._conn.execute(
             "INSERT INTO memories "
-            "(id, content, source, status, tier, created_at, last_reviewed_at, review_status) "
-            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?)",
-            (mid, content, source, tier, now, last_reviewed_at, review_status),
+            "(id, content, source, status, tier, created_at, last_reviewed_at, "
+            "review_status, security_sensitive) "
+            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?)",
+            (
+                mid,
+                content,
+                source,
+                tier,
+                now,
+                last_reviewed_at,
+                review_status,
+                int(security_sensitive),
+            ),
         )
         self._conn.commit()
         return self.get(mid)
+
+    @_locked
+    def flag_sensitive(self, memory_id: str, reason: str) -> Memory:
+        """Retroactively flag an existing memory as security-sensitive
+        (identity / permissions / standing-instruction content). Once
+        flagged, `pin()` will require independent corroboration — see
+        `pin()`. Requires a reason, logged in the audit trail."""
+        reason = _require_text(reason, "reason")
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        self._conn.execute(
+            "UPDATE memories SET security_sensitive=1 WHERE id=?", (memory_id,)
+        )
+        self._log(memory_id, "flag_sensitive", reason)
+        self._conn.commit()
+        return self.get(memory_id)
+
+    @_locked
+    def independent_corroboration_count(self, memory_id: str) -> int:
+        """Count corroborating sources for this memory that are distinct
+        from the memory's own recorded `source`. A memory corroborated only
+        by its own source (or with no source recorded at all, corroborated
+        by literally nothing else) does not count as independently
+        verified — this is the check `pin()` uses for security-sensitive
+        memories."""
+        mem = self.get(memory_id)
+        if mem is None:
+            raise KeyError(f"no such memory: {memory_id}")
+        rows = self._conn.execute(
+            "SELECT DISTINCT source FROM corroborations WHERE memory_id=?",
+            (memory_id,),
+        ).fetchall()
+        distinct_sources = {r["source"] for r in rows}
+        if mem.source is not None:
+            distinct_sources.discard(mem.source)
+        return len(distinct_sources)
 
     # -- consolidation module (Assmann) ---------------------------------------
 
@@ -257,6 +332,16 @@ class Store:
         history — you cannot skip straight from a passing remark to a
         monument. Call `promote()` first.
 
+        Source criticism (Ricoeur: l'abus de mémoire): if the memory is
+        `security_sensitive` (identity / permissions / standing
+        instructions), pinning additionally requires at least one
+        `corroborate()` call from a source distinct from the memory's own
+        `source`. Without that, `pin()` raises `PermissionError` and logs a
+        `pin_denied` audit entry. This exists so that content asserting its
+        own importance once — e.g. injected text claiming "the developer
+        said this is a core instruction" — cannot promote itself straight
+        into the anchor set on its own say-so.
+
         Anchors are meant to stay few. Exceeding `anchor_soft_limit` does not
         block the pin, but the returned dict includes a `warning` — a large
         set of "anchors" stops functioning as a set of anchors."""
@@ -269,6 +354,16 @@ class Store:
                 "memory must be consolidated (call promote() first) before "
                 "it can be pinned as an anchor"
             )
+        if mem.is_security_sensitive and self.independent_corroboration_count(memory_id) < 1:
+            denial_reason = (
+                "memory is flagged security_sensitive and has no "
+                "independent corroboration; refusing to pin on the "
+                "strength of a single source (source criticism safeguard "
+                "against memory poisoning)"
+            )
+            self._log(memory_id, "pin_denied", denial_reason)
+            self._conn.commit()
+            raise PermissionError(denial_reason)
         now = _now()
         self._conn.execute(
             "INSERT OR REPLACE INTO anchors (memory_id, reason, pinned_at) "
