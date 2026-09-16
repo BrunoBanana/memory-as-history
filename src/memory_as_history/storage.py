@@ -353,11 +353,19 @@ class Store:
         return self.get(mid)
 
     @_locked
-    def flag_sensitive(self, memory_id: str, reason: str) -> Memory:
+    def flag_sensitive(self, memory_id: str, reason: str) -> dict:
         """Retroactively flag an existing memory as security-sensitive
         (identity / permissions / standing-instruction content). Once
         flagged, `pin()` will require independent corroboration — see
-        `pin()`. Requires a reason, logged in the audit trail."""
+        `pin()`. Requires a reason, logged in the audit trail.
+
+        If the memory is currently pinned as an anchor, the pin is
+        automatically lifted: an anchor that is later recognized as
+        security-sensitive but never independently corroborated should not
+        keep its always-surfaced status while we wait for someone to notice.
+        The unpin is itself logged (action 'unpin_by_sensitivity') so the
+        chain of events stays auditable. If corroboration is later
+        obtained, `pin()` can be called again and will succeed."""
         reason = _require_text(reason, "reason")
         mem = self.get(memory_id)
         if mem is None:
@@ -365,18 +373,37 @@ class Store:
         self._conn.execute(
             "UPDATE memories SET security_sensitive=1 WHERE id=?", (memory_id,)
         )
+        unpin_note = None
+        if self.is_anchored(memory_id) and self.independent_corroboration_count(memory_id) < 1:
+            self._conn.execute("DELETE FROM anchors WHERE memory_id=?", (memory_id,))
+            unpin_note = (
+                "anchor lifted: flagged security_sensitive without "
+                "independent corroboration"
+            )
+            self._log(memory_id, "unpin_by_sensitivity", unpin_note)
         self._log(memory_id, "flag_sensitive", reason)
         self._conn.commit()
-        return self.get(memory_id)
+        result = self.get(memory_id).to_dict()
+        if unpin_note is not None:
+            result["unpinned_by_sensitivity"] = True
+        return result
 
     @_locked
     def independent_corroboration_count(self, memory_id: str) -> int:
         """Count corroborating sources for this memory that are distinct
         from the memory's own recorded `source`. A memory corroborated only
-        by its own source (or with no source recorded at all, corroborated
-        by literally nothing else) does not count as independently
-        verified — this is the check `pin()` uses for security-sensitive
-        memories."""
+        by its own source does not count as independently verified — this
+        is the check `pin()` uses for security-sensitive memories.
+
+        Strictness on missing origins: a memory with no recorded source
+        (source=None) is treated as having an *unknown* origin, not a blank
+        one. Any single corroborating source therefore cannot be assumed to
+        differ from that unknown origin, so it does not count as
+        independent. Such a memory needs two *distinct* corroborating
+        sources to count as independently corroborated — with an unknown
+        origin, at least two different voices are required before any of
+        them can be considered independent of wherever the content really
+        came from. Blank/whitespace corroborating sources never count."""
         mem = self.get(memory_id)
         if mem is None:
             raise KeyError(f"no such memory: {memory_id}")
@@ -384,9 +411,14 @@ class Store:
             "SELECT DISTINCT source FROM corroborations WHERE memory_id=?",
             (memory_id,),
         ).fetchall()
-        distinct_sources = {r["source"] for r in rows}
-        if mem.source is not None:
-            distinct_sources.discard(mem.source)
+        distinct_sources = {
+            r["source"].strip() for r in rows
+            if r["source"] and r["source"].strip()
+        }
+        if mem.source is None:
+            # unknown origin: need at least two distinct voices
+            return max(len(distinct_sources) - 1, 0)
+        distinct_sources.discard(mem.source.strip())
         return len(distinct_sources)
 
     # -- consolidation module (Assmann) ---------------------------------------
@@ -497,6 +529,15 @@ class Store:
         ).fetchone()
         return row is not None
 
+    def _active_canon_count(self, memory_id: str) -> int:
+        """Count of active (not decommissioned) canon entries for a memory,
+        across all scopes. Used by `forget()` to enforce the canon guard."""
+        return self._conn.execute(
+            "SELECT COUNT(*) FROM canon_entries WHERE memory_id=? AND "
+            "decommissioned_at IS NULL",
+            (memory_id,),
+        ).fetchone()[0]
+
     @_locked
     def list_anchors(self) -> list[dict]:
         rows = self._conn.execute(
@@ -518,9 +559,15 @@ class Store:
         silent side-effect of storage pressure.
 
         An anchored memory cannot be forgotten directly: call `unpin()`
-        first. Identity cornerstones should not quietly vanish alongside
-        an unrelated forgetting decision — removing an anchor has to be its
-        own, separately reasoned step.
+        first. A canonized memory likewise cannot be forgotten directly:
+        call `decanonize()` (or `end_scope()`) first. Both guards exist for
+        the same reason — a memory currently serving as an identity
+        cornerstone or as actively task-prioritized should not quietly
+        vanish as a side-effect of an unrelated forgetting decision;
+        removing it from that role has to be its own, separately reasoned
+        step. Without the canon guard, forgetting a canonized memory would
+        leave an orphaned "active" canon entry pointing at a tombstoned
+        memory.
 
         Forgetting an already-forgotten memory is idempotent-ish: it updates
         the reason and re-logs the action, but does not change the original
@@ -533,6 +580,11 @@ class Store:
             raise ValueError(
                 "memory is pinned as an anchor; call unpin() first before "
                 "it can be forgotten"
+            )
+        if self._active_canon_count(memory_id) > 0:
+            raise ValueError(
+                "memory is in the active canon; call decanonize() (or "
+                "end_scope()) first before it can be forgotten"
             )
         now = _now()
         if mem.forgotten_at is None:
@@ -935,8 +987,15 @@ class Store:
         if memory_id_a == memory_id_b:
             raise ValueError("a memory cannot conflict with itself")
         for mid in (memory_id_a, memory_id_b):
-            if self.get(mid) is None:
+            mem = self.get(mid)
+            if mem is None:
                 raise KeyError(f"no such memory: {mid}")
+            if mem.is_forgotten:
+                raise ValueError(
+                    f"memory {mid} is forgotten; restore() it before "
+                    "declaring a conflict on it — conflicts describe live "
+                    "framed versions, not tombstoned ones"
+                )
         lo, hi = sorted([memory_id_a, memory_id_b])
         existing = self._conn.execute(
             "SELECT * FROM conflicts WHERE "
@@ -1048,11 +1107,23 @@ class Store:
         limit: int = 10,
         frame: str | None = None,
     ) -> dict:
-        """Recall memories. Anchors are always returned first, in full,
-        regardless of the query — they do not compete on relevance.
-        Remaining slots are filled by consolidated memories, then working
-        memories, newest first, optionally filtered by a naive substring
-        match on `query` (v0.1/v0.2 have no embedding dependency by design).
+        """Recall memories, deduplicated across sections and bounded by a
+        global budget.
+
+        Priority cascade: anchors (identity cornerstones) first, then active
+        canon entries (task-scoped), then ordinary memories (consolidated
+        before working, newest first). A memory never appears in more than
+        one section: if it is both pinned and canonized, it shows up under
+        `anchors` only (identity takes precedence); if it is canonized, it
+        shows under `canon` only.
+
+        `limit` bounds the TOTAL number of entries across anchors + canon +
+        memories. Anchors are the one exception: they are always returned
+        in full (that is their entire point) even if the anchor count alone
+        exceeds `limit` — in that case canon and memories get no slots.
+        Otherwise, slots remaining after anchors go to canon first, then to
+        ordinary memories, optionally filtered by a naive substring match on
+        `query` (no embedding dependency by design).
 
         `frame` (Halbwachs) optionally restricts the ordinary-memory list to
         one social frame — anchors and canon are always returned regardless
@@ -1064,25 +1135,35 @@ class Store:
         `narrative`: the current narrative synthesis from `narrate()`, if
         one has ever been submitted, alongside the discrete memory list —
         recall gives both the story and the raw facts it was built from.
-        And `canon`: the active, task-scoped canon entries (Assmann), which
-        are prioritized like anchors but are expected to rotate as tasks
-        change — unlike permanent anchors. And `conflicts`: currently open
-        (unresolved) conflicting framed versions, so disagreement is
-        surfaced explicitly rather than one version silently winning."""
+        And `conflicts`: currently open (unresolved) conflicting framed
+        versions, so disagreement is surfaced explicitly rather than one
+        version silently winning. These extra sections are informational
+        and do not count against `limit`."""
         anchors = self.list_anchors()
+        # canon entries excluding anchors (identity takes precedence over
+        # task-scoping for display; the memory is not duplicated)
+        all_canon = self.list_canon()
+        anchor_ids = {a["id"] for a in anchors}
+        canon = [c for c in all_canon if c["memory_id"] not in anchor_ids]
 
         def _match(row: sqlite3.Row) -> bool:
             if not query:
                 return True
             return query.lower() in row["content"].lower()
 
+        # global budget: anchors always win; canon then memories share what's left
         remaining = max(limit - len(anchors), 0)
+        canon = canon[:remaining]
+        rest_budget = max(remaining - len(canon), 0)
+
         rest: list[dict] = []
-        if remaining:
+        if rest_budget:
             if frame is not None:
                 rows = self._conn.execute(
                     "SELECT * FROM memories WHERE forgotten_at IS NULL AND "
                     "frame = ? AND id NOT IN (SELECT memory_id FROM anchors) "
+                    "AND id NOT IN (SELECT memory_id FROM canon_entries "
+                    "WHERE decommissioned_at IS NULL) "
                     "ORDER BY status='consolidated' DESC, created_at DESC",
                     (frame,),
                 ).fetchall()
@@ -1090,17 +1171,19 @@ class Store:
                 rows = self._conn.execute(
                     "SELECT * FROM memories WHERE forgotten_at IS NULL AND id NOT IN "
                     "(SELECT memory_id FROM anchors) "
+                    "AND id NOT IN (SELECT memory_id FROM canon_entries "
+                    "WHERE decommissioned_at IS NULL) "
                     "ORDER BY status='consolidated' DESC, created_at DESC"
                 ).fetchall()
             for r in rows:
                 if _match(r):
                     rest.append(dict(r))
-                if len(rest) >= remaining:
+                if len(rest) >= rest_budget:
                     break
 
         return {
             "anchors": anchors,
-            "canon": self.list_canon(),
+            "canon": canon,
             "memories": rest,
             "stale_interpretations": self.due_for_review(),
             "narrative": self.current_narrative(),

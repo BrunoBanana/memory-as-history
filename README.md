@@ -2,7 +2,7 @@
 
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Status: v0.8 — local prototype, not yet published.**
+**Status: v0.9 — local prototype, not yet published.**
 
 ## Why
 
@@ -93,6 +93,33 @@ multiple threads (a single `Store` instance is shared across an MCP server's
 concurrent tool-call handlers). Fixed with `check_same_thread=False` plus an
 instance-level `threading.RLock()` serializing all public methods — sqlite3
 connections are not safe for concurrent use even with that flag alone.
+
+A second review round (v0.9), specifically probing *cross-module interactions*
+that per-module tests miss, found and fixed six more issues:
+
+1. **`recall()` duplicated canonized memories** — a canonized memory appeared in
+   both the `canon` and `memories` sections (and an anchor+canon memory appeared
+   twice). Fixed: strict deduplication; an anchor+canon memory shows under
+   `anchors` only (identity takes precedence).
+2. **`recall(limit=N)` didn't bound the total** — `limit` only constrained the
+   `memories` section; anchors and canon were unbounded (up to 12+8+10=30
+   entries for a `limit=10` call). Fixed: `limit` is now a global budget across
+   anchors + canon + memories, with anchors as the sole exception (always
+   returned in full — that is their design).
+3. **`forget()` lacked a canon guard** — a canonized memory could be forgotten
+   directly, leaving an orphaned "active" canon entry pointing at a tombstone.
+   Fixed: mirrors the anchor guard — `decanonize()` (or `end_scope()`) first.
+4. **`flag_sensitive()` didn't lift an existing pin** — the corroboration gate
+   only checked at `pin()` time, so a memory pinned *before* being recognized
+   as sensitive kept its always-surfaced anchor status. Fixed: retroactive
+   flagging now auto-lifts unverified anchors (logged as `unpin_by_sensitivity`,
+   reversible by corroborating and re-pinning).
+5. **`mark_conflict()` accepted forgotten memories** — conflicts describe live
+   framed versions, not tombstoned ones. Fixed: explicit `ValueError`.
+6. **Unknown-origin corroboration was too lenient** — a memory with
+   `source=None` counted any single corroboration as independent (nothing to
+   exclude). Fixed: unknown origin requires two distinct corroborating voices
+   (any one of them could be the true origin).
 
 ## Does the mechanism actually work? (`usefulness_test.py`, `poisoning_test.py`)
 

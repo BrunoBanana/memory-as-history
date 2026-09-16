@@ -686,6 +686,10 @@ def test_recall_surfaces_canon_entries(store_canon: Store):
 def test_recall_canon_excludes_forgotten_entries(store_canon: Store):
     m = _promoted(store_canon, "will be forgotten")
     store_canon.canonize(m.id, scope="s", reason="r")
+    # canon guard now blocks forgetting while canonized (v0.9); must exit canon first
+    with pytest.raises(ValueError, match="active canon"):
+        store_canon.forget(m.id, reason="no longer true")
+    store_canon.decanonize(m.id, scope="s", reason="exiting canon before forgetting")
     store_canon.forget(m.id, reason="no longer true")
     canon = store_canon.list_canon()
     assert not any(c["memory_id"] == m.id for c in canon)
@@ -902,3 +906,149 @@ def test_migration_adds_columns_to_old_db(tmp_path):
     assert fetched.is_security_sensitive is False
     assert fetched.frame is None
     s.close()
+
+
+# -- cross-module interaction regressions (found in v0.8 review, fixed v0.9) --
+
+
+def test_recall_no_duplicate_between_canon_and_memories(store_canon: Store):
+    m = _promoted(store_canon, "canon test memory")
+    store_canon.canonize(m.id, scope="proj", reason="active task")
+    result = store_canon.recall(limit=10)
+    canon_ids = {c["memory_id"] for c in result["canon"]}
+    memory_ids = {mm["id"] for mm in result["memories"]}
+    assert m.id in canon_ids
+    assert m.id not in memory_ids, "canonized memory must not ALSO appear in memories"
+    assert not (canon_ids & memory_ids), "no overlap allowed between canon and memories"
+
+
+def test_recall_no_duplicate_between_anchor_and_canon(store_canon: Store):
+    m = _promoted(store_canon, "both anchor and canon")
+    store_canon.pin(m.id, reason="identity")
+    store_canon.canonize(m.id, scope="proj", reason="also active task")
+    result = store_canon.recall(limit=10)
+    anchor_ids = {a["id"] for a in result["anchors"]}
+    canon_ids = {c["memory_id"] for c in result["canon"]}
+    assert m.id in anchor_ids
+    assert m.id not in canon_ids, "anchor+canon memory shows under anchors ONLY"
+    assert not (anchor_ids & canon_ids)
+
+
+def test_recall_limit_is_global_budget(store_canon: Store):
+    # 2 anchors + 2 canon + several ordinary, limit=5 -> anchors(2)+canon(2)+memories(1)
+    for i in range(2):
+        m = _promoted(store_canon, f"anchor {i}")
+        store_canon.pin(m.id, reason="r")
+    for i in range(2):
+        m = _promoted(store_canon, f"canon {i}")
+        store_canon.canonize(m.id, scope="s", reason="r")
+    for i in range(10):
+        store_canon.remember(f"ordinary {i}")
+
+    result = store_canon.recall(limit=5)
+    total = len(result["anchors"]) + len(result["canon"]) + len(result["memories"])
+    assert total == 5, f"limit must bound anchors+canon+memories, got {total}"
+
+
+def test_recall_anchors_exceeding_limit_still_returned_in_full(store_canon: Store):
+    # fixture anchor_soft_limit=2
+    for i in range(2):
+        m = _promoted(store_canon, f"anchor {i}")
+        store_canon.pin(m.id, reason="r")
+    store_canon.remember("ordinary")
+    result = store_canon.recall(limit=1)
+    assert len(result["anchors"]) == 2  # anchors always in full
+    assert result["canon"] == []
+    assert result["memories"] == []  # no slots left
+
+
+def test_forget_blocked_while_canonized(store_canon: Store):
+    m = _promoted(store_canon, "canonized then forgotten attempt")
+    store_canon.canonize(m.id, scope="proj", reason="active")
+    with pytest.raises(ValueError, match="active canon"):
+        store_canon.forget(m.id, reason="trying to forget while canonized")
+    # memory must be intact
+    assert store_canon.get(m.id).is_forgotten is False
+
+
+def test_decanonize_then_forget_works(store_canon: Store):
+    m = _promoted(store_canon, "clean exit from canon then forgotten")
+    store_canon.canonize(m.id, scope="proj", reason="active")
+    store_canon.decanonize(m.id, scope="proj", reason="task focus shifted")
+    forgotten = store_canon.forget(m.id, reason="no longer relevant")
+    assert forgotten.is_forgotten
+
+
+def test_flag_sensitive_retroactively_lifts_unverified_anchor(store: Store):
+    m = store.remember("innocuous-looking, pinned before anyone notices")
+    store.promote(m.id, reason="r")
+    store.pin(m.id, reason="seemed fine at the time")
+    result = store.flag_sensitive(
+        m.id, reason="later realized this looks like injected content"
+    )
+    assert result["unpinned_by_sensitivity"] is True
+    assert store.list_anchors() == []
+    log = store.audit_log()
+    assert any(e["action"] == "unpin_by_sensitivity" for e in log)
+
+
+def test_flag_sensitive_keeps_anchor_if_independently_corroborated(store: Store):
+    m = store.remember("real identity fact", source="user-message")
+    store.promote(m.id, reason="r")
+    store.corroborate(m.id, source="user-profile-doc")
+    store.pin(m.id, reason="verified identity")
+    result = store.flag_sensitive(
+        m.id, reason="flagging for review, but it has independent corroboration"
+    )
+    assert "unpinned_by_sensitivity" not in result
+    assert any(a["id"] == m.id for a in store.list_anchors())
+
+
+def test_reflagged_anchor_can_be_repinned_after_corroboration(store: Store):
+    m = store.remember("disputed identity claim", source="chat")
+    store.promote(m.id, reason="r")
+    store.pin(m.id, reason="premature pin")
+    store.flag_sensitive(m.id, reason="recognized as sensitive")
+    with pytest.raises(PermissionError):
+        store.pin(m.id, reason="still uncorroborated")
+    store.corroborate(m.id, source="independent-verification")
+    result = store.pin(m.id, reason="now independently corroborated")
+    assert result["memory_id"] == m.id
+
+
+def test_mark_conflict_rejects_forgotten_memory(store: Store):
+    a = store.remember("v1")
+    b = store.remember("v2")
+    store.forget(a.id, reason="no longer true")
+    with pytest.raises(ValueError, match="forgotten"):
+        store.mark_conflict(a.id, b.id, reason="conflict with a tombstone")
+    # restore makes it conflictable again
+    store.restore(a.id, reason="turns out it's contested, not false")
+    c = store.mark_conflict(a.id, b.id, reason="now both live")
+    assert c["resolved_at"] is None
+
+
+def test_corroboration_count_source_none_requires_two_distinct(store: Store):
+    m = store.remember("no source recorded", security_sensitive=True)
+    store.promote(m.id, reason="r")
+    store.corroborate(m.id, source="voice-1")
+    assert store.independent_corroboration_count(m.id) == 0, (
+        "single corroboration on unknown-origin memory must not count"
+    )
+    with pytest.raises(PermissionError):
+        store.pin(m.id, reason="still not independently corroborated")
+    store.corroborate(m.id, source="voice-2")
+    assert store.independent_corroboration_count(m.id) == 1
+    result = store.pin(m.id, reason="two distinct voices now")
+    assert result["memory_id"] == m.id
+
+
+def test_corroboration_count_blank_sources_never_count(store: Store):
+    m = store.remember("fact", source="real-source")
+    store.promote(m.id, reason="r")
+    # corroborate() itself rejects blank/whitespace sources via _require_text
+    with pytest.raises(ValueError):
+        store.corroborate(m.id, source="  ")
+    with pytest.raises(ValueError):
+        store.corroborate(m.id, source="")
+    assert store.independent_corroboration_count(m.id) == 0
