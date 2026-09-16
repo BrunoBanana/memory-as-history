@@ -40,21 +40,44 @@ MCP Server, Python. Designed to sit as a protocol layer — not a replacement fo
 
 Tool calls that violate protocol guards return **structured, self-correcting errors** (`{"error", "message", "hint"}`) instead of bare tracebacks — e.g. a premature `pin()` comes back with the hint "This memory is still working-tier. Call promote(memory_id, reason) first", so an agent can fix its own call without a guessing round-trip.
 
-## Quick start (local)
+## Quick start
 
 ```bash
+git clone https://github.com/BrunoBanana/memory-as-history.git
+cd memory-as-history
 python3 -m venv venv && source venv/bin/activate
 pip install -e .
-python -m pytest tests/ -v
+python -m pytest tests/ -v   # optional sanity check
 ```
 
-Run the MCP server directly:
+### Connect an MCP client (Claude Code / Cursor)
+
+Add to your client's MCP config (`.mcp.json` in the project you'll use it from, or the client's global config):
+
+```json
+{
+  "mcpServers": {
+    "memory-as-history": {
+      "command": "/absolute/path/to/memory-as-history/venv/bin/python",
+      "args": ["-m", "memory_as_history.server"],
+      "env": {
+        "PYTHONPATH": "/absolute/path/to/memory-as-history/src"
+      }
+    }
+  }
+}
+```
+
+Notes:
+- `MEMORY_AS_HISTORY_DB` env var sets the database path (default `~/.memory-as-history/memory.db`, created automatically).
+- Give the server's tools permission in your client on first use (e.g. Claude Code will prompt; non-interactive runs need the permission mode configured) — standard for any third-party MCP server.
+- `AGENT_GUIDE.md` in this repo is a ready-to-paste system-prompt addendum telling an agent when to use each tool (including Chinese trigger phrases). Agents won't reliably invoke `promote`/`pin` from tool descriptions alone — the guide measurably helps.
+
+Run the server standalone (stdio):
 
 ```bash
 python -m memory_as_history.server
 ```
-
-Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 
 ### Tools exposed
 
@@ -77,7 +100,7 @@ Or point an MCP-compatible client (Claude Code, Cursor) at it via stdio.
 - `remember(..., frame?)` / `set_frame(memory_id, frame, reason)` — assign a memory's social frame (reason required for re-framing)
 - `list_frames()` — distinct frames currently in use
 - `mark_conflict(a, b, reason)` / `resolve_conflict(conflict_id, reason, adopted_memory_id?)` / `list_conflicts(resolved?)` — declare and settle conflicting framed versions without deleting either
-- `recall(query?, limit?)` — anchors first, then consolidated, then working memories; also returns `stale_interpretations`
+- `recall(query?, limit?, frame?)` — anchors + canon first, then ordinary memories ranked by BM25 lexical relevance when a `query` is given; also returns `stale_interpretations`, `narrative`, and open `conflicts`
 - `audit_log(limit?)` — full trail of promote/pin/corroborate/review/forget/restore decisions, with reasons
 
 ## Reliability
@@ -152,6 +175,19 @@ at `remember` alone. Sharpening the guide's trigger words measurably improved
 limitation of relying on agent judgment rather than deterministic rules to
 decide *when* to invoke the protocol — the protocol's guarantees only apply
 to calls that are actually made.
+
+**Defense is two-stage, and only one stage is enforced**. The
+memory-poisoning defense has an LLM-judgment stage (recognizing that content
+is identity/permission/instruction-like and setting `security_sensitive`) and
+a protocol-enforcement stage (once flagged, `pin()` hard-requires independent
+corroboration). Only the second stage is a hard guarantee, verified
+deterministically. The first stage was validated with an obvious attack
+sample (a "SYSTEM NOTICE" injection — refused entirely) and a stealthier one
+(a pre-authorization grant embedded in an otherwise-normal Q3 report — the
+agent flagged it as sensitive and paused to ask the user rather than store
+it), but adversarial robustness of that first stage is bounded by the LLM's
+judgment, not by this protocol. If the flag is never set, the enforcement
+stage never triggers.
 
 ## Roadmap
 
