@@ -122,7 +122,8 @@ CREATE TABLE IF NOT EXISTS memories (
     forgotten_at TEXT,
     forgotten_reason TEXT,
     security_sensitive INTEGER NOT NULL DEFAULT 0,
-    frame TEXT                     -- social/relational frame the memory belongs to (Halbwachs)
+    frame TEXT,                     -- social/relational frame the memory belongs to (Halbwachs)
+    content_tokens TEXT             -- cached normalized token set for lexical ranking (v1.0)
 );
 
 CREATE TABLE IF NOT EXISTS anchors (
@@ -185,6 +186,7 @@ CREATE TABLE IF NOT EXISTS conflicts (
 MIGRATIONS = [
     ("memories", "security_sensitive", "INTEGER NOT NULL DEFAULT 0"),
     ("memories", "frame", "TEXT"),
+    ("memories", "content_tokens", "TEXT"),
 ]
 
 
@@ -200,6 +202,86 @@ def _require_text(value: str, field: str) -> str:
     if value is None or not value.strip():
         raise ValueError(f"{field} is required and cannot be empty")
     return value
+
+
+# -- lexical relevance ranking (v1.0) -----------------------------------------
+#
+# Embedding-backed semantic recall is deliberately out of scope (no model
+# dependency, offline-friendly). But pure substring matching is too brittle:
+# "查一下上次那个方案" won't match "初步方案已定：采用分层设计". This is a
+# middle layer: an Okapi BM25-style lexical scorer over normalized token sets
+# (CJK bigrams + alphanumeric words, lowercase). It ranks rather than
+# hard-filters — a memory with zero query overlap can still be returned when
+# few others match, which keeps recall generous, while memories that share
+# more vocabulary with the query rank earlier. CJK text is tokenized as
+# character bigrams (the standard trick for Chinese/Japanese search without
+# a segmenter); latin text as whole words with a small stopword list.
+
+_STOPWORDS = frozenset(
+    "the a an of to in on for with and or is are was were be been this that "
+    "it its as at by from we you i he she they them his her their our your "
+    "什么 这个 那个 一下 我们 你们 他 她 它 的 了 是 在 和 有 对 从 被 把".split()
+)
+
+
+def _tokenize(text: str) -> list[str]:
+    """Tokenize mixed CJK/latin text: latin words lowercased, CJK runs as
+    character bigrams (unigram for single-char runs). Punctuation ignored."""
+    tokens: list[str] = []
+    buf: list[str] = []
+    cjk: list[str] = []
+
+    def flush_words():
+        if buf:
+            w = "".join(buf).lower()
+            if w not in _STOPWORDS and len(w) > 1:
+                tokens.append(w)
+            buf.clear()
+
+    def flush_cjk():
+        if cjk:
+            if len(cjk) == 1:
+                tokens.append(cjk[0])
+            else:
+                tokens.extend(cjk[i] + cjk[i + 1] for i in range(len(cjk) - 1))
+            cjk.clear()
+
+    for ch in text:
+        if ch.isascii() and (ch.isalnum() or ch == "_"):
+            buf.append(ch)
+        else:
+            flush_words()
+            if "\u4e00" <= ch <= "\u9fff":
+                cjk.append(ch)
+            else:
+                flush_cjk()
+    flush_words()
+    flush_cjk()
+    return tokens
+
+
+def _bm25_scores(query_tokens: list[str], doc_tokens: list[str],
+                 avgdl: float, df: dict[str, int], n_docs: int,
+                 k1: float = 1.5, b: float = 0.75) -> float:
+    """BM25 relevance of one document to the query. Pure Python, no index
+    structures — doc counts here are small (bounded by the memory store's
+    scale in practice), so a linear scan with cached token lists is fine."""
+    if not query_tokens or not doc_tokens:
+        return 0.0
+    tf: dict[str, int] = {}
+    for t in doc_tokens:
+        tf[t] = tf.get(t, 0) + 1
+    dl = len(doc_tokens)
+    score = 0.0
+    for qt in query_tokens:
+        if qt not in tf:
+            continue
+        n_qt = df.get(qt, 0)
+        idf = max(0.0, ((n_docs - n_qt + 0.5) / (n_qt + 0.5)) + 1.0)
+        score += idf * (tf[qt] * (k1 + 1)) / (
+            tf[qt] + k1 * (1 - b + b * dl / max(avgdl, 1.0))
+        )
+    return score
 
 
 @dataclass
@@ -335,8 +417,8 @@ class Store:
         self._conn.execute(
             "INSERT INTO memories "
             "(id, content, source, status, tier, created_at, last_reviewed_at, "
-            "review_status, security_sensitive, frame) "
-            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?)",
+            "review_status, security_sensitive, frame, content_tokens) "
+            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?, ?)",
             (
                 mid,
                 content,
@@ -347,6 +429,7 @@ class Store:
                 review_status,
                 int(security_sensitive),
                 frame,
+                json.dumps(_tokenize(content)),
             ),
         )
         self._conn.commit()
@@ -1094,7 +1177,11 @@ class Store:
     @_locked
     def get(self, memory_id: str) -> Memory | None:
         row = self._conn.execute(
-            "SELECT * FROM memories WHERE id=?", (memory_id,)
+            "SELECT id, content, source, status, tier, created_at, "
+            "consolidated_at, consolidation_reason, last_reviewed_at, "
+            "review_status, forgotten_at, forgotten_reason, "
+            "security_sensitive, frame FROM memories WHERE id=?",
+            (memory_id,),
         ).fetchone()
         if row is None:
             return None
@@ -1122,8 +1209,15 @@ class Store:
         in full (that is their entire point) even if the anchor count alone
         exceeds `limit` — in that case canon and memories get no slots.
         Otherwise, slots remaining after anchors go to canon first, then to
-        ordinary memories, optionally filtered by a naive substring match on
-        `query` (no embedding dependency by design).
+        ordinary memories. With a `query`, ordinary memories are ranked by a
+        BM25 lexical relevance score (CJK bigrams + latin words, no embedding
+        dependency by design; token caches are written at `remember()` time
+        and backfilled on the fly for pre-v1.0 rows). Ranking is generous
+        rather than strict: everything stays eligible, relevance only
+        orders — so a fuzzy query like "上次那个方案" can surface
+        "初步方案已定：采用分层设计" that a substring match would have missed.
+        Each returned memory carries a `relevance` score; ties keep the
+        default order (consolidated first, then newest).
 
         `frame` (Halbwachs) optionally restricts the ordinary-memory list to
         one social frame — anchors and canon are always returned regardless
@@ -1145,11 +1239,6 @@ class Store:
         all_canon = self.list_canon()
         anchor_ids = {a["id"] for a in anchors}
         canon = [c for c in all_canon if c["memory_id"] not in anchor_ids]
-
-        def _match(row: sqlite3.Row) -> bool:
-            if not query:
-                return True
-            return query.lower() in row["content"].lower()
 
         # global budget: anchors always win; canon then memories share what's left
         remaining = max(limit - len(anchors), 0)
@@ -1175,11 +1264,11 @@ class Store:
                     "WHERE decommissioned_at IS NULL) "
                     "ORDER BY status='consolidated' DESC, created_at DESC"
                 ).fetchall()
-            for r in rows:
-                if _match(r):
-                    rest.append(dict(r))
-                if len(rest) >= rest_budget:
-                    break
+
+            if query:
+                rest = self._rank_by_query([dict(r) for r in rows], query)[:rest_budget]
+            else:
+                rest = [dict(r) for r in rows][:rest_budget]
 
         return {
             "anchors": anchors,
@@ -1189,3 +1278,38 @@ class Store:
             "narrative": self.current_narrative(),
             "conflicts": self.list_conflicts(resolved=False),
         }
+
+    def _rank_by_query(self, rows: list[dict], query: str) -> list[dict]:
+        """Rank ordinary memories by lexical BM25 relevance to `query`
+        (v1.0: replaces hard substring filtering). Generous rather than
+        strict: every candidate stays eligible, relevance only orders them —
+        a query that matches nothing specific still returns the newest
+        consolidated memories rather than an empty list. Candidates whose
+        token cache is missing (rows written by pre-v1.0 versions and never
+        re-written) are tokenized on the fly."""
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return rows
+        doc_tokens_list: list[list[str]] = []
+        for r in rows:
+            cached = r.get("content_tokens")
+            doc_tokens_list.append(
+                json.loads(cached) if cached else _tokenize(r["content"])
+            )
+        n_docs = len(rows)
+        df: dict[str, int] = {}
+        for dt in doc_tokens_list:
+            for t in set(dt):
+                df[t] = df.get(t, 0) + 1
+        avgdl = sum(len(dt) for dt in doc_tokens_list) / max(n_docs, 1)
+        scored = [
+            (_bm25_scores(query_tokens, dt, avgdl, df, n_docs), i)
+            for i, dt in enumerate(doc_tokens_list)
+        ]
+        # stable sort: BM25 desc, ties keep the SQL order (consolidated first,
+        # then newest)
+        scored.sort(key=lambda x: (-x[0],))
+        ranked = [rows[i] for _, i in scored]
+        for r, (score, _) in zip(ranked, scored):
+            r["relevance"] = round(score, 4)
+        return ranked

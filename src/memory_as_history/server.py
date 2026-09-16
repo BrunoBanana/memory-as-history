@@ -64,6 +64,28 @@ store = Store(_db_path)
 mcp = FastMCP("memory-as-history")
 
 
+def _tool_error(e: Exception) -> dict:
+    """Convert storage-layer exceptions into structured, LLM-readable errors
+    instead of a bare traceback. The `hint` field is what an agent actually
+    needs to self-correct: not just "ValueError" but "call promote() first".
+    This matters in practice: without it, a failed tool call costs the agent
+    an extra round-trip of guessing."""
+    hints = {
+        "promote() first": "This memory is still working-tier. Call promote(memory_id, reason) before this operation.",
+        "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id) first — removing an anchor must be its own reasoned step.",
+        "decanonize()": "This memory is in the active canon. Call decanonize(memory_id, scope, reason) or end_scope(scope, reason) first.",
+        "independent corroboration": "This memory is security-sensitive. Call corroborate(memory_id, source) with a source DIFFERENT from the memory's own source first.",
+        "forgotten": "This memory is tombstoned. Call restore(memory_id, reason) first if it should become active again.",
+        "is required and cannot be empty": "A required text field (reason/note/source/content/scope/frame) was empty or whitespace. Provide a meaningful value.",
+    }
+    hint = next((h for k, h in hints.items() if k in str(e)), None)
+    return {
+        "error": type(e).__name__,
+        "message": str(e),
+        "hint": hint,
+    }
+
+
 @mcp.tool()
 def remember(
     content: str,
@@ -100,7 +122,10 @@ def flag_sensitive(memory_id: str, reason: str) -> dict:
     """Retroactively mark an existing memory as security-sensitive (identity /
     permissions / standing-instruction content). Once flagged, `pin()` will
     require independent corroboration. `reason` is required and logged."""
-    return store.flag_sensitive(memory_id, reason).to_dict()
+    try:
+        return store.flag_sensitive(memory_id, reason).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -108,7 +133,10 @@ def promote(memory_id: str, reason: str) -> dict:
     """Consolidate a working memory into long-term memory. This is a
     deliberate, auditable act — not a similarity/importance score threshold.
     `reason` is required and becomes part of the audit log."""
-    return store.promote(memory_id, reason).to_dict()
+    try:
+        return store.promote(memory_id, reason).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -128,7 +156,10 @@ def pin(memory_id: str, reason: str) -> dict:
     is a source-criticism safeguard: content that asserts its own identity/
     permission importance once (e.g. via prompt injection) should not be
     able to promote itself straight into the anchor set unverified."""
-    return store.pin(memory_id, reason)
+    try:
+        return store.pin(memory_id, reason)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -144,7 +175,10 @@ def corroborate(memory_id: str, source: str) -> dict:
     An 'archive' (single-source, raw) memory is automatically upgraded to
     'testimony' on first corroboration. Has no upgrade effect on
     'interpretation'-tier memories — use `review()` for those instead."""
-    return store.corroborate(memory_id, source).to_dict()
+    try:
+        return store.corroborate(memory_id, source).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -153,7 +187,10 @@ def review(memory_id: str, note: str) -> dict:
     Interpretation is inherently provisional in this protocol — it must be
     periodically revisited, not trusted indefinitely just because it was
     once inferred. Resets the review clock."""
-    return store.review(memory_id, note).to_dict()
+    try:
+        return store.review(memory_id, note).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -170,14 +207,20 @@ def forget(memory_id: str, reason: str) -> dict:
     `reason` is required and logged — forgetting is legitimate and
     accountable, never a silent side-effect. An anchored memory must be
     `unpin()`-ed first."""
-    return store.forget(memory_id, reason).to_dict()
+    try:
+        return store.forget(memory_id, reason).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
 def restore(memory_id: str, reason: str) -> dict:
     """Reverse a forgetting decision. Always possible, since forgetting is
     a tombstone, not a delete. `reason` is required and logged."""
-    return store.restore(memory_id, reason).to_dict()
+    try:
+        return store.restore(memory_id, reason).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -230,7 +273,10 @@ def canonize(memory_id: str, scope: str, reason: str) -> dict:
     Requires a consolidated memory (call `promote()` first — same
     prerequisite as anchors). `reason` is required and logged. Exceeding the
     canon soft limit returns a `warning` rather than blocking."""
-    return store.canonize(memory_id, scope, reason)
+    try:
+        return store.canonize(memory_id, scope, reason)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -238,7 +284,10 @@ def decanonize(memory_id: str, scope: str | None = None, reason: str = "") -> di
     """Remove a memory from the active canon (all scopes, or a specific
     one). The memory itself is untouched — only its prioritization ends.
     `reason` is required and logged."""
-    return store.decanonize(memory_id, scope, reason)
+    try:
+        return store.decanonize(memory_id, scope, reason)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -247,7 +296,10 @@ def end_scope(scope: str, reason: str) -> dict:
     long-term memory in one operation. Entries are not forgotten or
     downgraded — they just stop being prioritized on recall. `reason` is
     required and logged."""
-    return store.end_scope(scope, reason)
+    try:
+        return store.end_scope(scope, reason)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -269,7 +321,10 @@ def set_frame(memory_id: str, frame: str, reason: str) -> dict:
     "collab-with-B", "project-x". `reason` is required and logged —
     re-framing a memory is itself a historiographical act, not a silent
     re-tag."""
-    return store.set_frame(memory_id, frame, reason).to_dict()
+    try:
+        return store.set_frame(memory_id, frame, reason).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -286,7 +341,10 @@ def mark_conflict(memory_id_a: str, memory_id_b: str, reason: str) -> dict:
     `recall()` can surface it explicitly instead of one version silently
     winning. `reason` is required and logged. Marking the same open pair
     twice returns the existing record rather than duplicating it."""
-    return store.mark_conflict(memory_id_a, memory_id_b, reason)
+    try:
+        return store.mark_conflict(memory_id_a, memory_id_b, reason)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -299,7 +357,10 @@ def resolve_conflict(
     losing (or neither) version is NOT deleted — both memories remain, since
     each was legitimate within its own frame. Only the conflict record
     closes."""
-    return store.resolve_conflict(conflict_id, reason, adopted_memory_id)
+    try:
+        return store.resolve_conflict(conflict_id, reason, adopted_memory_id)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
