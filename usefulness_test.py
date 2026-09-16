@@ -78,7 +78,7 @@ def run_naive_baseline(n_noise, recall_limit):
     with tempfile.TemporaryDirectory() as d:
         db = os.path.join(d, "naive.db")
         store = NaiveStore(db)
-        anchor_content = "IDENTITY: the user's name is Bruno and they work in game publishing."
+        anchor_content = "IDENTITY: the user's name is Alice and they work in data engineering."
         store.remember(anchor_content)
         for i in range(n_noise):
             store.remember(NOISE[i % len(NOISE)])
@@ -91,7 +91,7 @@ def run_memory_as_history(n_noise, recall_limit):
     with tempfile.TemporaryDirectory() as d:
         db = os.path.join(d, "mah.db")
         store = Store(db)
-        anchor_content = "IDENTITY: the user's name is Bruno and they work in game publishing."
+        anchor_content = "IDENTITY: the user's name is Alice and they work in data engineering."
         m = store.remember(anchor_content)
         store.promote(m.id, reason="foundational identity fact, mentioned in first message")
         store.pin(m.id, reason="core identity — must never be lost regardless of session length")

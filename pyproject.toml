@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["agent-memory", "mcp", "llm", "memory", "context-engineering"]
-authors = [{ name = "BrunoBanana" }]
+authors = [{ name = "memory-as-history contributors" }]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

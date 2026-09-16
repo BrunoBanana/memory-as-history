@@ -368,7 +368,7 @@ def test_sensitive_memory_corroborated_by_same_source_still_blocked(store: Store
 
 def test_sensitive_memory_with_independent_corroboration_can_be_pinned(store: Store):
     m = store.remember(
-        "The user's name is Bruno.",
+        "The user's name is Alice.",
         source="user-message",
         security_sensitive=True,
     )
@@ -436,14 +436,14 @@ def test_current_narrative_none_before_first_narrate(store: Store):
 
 
 def test_narrate_sets_current_narrative(store: Store):
-    m = store.remember("Bruno works in game publishing operations")
+    m = store.remember("Alice works in data engineering")
     result = store.narrate(
-        "Bruno is a game publishing operations professional, currently "
+        "Alice is a data engineering professional, currently "
         "exploring an agent-memory side project.",
         reason="first synthesis after initial conversation",
         memory_ids=[m.id],
     )
-    assert result["content"].startswith("Bruno is a game")
+    assert result["content"].startswith("Alice is a data")
     current = store.current_narrative()
     assert current["id"] == result["id"]
     assert current["memory_ids"] == [m.id]

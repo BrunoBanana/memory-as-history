@@ -43,7 +43,7 @@ Tool calls that violate protocol guards return **structured, self-correcting err
 ## Quick start
 
 ```bash
-git clone https://github.com/BrunoBanana/memory-as-history.git
+git clone https://github.com/<your-fork-or-org>/memory-as-history.git
 cd memory-as-history
 python3 -m venv venv && source venv/bin/activate
 pip install -e .
