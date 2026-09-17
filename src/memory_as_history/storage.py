@@ -44,7 +44,9 @@ Three modules for v0.2:
   if any, is not deleted — it is marked superseded, so the *story itself*
   has a history: not just who the user currently is, but how that account
   changed over time, and why. `recall()` surfaces the current narrative
-  alongside the discrete memory list.
+  alongside the discrete memory list when its dependencies are usable. Invalid
+  sources suppress the default text; explicit inspection preserves it, and
+  review_narrative() records revalidation without rewriting the account.
 - Canon / archive circulation (Assmann: Kanon/Archiv — distinct from Nora's
   permanent anchors): a *task-scoped*, rotating "canon" — the small, active
   set of memories relevant to whatever the current task/phase is.
@@ -303,6 +305,7 @@ def _tokenize(text: str) -> list[str]:
 
     for ch in text:
         if ch.isascii() and (ch.isalnum() or ch == "_"):
+            flush_cjk()
             buf.append(ch)
         else:
             flush_words()
@@ -610,6 +613,8 @@ class Store:
         automatically lifted: an anchor that is later recognized as
         security-sensitive but never independently corroborated should not
         keep its always-surfaced status while we wait for someone to notice.
+        Unsupported canon scopes are also decommissioned and linked narratives
+        invalidated, all atomically. Supported memberships stay active.
         The unpin is itself logged (action 'unpin_by_sensitivity') so the
         chain of events stays auditable. If corroboration is later
         obtained, `pin()` can be called again and will succeed."""
@@ -1310,7 +1315,7 @@ class Store:
 
     @_locked
     def list_canon(self, scope: str | None = None) -> list[dict]:
-        """List active canon entries, optionally filtered by scope."""
+        """Inspect active canon, including eligibility of unsupported legacy rows."""
         if scope is None:
             rows = self._conn.execute(
                 "SELECT c.*, m.content, m.status, m.tier, m.security_sensitive "
@@ -1546,8 +1551,9 @@ class Store:
         Also surfaces `stale_interpretations`: interpretation-tier memories
         due for review, so callers can prompt for re-examination. And
         `narrative`: the current narrative synthesis from `narrate()`, if
-        one has ever been submitted, alongside the discrete memory list —
-        recall gives both the story and the raw facts it was built from.
+        one has been submitted and its dependencies remain usable. A stale
+        account is withheld and replaced by a content-free `narrative_review`
+        notice; current_narrative()/narrative_history() retain its full text.
         And `conflicts`: currently open (unresolved) conflicting framed
         versions, so disagreement is surfaced explicitly rather than one
         version silently winning. Conflicts with a forgotten participant
@@ -1636,7 +1642,12 @@ class Store:
                 tokens = json.loads(cached) if cached else None
             except (ValueError, TypeError):
                 tokens = None
-            if not isinstance(tokens, list) or any(not isinstance(t, str) for t in tokens):
+            # Pre-1.2 tokenization joined CJK runs across embedded ASCII.
+            # Recompute affected caches without rewriting historical rows.
+            interleaved_scripts = re.search(r"[\u4e00-\u9fff][A-Za-z0-9_]+[\u4e00-\u9fff]", r["content"])
+            if (not isinstance(tokens, list)
+                    or any(not isinstance(t, str) for t in tokens)
+                    or interleaved_scripts):
                 tokens = _tokenize(r["content"])
             doc_tokens_list.append(tokens)
         n_docs = len(rows)

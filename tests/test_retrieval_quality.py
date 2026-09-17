@@ -68,3 +68,15 @@ def test_query_respects_frame_and_forgetting_while_retaining_priority(store):
     result = store.recall(query='alpha', frame='selected', limit=2)
     assert [r['id'] for r in result['anchors']] == [anchor.id]
     assert [r['id'] for r in result['memories']] == [ordinary.id]
+
+
+def test_interleaved_scripts_do_not_form_bigrams_across_ascii_words():
+    assert _tokenize('中SQLite文') == ['中', 'sqlite', '文']
+
+
+def test_old_interleaved_script_cache_cannot_restore_false_matches(store):
+    memory = store.remember('中SQLite文')
+    store._conn.execute('UPDATE memories SET content_tokens=? WHERE id=?',
+                        ('["sqlite", "中文"]', memory.id))
+    store._conn.commit()
+    assert store.recall(query='中文')['memories'][0]['relevance'] == 0

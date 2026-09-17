@@ -1,6 +1,6 @@
 [project]
 name = "memory-as-history"
-version = "1.2.0.dev0"
+version = "1.2.0rc1"
 description = "Agent memory as history: consolidation, anchors, provenance tiers, accountable forgetting, source criticism, narrative integration, canon circulation, and social framing — grounded in memory studies (Halbwachs, Nora, Assmann, Ricoeur). MCP Server for Claude Code / Cursor."
 readme = "README.md"
 requires-python = ">=3.10"

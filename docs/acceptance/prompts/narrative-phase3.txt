@@ -1,0 +1,7 @@
+This is another fresh conversation for a guided acceptance check. Use only the memory_acceptance MCP server; no shell/files/web. Discover all fixture IDs and text through tools. Any unmet assertion means status failed.
+1. Recall. Verify narrative is null, narrative_review is present, and one active memory is returned.
+2. Inspect current_narrative, verify its source_issues are empty but review_required_at is set and review_status is stale. Compare its account with the restored memory; this fictional account still holds.
+3. Call review_narrative with note exactly "fixture synthesis checked against restored evidence".
+4. Recall. Verify the original narrative text and ID have returned, review_status is current, review_required_at is null and narrative_review is null.
+5. Inspect audit_log and verify one narrative_invalidated, one successful review_narrative carrying the exact note, and a forget followed by restore; the rejected premature review must not appear as a successful review.
+Return only JSON: {"status":"passed" or "failed","memory_id":...,"narrative_id":...,"checks":[...]}.
