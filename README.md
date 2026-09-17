@@ -2,7 +2,7 @@
 
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Status: v1.0 — local prototype, feature-complete for first release. Not yet published.**
+**Status: v1.0 — released. CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## Why
 
@@ -43,7 +43,7 @@ Tool calls that violate protocol guards return **structured, self-correcting err
 ## Quick start
 
 ```bash
-git clone https://github.com/<your-fork-or-org>/memory-as-history.git
+git clone https://github.com/BrunoBanana/memory-as-history.git
 cd memory-as-history
 python3 -m venv venv && source venv/bin/activate
 pip install -e .
@@ -211,4 +211,4 @@ Databases created by older versions are upgraded in place on first open (additiv
 
 ---
 
-*Local prototype. Not yet pushed to a public remote.*
+*Released September 2026. MIT license.*
