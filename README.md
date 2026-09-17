@@ -167,30 +167,6 @@ correctly:
   a permanent anchor on one appearance. With the flag set, `pin()` refuses
   without independent corroboration.
 
-**Honest finding from testing with a real LLM (not scripted) via MCP**: the
-mechanisms work when invoked, but an agent's *decision* to invoke `promote`/
-`pin`/`security_sensitive` from natural conversation is not fully reliable —
-the same prompt, run twice against `AGENT_GUIDE.md`'s trigger-word guidance,
-sometimes calls the full `remember → promote → pin` chain and sometimes stops
-at `remember` alone. Sharpening the guide's trigger words measurably improved
-(but did not eliminate) this variance. This is a real, currently open
-limitation of relying on agent judgment rather than deterministic rules to
-decide *when* to invoke the protocol — the protocol's guarantees only apply
-to calls that are actually made.
-
-**Defense is two-stage, and only one stage is enforced**. The
-memory-poisoning defense has an LLM-judgment stage (recognizing that content
-is identity/permission/instruction-like and setting `security_sensitive`) and
-a protocol-enforcement stage (once flagged, `pin()` hard-requires independent
-corroboration). Only the second stage is a hard guarantee, verified
-deterministically. The first stage was validated with an obvious attack
-sample (a "SYSTEM NOTICE" injection — refused entirely) and a stealthier one
-(a pre-authorization grant embedded in an otherwise-normal Q3 report — the
-agent flagged it as sensitive and paused to ask the user rather than store
-it), but adversarial robustness of that first stage is bounded by the LLM's
-judgment, not by this protocol. If the flag is never set, the enforcement
-stage never triggers.
-
 ## Roadmap
 
 All planned memory-studies modules are built (consolidation, anchors, provenance tiers, forgetting, source criticism, narrative integration, canon circulation, social framing). v1.0 added BM25-ranked recall and structured tool errors. Open next steps are engineering-facing: client-side distribution polish (install instructions, permission setup docs), and evaluating whether agent-side invocation guidance can be made more reliable than trigger-word heuristics.
