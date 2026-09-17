@@ -322,8 +322,9 @@ def review_narrative(narrative_id: str, note: str) -> dict:
 
 @mcp.tool()
 def current_narrative() -> dict | None:
-    """Return the current narrative synthesis, or null if `narrate()` has
-    never been called yet."""
+    """Inspect the latest stored narrative, including stale text, or null if
+    none exists. Check review_status and source_issues before using the account
+    as current evidence. Default recall withholds stale narrative text."""
     return store.current_narrative()
 
 
