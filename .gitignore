@@ -9,3 +9,6 @@ venv/
 dist/
 build/
 .mcp.json
+
+.benchmark-data/
+.benchmark-results/
