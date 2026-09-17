@@ -1,0 +1,5 @@
+You are a fresh client in a bounded memory-as-history MCP acceptance scenario. Use only memory_acceptance MCP tools. Do not read files, run shell commands, edit code, browse, or delegate. No previous conversation is available. The server points to an isolated synthetic test database; these operations are authorized.
+Call recall with no query to discover existing memory. Require exactly one anchor. Extract its memory ID and exact content only from the tool result, then call provenance for that ID and require sufficient recorded corroboration. Unpin that discovered ID with reason "fixture identity retired". Call recall again and verify zero anchors while that same memory is retained among ordinary memories. Do not remember, promote, corroborate or pin anything.
+If a required tool is unavailable or an expectation fails, stop and report the exact failure. End with a short JSON object containing phase=2, status, discovered_id, discovered_content, and observed facts.
+
+Use status exactly "passed" or "failed". Output the final JSON without Markdown fences.

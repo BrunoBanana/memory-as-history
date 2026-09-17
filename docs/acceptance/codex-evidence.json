@@ -1,0 +1,173 @@
+{
+  "date": "2026-09-18",
+  "timezone": "Asia/Shanghai",
+  "server_commit": "8aa14eb7bd26b07e050a0940f0af4ffb138b6cd9",
+  "client": "Codex CLI 0.155.0-alpha.2.6",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "xhigh",
+  "python": "3.12.13",
+  "mcp": "2.2.0",
+  "scope": "Guided synthetic-fixture acceptance, after client setup corrections; not autonomous-tool-use evaluation.",
+  "fresh_conversations_verified": 3,
+  "completed_mcp_calls": 15,
+  "tool_responses_independently_asserted": true,
+  "later_prompts_omit_memory_id_and_content": true,
+  "phases": [
+    {
+      "phase": 1,
+      "tools": [
+        "remember",
+        "promote",
+        "pin",
+        "corroborate",
+        "corroborate",
+        "pin",
+        "recall",
+        "provenance"
+      ],
+      "client_result": {
+        "phase": 1,
+        "status": "passed",
+        "memory_id": "29a27cd57f43",
+        "observed_facts": {
+          "content": "Fixture identity: ORION-7429",
+          "source": "fixture:declaration",
+          "security_sensitive": true,
+          "promoted": true,
+          "unverified_pin_error": "PermissionError",
+          "same_source_tier": "archive",
+          "independent_source_tier": "testimony",
+          "pin_succeeded": true,
+          "anchor_count": 1,
+          "independent_corroboration_count": 1,
+          "corroboration_satisfied": true
+        }
+      }
+    },
+    {
+      "phase": 2,
+      "tools": [
+        "recall",
+        "provenance",
+        "unpin",
+        "recall"
+      ],
+      "client_result": {
+        "phase": 2,
+        "status": "passed",
+        "discovered_id": "29a27cd57f43",
+        "discovered_content": "Fixture identity: ORION-7429",
+        "observed_facts": {
+          "initial_anchor_count": 1,
+          "independent_corroboration_count": 1,
+          "corroboration_satisfied": true,
+          "unpinned": true,
+          "unpin_reason": "fixture identity retired",
+          "final_anchor_count": 0,
+          "retained_as_ordinary_memory": true,
+          "content_unchanged": true
+        }
+      }
+    },
+    {
+      "phase": 3,
+      "tools": [
+        "recall",
+        "provenance",
+        "audit_log"
+      ],
+      "client_result": {
+        "phase": 3,
+        "status": "passed",
+        "discovered_id": "29a27cd57f43",
+        "discovered_content": "Fixture identity: ORION-7429",
+        "persisted_unpin_reason": "fixture identity retired",
+        "observed_facts": {
+          "recall_without_query": true,
+          "anchors": 0,
+          "ordinary_memories": 1,
+          "corroboration_satisfied": true,
+          "independent_corroboration_count": 1,
+          "unpin_entries_for_id": 1,
+          "unpin_reason_nonblank": true,
+          "unpin_timestamp": "2026-09-17T16:37:47.460718+00:00",
+          "prior_pin_denied_timestamp": "2026-09-17T16:36:06.076227+00:00",
+          "prior_corroborate_upgrade_timestamp": "2026-09-17T16:36:12.832339+00:00",
+          "intentional_state_changing_calls": 0
+        }
+      }
+    }
+  ],
+  "read_only_database_verification": {
+    "memories": [
+      {
+        "id": "29a27cd57f43",
+        "content": "Fixture identity: ORION-7429",
+        "source": "fixture:declaration",
+        "status": "consolidated",
+        "tier": "testimony",
+        "security_sensitive": 1,
+        "forgotten_at": null
+      }
+    ],
+    "anchor_count": 0,
+    "corroborating_sources": [
+      "fixture:declaration",
+      "fixture:independent-register"
+    ],
+    "audit": [
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "promote",
+        "reason": "fixture identity",
+        "at": "2026-09-17T16:36:03.270777+00:00"
+      },
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "pin_denied",
+        "reason": "memory is flagged security_sensitive and has no independent corroboration; refusing to pin on the strength of a single source (source criticism safeguard against memory poisoning)",
+        "at": "2026-09-17T16:36:06.076227+00:00"
+      },
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "corroborate",
+        "reason": "recorded corroborating source: fixture:declaration",
+        "at": "2026-09-17T16:36:09.054578+00:00"
+      },
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "corroborate",
+        "reason": "recorded corroborating source: fixture:independent-register",
+        "at": "2026-09-17T16:36:12.832133+00:00"
+      },
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "corroborate_upgrade",
+        "reason": "corroborated by additional source: fixture:independent-register",
+        "at": "2026-09-17T16:36:12.832339+00:00"
+      },
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "pin",
+        "reason": "independent fixture support",
+        "at": "2026-09-17T16:36:18.359299+00:00"
+      },
+      {
+        "memory_id": "29a27cd57f43",
+        "action": "unpin",
+        "reason": "fixture identity retired",
+        "at": "2026-09-17T16:37:47.460718+00:00"
+      }
+    ]
+  },
+  "deterministic_suite": {
+    "tests": 179,
+    "mcp_versions": [
+      "1.2.0",
+      "1.30.0",
+      "2.2.0"
+    ],
+    "clean_wheel_tests": 179,
+    "state_loss_negative_control": "Both restart cases fail at the first post-restart anchor check with :memory:."
+  }
+}

@@ -1,0 +1,5 @@
+You are a fresh client in a bounded memory-as-history MCP acceptance scenario. Use only memory_acceptance MCP tools. Do not read files, run shell commands, edit code, browse, or delegate. No previous conversation is available. The server points to an isolated synthetic test database.
+Call recall with no query. Require zero anchors and exactly one ordinary memory. Extract its ID and content from the result. Call provenance for that ID and require sufficient corroboration. Call audit_log and require exactly one unpin entry for that ID with a nonblank reason and timestamp, plus a prior pin_denied and corroborate_upgrade. Report the exact persisted unpin reason from the log. Make no intentional state-changing calls (recall may maintain review status internally).
+If a required tool is unavailable or an expectation fails, stop and report the exact failure. End with a short JSON object containing phase=3, status, discovered_id, discovered_content, persisted_unpin_reason, and observed facts.
+
+Use status exactly "passed" or "failed". Output the final JSON without Markdown fences.

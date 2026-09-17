@@ -138,12 +138,16 @@ the outcomes. Audit failure rolls back the removal.
 
 ## Reliability
 
-The suite contains **177 tests**, including real MCP stdio calls covering
-sensitivity flagging, evidence-gated testimony, provenance inspection, optional unpin reasons, and structured input errors. Run it with
+The suite contains **179 tests**, including real MCP stdio calls covering
+sensitivity flagging, evidence-gated testimony, provenance inspection, optional unpin reasons, structured input errors, and the full anchor lifecycle across client/server restarts. Run it with
 `python -m pytest tests/ -v`. CI includes MCP 1.2.0, latest 1.x, and latest 2.x.
 Sensitive memories with an unknown, empty, or whitespace-only original source
 require two distinct corroborating sources before pinning. Known origins need
 one source distinct from the original.
+
+`tests/test_sessions.py` covers known/unknown origins through four independent
+client/server sessions. For the guided Codex client check and reproducible
+commands, see [cross-session acceptance](docs/acceptance/cross-session.md).
 
 State-changing calls use explicit SQLite transactions: acquire the writer
 before checking state, then commit business changes and audit records together.
@@ -217,10 +221,9 @@ correctly:
 ## Roadmap
 
 The eight memory-studies modules are implemented. The 1.1.1 patch and first
-1.2 transaction stage are merged into main. This batch implements provenance
-semantics and unpin auditing. Next: cross-session acceptance in a real MCP
-client, then explicit policy for evidence propagation through canon/narrative
-and narrative review after forgetting. See the
+1.2 transaction and provenance/audit stages are merged into main. Cross-session
+acceptance now covers the complete anchor lifecycle. Next: explicit policy for
+evidence propagation through canon/narrative and narrative review after forgetting. See the
 [development roadmap](docs/plans/2026-09-17-reliability-roadmap.md) and
 [provenance/audit plan](docs/plans/2026-09-17-provenance-audit.md).
 
