@@ -3,6 +3,47 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+Reliability fixes targeting 1.1.1; no database schema changes.
+
+### Fixed
+- `flag_sensitive` now returns its storage result directly over MCP, including
+  `unpinned_by_sensitivity`. Previously it committed the change, then raised
+  an `AttributeError` while trying to convert an already-converted dictionary.
+- Invalid `remember` and `narrate` inputs now return the same structured
+  `error` / `message` / `hint` payload as other guarded tools.
+- Empty and whitespace-only original sources now receive the same
+  two-distinct-source corroboration requirement as `source=None`, including
+  rows already stored in existing databases.
+- `pin()` rejects forgotten memories, preventing new hidden anchors from
+  being created while their memories are tombstoned.
+- `recall()` deduplicates memories shared by multiple canon scopes before
+  allocating its limit. `list_canon()` retains all scope memberships.
+- `recall()` omits conflicts with forgotten participants. Full conflict
+  history remains inspectable through `list_conflicts()` (now including each
+  participant's forgetting timestamp), and restoration resurfaces open conflicts.
+- `recall()` refreshes interpretation review status before assembling its
+  sections, preventing contradictory current/stale values on the first read.
+
+### Added
+- 14 regression cases, including five tests that start the real server and
+  call its tools over MCP stdio. The suite now contains 128 tests.
+- A `test` installation extra and CI coverage for MCP 1.2.0, latest 1.x, and
+  latest 2.x, alongside the existing OS/Python matrix.
+- A prioritized [reliability plan](docs/plans/2026-09-17-reliability-roadmap.md).
+
+## [1.1.0] — 2026-09-17
+
+### Added
+- Deterministic English/Chinese sensitivity screening at `remember()` time,
+  with `auto_flag_sensitive` audit entries for recognized injection patterns.
+- `due_for_consolidation(days, limit)`: an oldest-first queue of active
+  working memories for the session-boundary consolidation ritual.
+- MCP 1.x / 2.x server import compatibility.
+- Three-condition poisoning check: naive persistence, an omitted sensitivity
+  flag caught by automatic screening, and explicitly flagged enforcement.
+
 ## [1.0.0] — 2026-09-16
 
 First release-candidate version: eight memory-studies modules complete,
