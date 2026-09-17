@@ -109,4 +109,5 @@ memory and the exact persisted unpin reason. Inspect `memories`, `anchors`,
 These are setup observations from the tested CLI, not memory-store defects.
 This is a guided tool-use acceptance check; it does not measure spontaneous
 memory use, broad model reliability, real-world source authentication, or
-canon/narrative propagation policy.
+canon/narrative propagation policy. A subsequent guided narrative withdrawal,
+restoration and explicit-review scenario is recorded in [narrative acceptance](narrative.md).

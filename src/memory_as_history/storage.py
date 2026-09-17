@@ -44,7 +44,9 @@ Three modules for v0.2:
   if any, is not deleted — it is marked superseded, so the *story itself*
   has a history: not just who the user currently is, but how that account
   changed over time, and why. `recall()` surfaces the current narrative
-  alongside the discrete memory list.
+  alongside the discrete memory list when its dependencies are usable. Invalid
+  sources suppress the default text; explicit inspection preserves it, and
+  review_narrative() records revalidation without rewriting the account.
 - Canon / archive circulation (Assmann: Kanon/Archiv — distinct from Nora's
   permanent anchors): a *task-scoped*, rotating "canon" — the small, active
   set of memories relevant to whatever the current task/phase is.
@@ -78,6 +80,7 @@ from __future__ import annotations
 
 import functools
 import json
+import math
 import re
 import sqlite3
 import threading
@@ -102,7 +105,7 @@ def _locked(method):
     return wrapper
 
 
-class _PinDenied(PermissionError):
+class _AuditedDenial(PermissionError):
     """Internal signal: the guard wrote only a deliberate denial audit."""
 
 
@@ -125,8 +128,8 @@ def _transactional(method):
             try:
                 try:
                     result = method(self, *args, **kwargs)
-                except _PinDenied as exc:
-                    # pin raises this only before any business mutation.
+                except _AuditedDenial as exc:
+                    # Guards raise this only before any business mutation.
                     # Ordinary exceptions, including failed audit inserts,
                     # must never take this commit path.
                     denial = exc
@@ -198,7 +201,12 @@ CREATE TABLE IF NOT EXISTS narratives (
     memory_ids TEXT,             -- JSON array of memory ids this narrative draws on, or NULL
     created_at TEXT NOT NULL,
     superseded_at TEXT,          -- NULL while this is the current narrative
-    superseded_by TEXT REFERENCES narratives(id)
+    superseded_by TEXT REFERENCES narratives(id),
+    security_sensitive INTEGER NOT NULL DEFAULT 0,
+    review_required_at TEXT,
+    review_reason TEXT,
+    last_reviewed_at TEXT,
+    review_note TEXT
 );
 
 CREATE TABLE IF NOT EXISTS canon_entries (
@@ -231,6 +239,11 @@ MIGRATIONS = [
     ("memories", "security_sensitive", "INTEGER NOT NULL DEFAULT 0"),
     ("memories", "frame", "TEXT"),
     ("memories", "content_tokens", "TEXT"),
+    ("narratives", "security_sensitive", "INTEGER NOT NULL DEFAULT 0"),
+    ("narratives", "review_required_at", "TEXT"),
+    ("narratives", "review_reason", "TEXT"),
+    ("narratives", "last_reviewed_at", "TEXT"),
+    ("narratives", "review_note", "TEXT"),
 ]
 
 
@@ -292,6 +305,7 @@ def _tokenize(text: str) -> list[str]:
 
     for ch in text:
         if ch.isascii() and (ch.isalnum() or ch == "_"):
+            flush_cjk()
             buf.append(ch)
         else:
             flush_words()
@@ -317,13 +331,13 @@ def _bm25_scores(query_tokens: list[str], doc_tokens: list[str],
         tf[t] = tf.get(t, 0) + 1
     dl = len(doc_tokens)
     score = 0.0
-    for qt in query_tokens:
+    for qt in dict.fromkeys(query_tokens):
         if qt not in tf:
             continue
         n_qt = df.get(qt, 0)
-        idf = max(0.0, ((n_docs - n_qt + 0.5) / (n_qt + 0.5)) + 1.0)
+        idf = math.log1p((n_docs - n_qt + 0.5) / (n_qt + 0.5))
         score += idf * (tf[qt] * (k1 + 1)) / (
-            tf[qt] + k1 * (1 - b + b * dl / max(avgdl, 1.0))
+            tf[qt] + k1 * (1 - b + b * dl / (avgdl if avgdl > 0 else 1.0))
         )
     return score
 
@@ -442,9 +456,16 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA busy_timeout = 30000")
-        self._conn.executescript(SCHEMA)
-        self._migrate()
-        self._conn.commit()
+        try:
+            # executescript commits any previous transaction: put BEGIN inside
+            # the script so schema creation AND additive upgrades share a lock.
+            self._conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
+            self._migrate()
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            self._conn.close()
+            raise
         self._lock = threading.RLock()
         self._transaction_active = False
         self.anchor_soft_limit = anchor_soft_limit
@@ -592,6 +613,8 @@ class Store:
         automatically lifted: an anchor that is later recognized as
         security-sensitive but never independently corroborated should not
         keep its always-surfaced status while we wait for someone to notice.
+        Unsupported canon scopes are also decommissioned and linked narratives
+        invalidated, all atomically. Supported memberships stay active.
         The unpin is itself logged (action 'unpin_by_sensitivity') so the
         chain of events stays auditable. If corroboration is later
         obtained, `pin()` can be called again and will succeed."""
@@ -610,10 +633,28 @@ class Store:
                 "independent corroboration"
             )
             self._log(memory_id, "unpin_by_sensitivity", unpin_note)
+        decommissioned = []
+        if self.independent_corroboration_count(memory_id) < 1:
+            entries = self._conn.execute(
+                "SELECT id, scope FROM canon_entries WHERE memory_id=? "
+                "AND decommissioned_at IS NULL ORDER BY scope", (memory_id,),
+            ).fetchall()
+            now = _now()
+            for entry in entries:
+                self._conn.execute(
+                    "UPDATE canon_entries SET decommissioned_at=? WHERE id=?",
+                    (now, entry["id"]),
+                )
+                self._log(memory_id, "decanonize_by_sensitivity",
+                          f"scope={entry['scope']}: {reason}")
+                decommissioned.append(entry["scope"])
+            self._invalidate_narratives(memory_id, "source flagged without independent corroboration")
         self._log(memory_id, "flag_sensitive", reason)
         result = self.get(memory_id).to_dict()
         if unpin_note is not None:
             result["unpinned_by_sensitivity"] = True
+        if decommissioned:
+            result["decanonized_by_sensitivity"] = decommissioned
         return result
 
     @_locked
@@ -751,7 +792,7 @@ class Store:
                 "against memory poisoning)"
             )
             self._log(memory_id, "pin_denied", denial_reason)
-            raise _PinDenied(denial_reason)
+            raise _AuditedDenial(denial_reason)
         now = _now()
         self._conn.execute(
             "INSERT OR REPLACE INTO anchors (memory_id, reason, pinned_at) "
@@ -862,6 +903,7 @@ class Store:
                 "UPDATE memories SET forgotten_reason=? WHERE id=?",
                 (reason, memory_id),
             )
+        self._invalidate_narratives(memory_id, "source forgotten")
         self._log(memory_id, "forget", reason)
         return self.get(memory_id)
 
@@ -880,6 +922,7 @@ class Store:
             "UPDATE memories SET forgotten_at=NULL, forgotten_reason=NULL WHERE id=?",
             (memory_id,),
         )
+        self._invalidate_narratives(memory_id, "source restored; synthesis needs review")
         self._log(memory_id, "restore", reason)
         return self.get(memory_id)
 
@@ -909,6 +952,10 @@ class Store:
         mem = self.get(memory_id)
         if mem is None:
             raise KeyError(f"no such memory: {memory_id}")
+        # Persist any existing dependency failure before new evidence can
+        # make a legacy synthesis look current again.
+        self._invalidate_narratives(memory_id, "source evidence changed after invalidation",
+                                    only_if_source_unusable=True)
         now = _now()
         self._conn.execute(
             "INSERT INTO corroborations (id, memory_id, source, at) VALUES (?, ?, ?, ?)",
@@ -941,6 +988,8 @@ class Store:
                 "only 'interpretation'-tier memories require review; "
                 f"this memory has tier={mem.tier!r}"
             )
+        self._invalidate_narratives(memory_id, "overdue source reviewed; synthesis needs review",
+                                    only_if_source_unusable=True)
         now = _now()
         self._conn.execute(
             "UPDATE memories SET last_reviewed_at=?, review_status='current' WHERE id=?",
@@ -972,40 +1021,91 @@ class Store:
             )
             for r in stale:
                 r["review_status"] = "stale"
+                self._invalidate_narratives(r["id"], "interpretation source is overdue")
         return stale
 
     # -- narrative integration module (Ricoeur: identité narrative) -------------
 
+    @staticmethod
+    def _normalize_memory_ids(memory_ids: list[str] | None) -> list[str]:
+        if memory_ids is None:
+            return []
+        if not isinstance(memory_ids, list) or any(
+            not isinstance(mid, str) or not mid.strip() for mid in memory_ids
+        ):
+            raise ValueError("memory_ids must be a list of nonempty memory IDs")
+        return list(dict.fromkeys(memory_ids))
+
+    def _narrative_sources(self, memory_ids: list[str], sensitive: bool) -> list[dict]:
+        """Compute live dependency issues without changing historical evidence."""
+        issues = []
+        if sensitive and not memory_ids:
+            issues.append({"memory_id": None, "issue": "missing_evidence"})
+        cutoff = (datetime.now(timezone.utc) - timedelta(
+            days=self.interpretation_review_days)).isoformat()
+        for mid in memory_ids:
+            mem = self.get(mid)
+            if mem is None:
+                issues.append({"memory_id": mid, "issue": "missing"})
+                continue
+            if mem.is_forgotten:
+                issues.append({"memory_id": mid, "issue": "forgotten"})
+            if mem.tier == "interpretation" and (
+                mem.last_reviewed_at is None or mem.last_reviewed_at < cutoff
+                or mem.review_status == "stale"
+            ):
+                issues.append({"memory_id": mid, "issue": "stale_interpretation"})
+            if (sensitive or mem.is_security_sensitive) and not self.provenance(mid)["corroboration_satisfied"]:
+                issues.append({"memory_id": mid, "issue": "insufficient_corroboration"})
+        return issues
+
+    def _invalidate_narratives(self, memory_id: str, reason: str,
+                              only_if_source_unusable: bool = False) -> None:
+        for row in self._conn.execute(
+            "SELECT * FROM narratives WHERE review_required_at IS NULL"
+        ).fetchall():
+            narrative = self._narrative_to_dict(row)
+            if memory_id not in narrative["memory_ids"]:
+                continue
+            if only_if_source_unusable and not any(
+                issue["memory_id"] == memory_id for issue in narrative["source_issues"]
+            ):
+                continue
+            self._conn.execute(
+                "UPDATE narratives SET review_required_at=?, review_reason=? WHERE id=?",
+                (_now(), reason, row["id"]),
+            )
+            self._log(row["id"], "narrative_invalidated", f"source={memory_id}: {reason}")
+
     @_transactional
     def narrate(
-        self, content: str, reason: str, memory_ids: list[str] | None = None
+        self, content: str, reason: str, memory_ids: list[str] | None = None,
+        security_sensitive: bool = False,
     ) -> dict:
-        """Submit the current narrative synthesis: a coherent account of who
-        the user is / where the relationship stands, composed (typically by
-        an agent) from the discrete memories in `recall()`. This method does
-        not compose the narrative itself — a plain store has no judgment or
-        language to do that; it only gives the synthesis a first-class,
-        accountable existence.
+        """Version a synthesis with active, traceable dependencies.
 
-        The previous current narrative, if any, is not deleted: it is marked
-        superseded (linked via `superseded_by`), so the narrative itself has
-        a history — not just who the user currently is, but how that account
-        changed over time, and why. `reason` is required and logged.
-
-        `memory_ids`, if given, are recorded as the discrete memories this
-        narrative draws on (for traceability back to the archive/testimony/
-        interpretation-tier facts underlying the story) — they are not
-        validated against existing memory ids, since a narrative may also
-        synthesize across already-forgotten or since-superseded memories."""
+        Unlinked nonsensitive accounts remain supported and explicitly labeled.
+        Sensitive text (explicit or recognized pattern) requires independently
+        corroborated linked evidence. Links do not establish semantic entailment.
+        """
         content = _require_text(content, "content")
         reason = _require_text(reason, "reason")
-        now = _now()
+        memory_ids = self._normalize_memory_ids(memory_ids)
+        sensitive = bool(security_sensitive or _looks_injected(content))
+        issues = self._narrative_sources(memory_ids, sensitive)
+        if any(issue["issue"] in ("missing", "forgotten", "stale_interpretation") for issue in issues):
+            raise ValueError(f"narrative has unresolved source issues: {issues}")
         nid = _new_id()
+        if issues:
+            denial = "narrative requires independent corroboration of linked evidence"
+            self._log(nid, "narrate_denied", f"{denial}: {issues}")
+            raise _AuditedDenial(denial)
+        now = _now()
         prev = self._current_narrative_row()
         self._conn.execute(
-            "INSERT INTO narratives (id, content, reason, memory_ids, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (nid, content, reason, json.dumps(memory_ids) if memory_ids else None, now),
+            "INSERT INTO narratives (id, content, reason, memory_ids, created_at, security_sensitive) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (nid, content, reason, json.dumps(memory_ids), now, int(sensitive)),
         )
         if prev is not None:
             self._conn.execute(
@@ -1023,13 +1123,49 @@ class Store:
             "ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
 
-    @staticmethod
-    def _narrative_to_dict(row: sqlite3.Row | None) -> dict | None:
+    def _narrative_to_dict(self, row: sqlite3.Row | None) -> dict | None:
         if row is None:
             return None
         d = dict(row)
-        d["memory_ids"] = json.loads(d["memory_ids"]) if d["memory_ids"] else []
+        issues = []
+        try:
+            d["memory_ids"] = self._normalize_memory_ids(
+                json.loads(d["memory_ids"]) if d["memory_ids"] else None)
+        except (ValueError, TypeError):
+            d["memory_ids"] = []
+            issues.append({"memory_id": None, "issue": "invalid_memory_ids"})
+        d["security_sensitive"] = bool(d["security_sensitive"] or _looks_injected(d["content"]))
+        d["source_issues"] = issues + self._narrative_sources(d["memory_ids"], d["security_sensitive"])
+        d["review_status"] = "stale" if d["review_required_at"] or d["source_issues"] else "current"
+        d["provenance_status"] = "linked" if d["memory_ids"] else "unlinked"
+        if not d["memory_ids"]:
+            d["warning"] = "Unlinked narrative: no traceable memory sources; this account is not verified."
         return d
+
+    @_transactional
+    def review_narrative(self, narrative_id: str, note: str) -> dict:
+        """Explicitly revalidate the current synthesis after its sources recover.
+
+        Refuse unresolved issues or superseded versions. The caller must examine
+        the text: this records their judgment, without rewriting the account.
+        """
+        note = _require_text(note, "note")
+        row = self._conn.execute("SELECT * FROM narratives WHERE id=?", (narrative_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"no such narrative: {narrative_id}")
+        if row["superseded_at"] is not None:
+            raise ValueError("only the current narrative can be reviewed; use narrate() for a new account")
+        narrative = self._narrative_to_dict(row)
+        if narrative["source_issues"]:
+            raise ValueError(f"narrative has unresolved source issues: {narrative['source_issues']}")
+        self._conn.execute(
+            "UPDATE narratives SET review_required_at=NULL, review_reason=NULL, "
+            "last_reviewed_at=?, review_note=? WHERE id=?", (_now(), note, narrative_id),
+        )
+        self._log(narrative_id, "review_narrative", note)
+        return self._narrative_to_dict(self._conn.execute(
+            "SELECT * FROM narratives WHERE id=?", (narrative_id,),
+        ).fetchone())
 
     @_locked
     def current_narrative(self) -> dict | None:
@@ -1076,6 +1212,10 @@ class Store:
                 "memory must be consolidated (call promote() first) before "
                 "it can enter the canon"
             )
+        if mem.is_security_sensitive and self.independent_corroboration_count(memory_id) < 1:
+            denial = "security-sensitive canon requires independent corroboration"
+            self._log(memory_id, "canonize_denied", f"scope={scope}: {denial}")
+            raise _AuditedDenial(denial)
         # already in the canon for this scope?
         existing = self._conn.execute(
             "SELECT id FROM canon_entries WHERE memory_id=? AND scope=? AND "
@@ -1175,24 +1315,31 @@ class Store:
 
     @_locked
     def list_canon(self, scope: str | None = None) -> list[dict]:
-        """List active canon entries, optionally filtered by scope."""
+        """Inspect active canon, including eligibility of unsupported legacy rows."""
         if scope is None:
             rows = self._conn.execute(
-                "SELECT c.*, m.content, m.status, m.tier "
+                "SELECT c.*, m.content, m.status, m.tier, m.security_sensitive "
                 "FROM canon_entries c JOIN memories m ON m.id = c.memory_id "
                 "WHERE c.decommissioned_at IS NULL AND m.forgotten_at IS NULL "
                 "ORDER BY c.canonized_at ASC"
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT c.*, m.content, m.status, m.tier "
+                "SELECT c.*, m.content, m.status, m.tier, m.security_sensitive "
                 "FROM canon_entries c JOIN memories m ON m.id = c.memory_id "
                 "WHERE c.decommissioned_at IS NULL AND m.forgotten_at IS NULL "
                 "AND c.scope=? "
                 "ORDER BY c.canonized_at ASC",
                 (scope,),
             ).fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for row in rows:
+            entry = dict(row)
+            entry["eligible_for_recall"] = not entry["security_sensitive"] or self.provenance(entry["memory_id"])["corroboration_satisfied"]
+            if not entry["eligible_for_recall"]:
+                entry["warning"] = "Sensitive legacy canon lacks independent corroboration; excluded from priority recall."
+            result.append(entry)
+        return result
 
     @_locked
     def active_scopes(self) -> list[str]:
@@ -1404,8 +1551,9 @@ class Store:
         Also surfaces `stale_interpretations`: interpretation-tier memories
         due for review, so callers can prompt for re-examination. And
         `narrative`: the current narrative synthesis from `narrate()`, if
-        one has ever been submitted, alongside the discrete memory list —
-        recall gives both the story and the raw facts it was built from.
+        one has been submitted and its dependencies remain usable. A stale
+        account is withheld and replaced by a content-free `narrative_review`
+        notice; current_narrative()/narrative_history() retain its full text.
         And `conflicts`: currently open (unresolved) conflicting framed
         versions, so disagreement is surfaced explicitly rather than one
         version silently winning. Conflicts with a forgotten participant
@@ -1417,7 +1565,7 @@ class Store:
         anchors = self.list_anchors()
         # canon entries excluding anchors (identity takes precedence over
         # task-scoping for display; the memory is not duplicated)
-        all_canon = self.list_canon()
+        all_canon = [entry for entry in self.list_canon() if entry["eligible_for_recall"]]
         anchor_ids = {a["id"] for a in anchors}
         seen_ids = set(anchor_ids)
         canon = []
@@ -1437,8 +1585,6 @@ class Store:
                 rows = self._conn.execute(
                     "SELECT * FROM memories WHERE forgotten_at IS NULL AND "
                     "frame = ? AND id NOT IN (SELECT memory_id FROM anchors) "
-                    "AND id NOT IN (SELECT memory_id FROM canon_entries "
-                    "WHERE decommissioned_at IS NULL) "
                     "ORDER BY status='consolidated' DESC, created_at DESC",
                     (frame,),
                 ).fetchall()
@@ -1446,22 +1592,29 @@ class Store:
                 rows = self._conn.execute(
                     "SELECT * FROM memories WHERE forgotten_at IS NULL AND id NOT IN "
                     "(SELECT memory_id FROM anchors) "
-                    "AND id NOT IN (SELECT memory_id FROM canon_entries "
-                    "WHERE decommissioned_at IS NULL) "
                     "ORDER BY status='consolidated' DESC, created_at DESC"
                 ).fetchall()
 
-            if query:
-                rest = self._rank_by_query([dict(r) for r in rows], query)[:rest_budget]
+            candidates = [dict(r) for r in rows if r["id"] not in seen_ids]
+            if query is not None:
+                rest = self._rank_by_query(candidates, query)[:rest_budget]
             else:
-                rest = [dict(r) for r in rows][:rest_budget]
+                rest = candidates[:rest_budget]
 
+        narrative = self.current_narrative()
+        narrative_review = None
+        if narrative and narrative["review_status"] == "stale":
+            narrative_review = {key: narrative[key] for key in (
+                "id", "review_status", "source_issues", "review_required_at", "review_reason"
+            )}
+            narrative = None
         return {
             "anchors": anchors,
             "canon": canon,
             "memories": rest,
             "stale_interpretations": stale_interpretations,
-            "narrative": self.current_narrative(),
+            "narrative": narrative,
+            "narrative_review": narrative_review,
             "conflicts": [
                 conflict for conflict in self.list_conflicts(resolved=False)
                 if conflict["forgotten_at_a"] is None
@@ -1479,13 +1632,24 @@ class Store:
         re-written) are tokenized on the fly."""
         query_tokens = _tokenize(query)
         if not query_tokens:
+            for row in rows:
+                row["relevance"] = 0.0
             return rows
         doc_tokens_list: list[list[str]] = []
         for r in rows:
             cached = r.get("content_tokens")
-            doc_tokens_list.append(
-                json.loads(cached) if cached else _tokenize(r["content"])
-            )
+            try:
+                tokens = json.loads(cached) if cached else None
+            except (ValueError, TypeError):
+                tokens = None
+            # Pre-1.2 tokenization joined CJK runs across embedded ASCII.
+            # Recompute affected caches without rewriting historical rows.
+            interleaved_scripts = re.search(r"[\u4e00-\u9fff][A-Za-z0-9_]+[\u4e00-\u9fff]", r["content"])
+            if (not isinstance(tokens, list)
+                    or any(not isinstance(t, str) for t in tokens)
+                    or interleaved_scripts):
+                tokens = _tokenize(r["content"])
+            doc_tokens_list.append(tokens)
         n_docs = len(rows)
         df: dict[str, int] = {}
         for dt in doc_tokens_list:

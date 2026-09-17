@@ -1,0 +1,7 @@
+This is a fresh conversation for a guided acceptance check. Use only the memory_acceptance MCP server; no shell/files/web. You are not given the previous fixture content or any IDs. Discover state through tools. Any unmet assertion means status failed.
+1. Recall. Verify narrative is null and narrative_review identifies a forgotten source.
+2. Inspect current_narrative. Verify its historical text remains readable, its review_status is stale, and its IDs match the notice. Discover the linked memory ID here.
+3. Call review_narrative with note "premature fixture review". Verify a structured ValueError for unresolved source issues.
+4. This fictional source has now been revalidated for the test. Restore that memory with reason "fixture evidence revalidated".
+5. Recall. Verify narrative remains null and narrative_review is still present even though the source is active. Do not review the narrative again in this session.
+Return only JSON: {"status":"passed" or "failed","memory_id":...,"narrative_id":...,"checks":[...]}.
