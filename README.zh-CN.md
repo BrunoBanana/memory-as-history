@@ -4,7 +4,7 @@
 
 > 多数 Agent 记忆系统用时效性和相似度打分来决定"记住什么"。本项目借用记忆研究（memory studies）看待人类记忆的方式对待 Agent 记忆：记忆通过**刻意巩固**、**身份锚点**、**来源分级**与**负责任的遗忘**成为"历史"——而不只是存储和检索的副产品。
 
-**代码版本：1.1.1（待发布）；变更记录在 [Unreleased](CHANGELOG.md#unreleased)。CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+**代码版本：1.2.0.dev0；事务一致性变更记录在 [Unreleased](CHANGELOG.md#unreleased)。CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## 为什么做这个
 
@@ -81,7 +81,7 @@ MCP Server，Python。定位为**协议层**——不是存储/embedding 后端�
 
 ## 可靠性与机制验证
 
-- **128 个自动化测试**（含真实 MCP stdio 协议回归）+ **6 项可靠性检查**（线程安全、多进程并发、重启持久化、5000 条规模、含 SQL 注入形态的边界输入、嵌套目录）。CI 保留 ubuntu/macos × Python 3.10–3.12 六矩阵，并增加 MCP 1.2.0、最新 1.x 和最新 2.x 的兼容性检查
+- **156 个自动化测试**（含真实 MCP stdio 协议回归、事务故障与独立进程竞争测试）+ **6 项可靠性检查**（线程安全、多进程并发、重启持久化、5000 条规模、含 SQL 注入形态的边界输入、嵌套目录）。CI 保留 ubuntu/macos × Python 3.10–3.12 六矩阵，并增加 MCP 1.2.0、最新 1.x 和最新 2.x 的兼容性检查
 - `usefulness_test.py`（确定性对照）：身份事实被 200 条噪音淹没后，朴素时间排序基线早已丢失，锚点机制仍能召回
 - `poisoning_test.py`（三组确定性对照）：朴素基线保留注入声明；v1.1 即使调用方漏设敏感标记，也会自动识别已知模式；自动标记和显式标记两组都在缺少独立佐证时拦截 `pin()`
 - **4 轮真实 LLM 日常使用模拟**（同一持久库、经 MCP 协议）：身份捕获 → 跨会话召回 → 模糊查询+叙事 → 注入攻击（明显样本被完全拒绝；隐蔽样本混在正常 Q3 复盘里的预授权声明，被识别为敏感并暂停求证）
@@ -90,7 +90,9 @@ v1.1 的 `due_for_consolidation(days?, limit?)` 会按时间从旧到新列出�
 
 ## 下一版本
 
-当前先收敛 1.1.1 可靠性补丁，再推进 1.2 的事务一致性和溯源约束。具体优先级、风险与验收条件见[工程推进计划](docs/plans/2026-09-17-reliability-roadmap.md)。
+1.1.1 补丁已提交审查，1.2 首批事务修复已实现：写操作在检查状态前获取 SQLite 写入权，业务和审计一起提交，异常时统一回滚。`recall()` 因会刷新复核状态，也参与写事务；并发调用可能等待，沿用 30 秒锁超时。此变更不自动修复既有历史异常。
+
+下一批是来源分级语义和解除锚定的审计契约。具体优先级与验收条件见[工程推进计划](docs/plans/2026-09-17-reliability-roadmap.md)及[事务实现计划](docs/plans/2026-09-17-transaction-integrity.md)。
 
 ## 相关工作
 

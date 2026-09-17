@@ -5,6 +5,35 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+Transaction integrity stage toward 1.2.0 (`1.2.0.dev0`); no schema changes.
+
+### Fixed
+- State-changing Store calls now reserve SQLite's writer before reading
+  preconditions and commit business/audit changes together. Separate
+  connections and processes cannot create duplicate current narratives,
+  active canon memberships, or open conflicts, or race pinning against forgetting.
+- Failed audit writes, partial review refreshes, and commit/lock errors roll
+  back before a connection is reused. A later successful call cannot commit
+  a previous failed call's partial state.
+- Nested calls such as `recall()` -> `due_for_review()` share the outer
+  transaction. An intentional sensitive-pin denial still commits its denial
+  audit and returns the original `PermissionError` contract; failed denial
+  auditing rolls back normally.
+
+### Added
+- 28 transaction tests: 15 audit failure scenarios, nested/partial refresh
+  failures, controlled connection and process races, denied-pin persistence,
+  and busy BEGIN/COMMIT recovery. The full suite now has 156 tests.
+- CI runs on PRs targeting `codex/**` branches as well as `main`, allowing
+  this stage to be reviewed and tested on top of the 1.1.1 patch.
+
+### Tradeoff
+- State-changing calls serialize at SQLite's writer reservation, including
+  `recall()` because it refreshes review status. The existing 30-second busy
+  timeout remains in effect. Existing historical anomalies are not repaired.
+
+## [1.1.1] — Unreleased
+
 Reliability fixes targeting 1.1.1; no database schema changes.
 
 ### Fixed
