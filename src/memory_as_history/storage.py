@@ -101,6 +101,49 @@ def _locked(method):
 
     return wrapper
 
+
+class _PinDenied(PermissionError):
+    """Internal signal: the guard wrote only a deliberate denial audit."""
+
+
+def _transactional(method):
+    """Own one transaction per outer state-changing call.
+
+    Reserve SQLite's writer before reading preconditions, so other Store
+    connections/processes cannot change the state between a guard and its
+    write. Nested calls (recall -> due_for_review) share the outer boundary.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            if self._transaction_active:
+                return method(self, *args, **kwargs)
+
+            self._conn.execute("BEGIN IMMEDIATE")
+            self._transaction_active = True
+            denial = None
+            try:
+                try:
+                    result = method(self, *args, **kwargs)
+                except _PinDenied as exc:
+                    # pin raises this only before any business mutation.
+                    # Ordinary exceptions, including failed audit inserts,
+                    # must never take this commit path.
+                    denial = exc
+                    result = None
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
+            finally:
+                self._transaction_active = False
+
+            if denial is not None:
+                raise PermissionError(str(denial)) from None
+            return result
+
+    return wrapper
+
 DEFAULT_DB_PATH = Path.home() / ".memory-as-history" / "memory.db"
 DEFAULT_ANCHOR_SOFT_LIMIT = 12
 DEFAULT_INTERPRETATION_REVIEW_DAYS = 30
@@ -403,6 +446,7 @@ class Store:
         self._migrate()
         self._conn.commit()
         self._lock = threading.RLock()
+        self._transaction_active = False
         self.anchor_soft_limit = anchor_soft_limit
         self.interpretation_review_days = interpretation_review_days
         self.canon_soft_limit = canon_soft_limit
@@ -433,7 +477,7 @@ class Store:
 
     # -- capture --------------------------------------------------------------
 
-    @_locked
+    @_transactional
     def remember(
         self,
         content: str,
@@ -503,7 +547,6 @@ class Store:
         )
         if auto_reason:
             self._log(mid, "auto_flag_sensitive", auto_reason)
-        self._conn.commit()
         return self.get(mid)
 
     @_locked
@@ -531,7 +574,7 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    @_locked
+    @_transactional
     def flag_sensitive(self, memory_id: str, reason: str) -> dict:
         """Retroactively flag an existing memory as security-sensitive
         (identity / permissions / standing-instruction content). Once
@@ -561,7 +604,6 @@ class Store:
             )
             self._log(memory_id, "unpin_by_sensitivity", unpin_note)
         self._log(memory_id, "flag_sensitive", reason)
-        self._conn.commit()
         result = self.get(memory_id).to_dict()
         if unpin_note is not None:
             result["unpinned_by_sensitivity"] = True
@@ -603,7 +645,7 @@ class Store:
 
     # -- consolidation module (Assmann) ---------------------------------------
 
-    @_locked
+    @_transactional
     def promote(self, memory_id: str, reason: str) -> Memory:
         """Explicitly consolidate a working memory. This is a deliberate act,
         not an automatic score threshold. A non-empty reason is required —
@@ -628,12 +670,11 @@ class Store:
                 (reason, memory_id),
             )
         self._log(memory_id, "promote", reason)
-        self._conn.commit()
         return self.get(memory_id)
 
     # -- anchor module (Nora) --------------------------------------------------
 
-    @_locked
+    @_transactional
     def pin(self, memory_id: str, reason: str) -> dict:
         """Mark a memory as an anchor: a 'site of memory' that is always
         surfaced on recall and never competes with ordinary memories on
@@ -677,8 +718,7 @@ class Store:
                 "against memory poisoning)"
             )
             self._log(memory_id, "pin_denied", denial_reason)
-            self._conn.commit()
-            raise PermissionError(denial_reason)
+            raise _PinDenied(denial_reason)
         now = _now()
         self._conn.execute(
             "INSERT OR REPLACE INTO anchors (memory_id, reason, pinned_at) "
@@ -686,7 +726,6 @@ class Store:
             (memory_id, reason, now),
         )
         self._log(memory_id, "pin", reason)
-        self._conn.commit()
 
         count = self._conn.execute("SELECT COUNT(*) FROM anchors").fetchone()[0]
         result = {"memory_id": memory_id, "reason": reason, "pinned_at": now}
@@ -699,10 +738,9 @@ class Store:
             )
         return result
 
-    @_locked
+    @_transactional
     def unpin(self, memory_id: str) -> None:
         self._conn.execute("DELETE FROM anchors WHERE memory_id=?", (memory_id,))
-        self._conn.commit()
 
     @_locked
     def is_anchored(self, memory_id: str) -> bool:
@@ -732,7 +770,7 @@ class Store:
 
     # -- forgetting module (Ricoeur: forgetting as legitimate, not failure) ----
 
-    @_locked
+    @_transactional
     def forget(self, memory_id: str, reason: str) -> Memory:
         """Deliberately forget a memory. This is not deletion: the content
         is retained (a tombstone), but the memory disappears from `recall()`
@@ -780,10 +818,9 @@ class Store:
                 (reason, memory_id),
             )
         self._log(memory_id, "forget", reason)
-        self._conn.commit()
         return self.get(memory_id)
 
-    @_locked
+    @_transactional
     def restore(self, memory_id: str, reason: str) -> Memory:
         """Reverse a forgetting decision. Forgetting in this protocol is not
         a hard delete, so restoration is always possible and is itself a
@@ -799,7 +836,6 @@ class Store:
             (memory_id,),
         )
         self._log(memory_id, "restore", reason)
-        self._conn.commit()
         return self.get(memory_id)
 
     @_locked
@@ -814,7 +850,7 @@ class Store:
 
     # -- provenance tiers module (Ricoeur) --------------------------------------
 
-    @_locked
+    @_transactional
     def corroborate(self, memory_id: str, source: str) -> Memory:
         """Record that an independent additional source corroborates this
         memory. An 'archive' (raw, single-source) memory is automatically
@@ -840,10 +876,9 @@ class Store:
                 "corroborate_upgrade",
                 f"corroborated by additional source: {source}",
             )
-        self._conn.commit()
         return self.get(memory_id)
 
-    @_locked
+    @_transactional
     def review(self, memory_id: str, note: str) -> Memory:
         """Re-examine an 'interpretation' memory and confirm it still holds.
         Ricoeur treats interpretation as inherently provisional — it must be
@@ -864,10 +899,9 @@ class Store:
             (now, memory_id),
         )
         self._log(memory_id, "review", note)
-        self._conn.commit()
         return self.get(memory_id)
 
-    @_locked
+    @_transactional
     def due_for_review(self, days: int | None = None) -> list[dict]:
         """Return interpretation-tier memories whose last review is older
         than `days` (default: interpretation_review_days), or that have
@@ -888,14 +922,13 @@ class Store:
                 "UPDATE memories SET review_status='stale' WHERE id=?",
                 [(i,) for i in ids],
             )
-            self._conn.commit()
             for r in stale:
                 r["review_status"] = "stale"
         return stale
 
     # -- narrative integration module (Ricoeur: identité narrative) -------------
 
-    @_locked
+    @_transactional
     def narrate(
         self, content: str, reason: str, memory_ids: list[str] | None = None
     ) -> dict:
@@ -932,7 +965,6 @@ class Store:
                 (now, nid, prev["id"]),
             )
         self._log(nid, "narrate", reason)
-        self._conn.commit()
         return self._narrative_to_dict(self._conn.execute(
             "SELECT * FROM narratives WHERE id=?", (nid,)
         ).fetchone())
@@ -969,7 +1001,7 @@ class Store:
 
     # -- canon / archive circulation module (Assmann: Kanon/Archiv) -------------
 
-    @_locked
+    @_transactional
     def canonize(self, memory_id: str, scope: str, reason: str) -> dict:
         """Add a memory to the active canon within a named task scope. The
         canon is the small, rotating set of memories relevant to whatever
@@ -1013,7 +1045,6 @@ class Store:
             (_new_id(), memory_id, scope, reason, now),
         )
         self._log(memory_id, "canonize", f"scope={scope}: {reason}")
-        self._conn.commit()
 
         count = self._conn.execute(
             "SELECT COUNT(*) FROM canon_entries WHERE decommissioned_at IS NULL"
@@ -1029,7 +1060,7 @@ class Store:
             )
         return result
 
-    @_locked
+    @_transactional
     def decanonize(self, memory_id: str, scope: str | None = None,
                    reason: str = "") -> dict:
         """Remove a memory from the active canon (all scopes, or a specific
@@ -1067,11 +1098,10 @@ class Store:
             "decanonize",
             (f"scope={scope}: " if scope else "all scopes: ") + reason,
         )
-        self._conn.commit()
         return {"memory_id": memory_id, "decommissioned": len(rows),
                 "scope": scope, "reason": reason}
 
-    @_locked
+    @_transactional
     def end_scope(self, scope: str, reason: str) -> dict:
         """Task/phase is over: move the entire scope's canon back into
         ordinary long-term memory in one operation. Entries are not
@@ -1093,7 +1123,6 @@ class Store:
         )
         for r in rows:
             self._log(r["memory_id"], "end_scope", f"scope={scope}: {reason}")
-        self._conn.commit()
         return {"scope": scope, "decommissioned": len(rows), "reason": reason}
 
     @_locked
@@ -1128,7 +1157,7 @@ class Store:
 
     # -- social framing / multi-perspective memory (Halbwachs) -------------------
 
-    @_locked
+    @_transactional
     def set_frame(self, memory_id: str, frame: str, reason: str) -> Memory:
         """Retroactively assign (or re-assign) a memory's social frame.
         Requires a reason, logged — re-framing a memory is itself a
@@ -1142,7 +1171,6 @@ class Store:
             "UPDATE memories SET frame=? WHERE id=?", (frame, memory_id)
         )
         self._log(memory_id, "set_frame", f"frame={frame}: {reason}")
-        self._conn.commit()
         return self.get(memory_id)
 
     @_locked
@@ -1154,7 +1182,7 @@ class Store:
         ).fetchall()
         return [r["frame"] for r in rows]
 
-    @_locked
+    @_transactional
     def mark_conflict(
         self, memory_id_a: str, memory_id_b: str, reason: str
     ) -> dict:
@@ -1195,12 +1223,11 @@ class Store:
             (cid, memory_id_a, memory_id_b, reason, now),
         )
         self._log(memory_id_a, "mark_conflict", f"with={memory_id_b}: {reason}")
-        self._conn.commit()
         return dict(self._conn.execute(
             "SELECT * FROM conflicts WHERE id=?", (cid,)
         ).fetchone())
 
-    @_locked
+    @_transactional
     def resolve_conflict(
         self, conflict_id: str, reason: str, adopted_memory_id: str | None = None
     ) -> dict:
@@ -1237,7 +1264,6 @@ class Store:
             "resolve_conflict",
             f"conflict={conflict_id} adopted={adopted_memory_id}: {reason}",
         )
-        self._conn.commit()
         return dict(self._conn.execute(
             "SELECT * FROM conflicts WHERE id=?", (conflict_id,)
         ).fetchone())
@@ -1288,7 +1314,7 @@ class Store:
             return None
         return Memory(**dict(row))
 
-    @_locked
+    @_transactional
     def recall(
         self,
         query: str | None = None,
