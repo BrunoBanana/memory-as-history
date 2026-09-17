@@ -145,6 +145,32 @@ def _aggregate(rows):
                                    for metric in ('recall', 'hit', 'mrr')}}
 
 
+def _diagnostics(prepared, max_items, max_bytes):
+    rows = []
+    for conversation in prepared:
+        lookup = {doc["id"]: doc for doc in conversation["documents"]}
+        for query in conversation["queries"]:
+            if query["excluded"]:
+                continue
+            evidence = [lookup[mid] for mid in query["gold"]]
+            terms = set(_tokenize(query["text"]))
+            # Gold labels are used only here, after all systems have ranked.
+            # Selecting shortest evidence gives a content-budget upper bound,
+            # not another system's measured retrieval score.
+            feasible = apply_budget(sorted(evidence, key=lambda doc: len(doc["text"].encode("utf-8"))),
+                                    max_items, max_bytes)
+            rows.append({"question_id": query["id"],
+                         "gold_exceeds_item_budget": len(evidence) > max_items,
+                         "gold_exceeds_byte_budget": sum(len(doc["text"].encode("utf-8")) for doc in evidence) > max_bytes,
+                         "budget_recall_ceiling": len(feasible) / len(evidence),
+                         "gold_without_query_token_overlap": sum(not terms.intersection(_tokenize(doc["text"])) for doc in evidence)})
+    return {"gold_exceeds_item_budget": sum(row["gold_exceeds_item_budget"] for row in rows),
+            "gold_exceeds_byte_budget": sum(row["gold_exceeds_byte_budget"] for row in rows),
+            "mean_budget_recall_ceiling": statistics.mean(row["budget_recall_ceiling"] for row in rows),
+            "gold_without_query_token_overlap": sum(row["gold_without_query_token_overlap"] for row in rows),
+            "per_question": rows}
+
+
 def run_retrieval(data, max_items=5, max_bytes=4096):
     apply_budget([], max_items, max_bytes)  # Validate even if nothing is eligible.
     prepared = prepare_locomo(data)
@@ -221,6 +247,7 @@ def run_retrieval(data, max_items=5, max_bytes=4096):
             'completed': True, 'total_questions': total, 'scored_questions': scored,
             'exclusions': dict(exclusions), 'excluded_questions': excluded_questions,
             'budget': {'max_items': max_items, 'max_utf8_content_bytes': max_bytes},
+            'diagnostics': _diagnostics(prepared, max_items, max_bytes),
             'systems': systems, 'paired_recall_outcomes': paired, 'index_stats': index_stats, 'results': results,
             'limits': ['Evidence-turn retrieval only; not official LoCoMo QA accuracy or abstention',
                        'Shared tokenization; independent BM25 equation; no semantic baseline',

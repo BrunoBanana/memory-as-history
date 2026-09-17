@@ -1,5 +1,4 @@
 """Run frozen longitudinal state contracts through the public Store API."""
-from collections import Counter
 import hashlib
 import json
 from pathlib import Path
@@ -170,8 +169,19 @@ def run_case(case, directory):
                             bindings[step['bind']] = result.id if hasattr(result, 'id') else result['id']
             except Exception as exc:
                 errors.append({'step': index, 'op': op, 'error': type(exc).__name__, 'message': str(exc)})
-                # Later operations might depend on a failed creation. Do not
-                # silently exclude the episode or count unexecuted checks as passes.
+                # Keep the predeclared denominator: blocked checks are failures,
+                # separately labeled so they are not mistaken for observations.
+                completed_steps = {check['step'] for check in checks}
+                for remaining_index in range(index, len(case['steps'])):
+                    if remaining_index in completed_steps:
+                        continue
+                    remaining = case['steps'][remaining_index]
+                    pending = list(remaining.get('assertions', []))
+                    if remaining.get('expect_error'):
+                        pending.append({'metric': 'guard', 'expected': remaining['expect_error']})
+                    checks.extend({'step': remaining_index, **assertion, 'passed': False,
+                                   'blocked': True, 'actual': {'blocked_by_step': index}}
+                                  for assertion in pending)
                 break
     finally:
         store.close()
@@ -193,9 +203,10 @@ def run_protocol(cases=None):
     metrics = {}
     for row in results:
         for check in row['checks']:
-            bucket = metrics.setdefault(check['metric'], {'passed': 0, 'failed': 0, 'total': 0})
+            bucket = metrics.setdefault(check['metric'], {'passed': 0, 'failed': 0, 'blocked': 0, 'total': 0})
             bucket['passed' if check['passed'] else 'failed'] += 1
             bucket['total'] += 1
+            bucket['blocked'] += int(check.get('blocked', False))
     for bucket in metrics.values():
         bucket['pass_rate'] = bucket['passed'] / bucket['total']
     groups = {}
@@ -205,6 +216,7 @@ def run_protocol(cases=None):
                              for key in sorted({r[dimension] for r in results})}
     return {'schema_version': 1, 'track': 'synthetic_protocol', 'environment': environment(),
             'corpus_sha256': hashlib.sha256((DATA / 'history-v1.json').read_bytes()).hexdigest(),
+            'selected_cases_sha256': hashlib.sha256(json.dumps(cases, sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
             'episodes': len(results), 'passed': all(r['passed'] for r in results),
             'failed_episodes': sum(not r['passed'] for r in results),
             'metrics': metrics, 'groups': groups, 'results': results,
