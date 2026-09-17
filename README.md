@@ -1,5 +1,7 @@
 # Memory as History
 
+> English | **[简体中文](README.zh-CN.md)**
+
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
 **Status: v1.0 — released. CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
