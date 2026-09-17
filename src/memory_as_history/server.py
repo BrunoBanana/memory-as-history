@@ -9,7 +9,7 @@ Modules:
   Source criticism / memory-poisoning defense (Ricoeur: l'abus de mémoire) —
                                 security_sensitive flag + corroboration gate on pin()
   Narrative integration (Ricoeur: identité narrative) — narrate() / current_narrative()
-                                / narrative_history()
+                                / narrative_history() / review_narrative()
   Canon / archive circulation (Assmann: Kanon/Archiv) — canonize(scope) / decanonize()
                                 / end_scope() / list_canon() / active_scopes()
   Social framing / multi-perspective memory (Halbwachs: cadres sociaux) —
@@ -34,6 +34,7 @@ Tools:
   - narrate(content, reason, memory_ids?)  submit the current narrative synthesis (requires reason)
   - current_narrative()                 the current narrative, or null if none submitted yet
   - narrative_history(limit?)           past narrative versions, most recent first
+  - review_narrative(narrative_id, note) explicitly revalidate a usable current account
   - canonize(memory_id, scope, reason)  add a consolidated memory to the active canon (requires reason)
   - decanonize(memory_id, scope?, reason) remove a memory from the canon (requires reason)
   - end_scope(scope, reason)            task over: decommission a whole scope's canon (requires reason)
@@ -80,7 +81,8 @@ def _tool_error(e: Exception) -> dict:
         "promote() first": "This memory is still working-tier. Call promote(memory_id, reason) before this operation.",
         "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id, reason) first — removing an anchor must be its own reasoned step.",
         "decanonize()": "This memory is in the active canon. Call decanonize(memory_id, scope, reason) or end_scope(scope, reason) first.",
-        "independent corroboration": "This memory is security-sensitive. Call corroborate(memory_id, source) with a source DIFFERENT from the memory's own source first. An unknown or blank original source requires two distinct corroborating sources.",
+        "source issues": "Inspect current_narrative().source_issues. Restore forgotten sources only when justified, review overdue interpretations, or submit a replacement narrative with valid links. Then explicitly review_narrative(narrative_id, note).",
+        "independent corroboration": "Supply actual independent evidence with corroborate(memory_id, source). Known origins need a different source; unknown/blank origins need two distinct sources. Sensitive narratives also need valid memory_ids with support for every linked memory. Do not invent sources.",
         "forgotten": "This memory is tombstoned. Call restore(memory_id, reason) first if it should become active again.",
         "is required and cannot be empty": "A required text field (reason/note/source/content/scope/frame) was empty or whitespace. Provide a meaningful value.",
         "tier must be one of": "Choose tier='archive' or 'interpretation'. Testimony requires corroborate(memory_id, source) with independent evidence.",
@@ -133,7 +135,8 @@ def remember(
 @mcp.tool()
 def flag_sensitive(memory_id: str, reason: str) -> dict:
     """Retroactively mark an existing memory as security-sensitive (identity /
-    permissions / standing-instruction content). Once flagged, `pin()` will
+    permissions / standing-instruction content). Unsupported anchors/canon are
+    removed and dependent narratives invalidated atomically. Once flagged, `pin()` will
     require independent corroboration. `reason` is required and logged."""
     try:
         return store.flag_sensitive(memory_id, reason)
@@ -278,7 +281,8 @@ def list_forgotten(limit: int = 50) -> list[dict]:
 
 
 @mcp.tool()
-def narrate(content: str, reason: str, memory_ids: list[str] | None = None) -> dict:
+def narrate(content: str, reason: str, memory_ids: list[str] | None = None,
+            security_sensitive: bool = False) -> dict:
     """Submit the current narrative synthesis: a coherent account of who the
     user is / where the relationship stands, composed from the discrete
     memories returned by `recall()`. This tool does not write the narrative
@@ -291,17 +295,36 @@ def narrate(content: str, reason: str, memory_ids: list[str] | None = None) -> d
     a stable story. The previous narrative is not deleted, only marked
     superseded, so the narrative itself has a history. `reason` is required
     (why this synthesis now, what changed). `memory_ids` optionally records
-    which memories this narrative draws on."""
+    which active memories this narrative draws on. Invalid, forgotten or overdue
+    sources are rejected. Sensitive sources require independent corroboration.
+    Set security_sensitive=True for identity/permission/instruction synthesis;
+    recognized injection patterns also set it. Sensitive synthesis requires
+    nonempty links with independent corroboration for each. Unlinked ordinary
+    accounts are explicitly labeled unverified. Source invalidation hides the
+    account from recall until review_narrative() or a valid replacement."""
     try:
-        return store.narrate(content, reason, memory_ids)
+        return store.narrate(content, reason, memory_ids, security_sensitive)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
+
+
+@mcp.tool()
+def review_narrative(narrative_id: str, note: str) -> dict:
+    """Review the current narrative after fixing all source issues. Inspect its
+    text first; record why it still holds. Restore/corroborate alone do not clear
+    an invalidation. To change the account, submit a new version with narrate().
+    Superseded versions and unresolved sources cannot be approved."""
+    try:
+        return store.review_narrative(narrative_id, note)
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 
 
 @mcp.tool()
 def current_narrative() -> dict | None:
-    """Return the current narrative synthesis, or null if `narrate()` has
-    never been called yet."""
+    """Inspect the latest stored narrative, including stale text, or null if
+    none exists. Check review_status and source_issues before using the account
+    as current evidence. Default recall withholds stale narrative text."""
     return store.current_narrative()
 
 
@@ -323,7 +346,8 @@ def canonize(memory_id: str, scope: str, reason: str) -> dict:
 
     Requires a consolidated memory (call `promote()` first — same
     prerequisite as anchors). `reason` is required and logged. Exceeding the
-    canon soft limit returns a `warning` rather than blocking."""
+    canon soft limit returns a `warning` rather than blocking. Sensitive memories
+    require independent corroboration; denials are audited."""
     try:
         return store.canonize(memory_id, scope, reason)
     except (ValueError, PermissionError, KeyError) as e:
@@ -355,7 +379,8 @@ def end_scope(scope: str, reason: str) -> dict:
 
 @mcp.tool()
 def list_canon(scope: str | None = None) -> list[dict]:
-    """List active canon entries, optionally filtered by scope."""
+    """Inspect active canon entries, optionally filtered by scope. Legacy entries
+    without sufficient evidence have eligible_for_recall=False and a warning."""
     return store.list_canon(scope)
 
 
@@ -430,7 +455,8 @@ def recall(
     memories. Query ranks ordinary memories by lexical relevance; without
     a query, consolidated memories come first, then working, newest first.
     Also returns `stale_interpretations` due for review,
-    `narrative` (the current narrative synthesis, or null), and `conflicts`
+    `narrative` (a usable synthesis, or null), `narrative_review` (a content-free
+    notice when the current synthesis needs review), and `conflicts`
     (open conflicting framed versions whose participants are both active).
 
     `frame` optionally restricts the ordinary-memory list to one social

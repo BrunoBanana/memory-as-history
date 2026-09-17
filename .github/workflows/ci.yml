@@ -36,8 +36,16 @@ jobs:
 
       - name: Run mechanism determinism tests
         run: |
-          python usefulness_test.py
+          python usefulness_test.py --json > usefulness-results.json
           python poisoning_test.py
+
+      - name: Preserve synthetic evaluation metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-${{ matrix.os }}-python-${{ matrix.python-version }}
+          path: usefulness-results.json
+          if-no-files-found: warn
 
   mcp-compatibility:
     runs-on: ubuntu-latest
