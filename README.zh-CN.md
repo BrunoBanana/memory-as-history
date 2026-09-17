@@ -4,7 +4,7 @@
 
 > 多数 Agent 记忆系统用时效性和相似度打分来决定"记住什么"。本项目借用记忆研究（memory studies）看待人类记忆的方式对待 Agent 记忆：记忆通过**刻意巩固**、**身份锚点**、**来源分级**与**负责任的遗忘**成为"历史"——而不只是存储和检索的副产品。
 
-**代码版本：1.2.0.dev0；事务一致性变更记录在 [Unreleased](CHANGELOG.md#unreleased)。CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+**代码版本：1.2.0.dev0；事务、来源分级与解除锚定审计变更记录在 [Unreleased](CHANGELOG.md#unreleased)。CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## 为什么做这个
 
@@ -32,7 +32,7 @@
 | **经典/档案流转** | 任务级流动的"经典圈"（区别于永久锚点）：`canonize(scope, reason)` 纳入当前任务优先注入；任务结束 `end_scope(reason)` 整圈退场——不是遗忘也不是降级。解决上下文膨胀。 | Assmann：Kanon / Archiv |
 | **社会框架** | 记忆可携带社会/关系框架标签；两条记忆冲突时 `mark_conflict(a, b, reason)` 显式声明、**两个版本都保留**；`resolve_conflict` 记录裁决但失败版本不删除。 | Halbwachs：社会框架 |
 
-所有状态变更（promote / pin / corroborate / review / forget / restore / canonize / narrate / 标记敏感 / 声明冲突……）统一写入审计日志，带理由和时间戳——**什么成为了历史、为什么，全部可查询**。
+所有状态变更（promote / pin / unpin / corroborate / review / forget / restore / canonize / narrate / 标记敏感 / 声明冲突……）统一写入审计日志，带理由和时间戳——**什么成为了历史、为什么，全部可查询**。
 
 ## 安装
 
@@ -73,6 +73,16 @@ python -m pytest tests/ -v   # 可选的自检
 python -m memory_as_history.server
 ```
 
+## 来源规则与旧客户端兼容（1.2 开发版）
+
+`archive → testimony` 与敏感记忆锚定使用同一个独立佐证门槛：已知原始来源需要一个不同来源；未知、空串或纯空白来源需要两个不同的非空佐证来源。比较时去除两端空白、保留大小写；重复或同源佐证仍记录并审计，但不增加独立支持。`interpretation` 不会因此升级。
+
+来源标识由调用方提供，服务端不认证其真实独立性。同一个人的多轮复述、同一文档的转载应使用同一稳定来源标识，不能编造新标识来通过门槛。
+
+新调用不能直接 `remember(tier="testimony")`：先保存 `archive`，再以真实独立证据调用 `corroborate()`。旧库的 testimony 标签和审计原样保留；新增只读 `provenance(memory_id)` 返回来源列表、独立佐证计数及 `corroboration_satisfied`，并对证据不足的历史 testimony 给出警告。旧标签本身不构成核验保证，敏感锚定始终检查实际记录的来源。
+
+`unpin(memory_id, reason)` 接受非空理由，实际移除写入 `unpin` 审计，已未锚定或未知 ID 写入 `unpin_noop`。省略理由或传 null 的旧调用继续有效，明确记录 `legacy unpin: caller did not provide a reason`，不会补造历史理由。Python 仍返回 `None`；MCP 仍返回 `{"memory_id": "...", "unpinned": true}`，表示目标状态，实际操作结果以审计区分。删除与审计在同一事务内，审计失败会恢复锚点。
+
 ## 分发定位
 
 MCP Server，Python。定位为**协议层**——不是存储/embedding 后端的替代品。纯 SQLite，**刻意不依赖 embedding**。v1.0 起 `recall(query)` 用进程内 **BM25 词法评分**排序（中文字符二元组 + 英文词 + 停用词；token 缓存在 `remember()` 时写入，旧版本数据运行时自动回填）。模糊查询如"上次那个方案"能召回"初步方案已定……"——纯子串匹配做不到。未来可替换真正的向量后端而不改变协议接口。
@@ -81,7 +91,7 @@ MCP Server，Python。定位为**协议层**——不是存储/embedding 后端�
 
 ## 可靠性与机制验证
 
-- **156 个自动化测试**（含真实 MCP stdio 协议回归、事务故障与独立进程竞争测试）+ **6 项可靠性检查**（线程安全、多进程并发、重启持久化、5000 条规模、含 SQL 注入形态的边界输入、嵌套目录）。CI 保留 ubuntu/macos × Python 3.10–3.12 六矩阵，并增加 MCP 1.2.0、最新 1.x 和最新 2.x 的兼容性检查
+- **177 个自动化测试**（含真实 MCP stdio 协议回归、事务故障与独立进程竞争测试）+ **6 项可靠性检查**（线程安全、多进程并发、重启持久化、5000 条规模、含 SQL 注入形态的边界输入、嵌套目录）。CI 保留 ubuntu/macos × Python 3.10–3.12 六矩阵，并增加 MCP 1.2.0、最新 1.x 和最新 2.x 的兼容性检查
 - `usefulness_test.py`（确定性对照）：身份事实被 200 条噪音淹没后，朴素时间排序基线早已丢失，锚点机制仍能召回
 - `poisoning_test.py`（三组确定性对照）：朴素基线保留注入声明；v1.1 即使调用方漏设敏感标记，也会自动识别已知模式；自动标记和显式标记两组都在缺少独立佐证时拦截 `pin()`
 - **4 轮真实 LLM 日常使用模拟**（同一持久库、经 MCP 协议）：身份捕获 → 跨会话召回 → 模糊查询+叙事 → 注入攻击（明显样本被完全拒绝；隐蔽样本混在正常 Q3 复盘里的预授权声明，被识别为敏感并暂停求证）
@@ -90,9 +100,9 @@ v1.1 的 `due_for_consolidation(days?, limit?)` 会按时间从旧到新列出�
 
 ## 下一版本
 
-1.1.1 补丁已提交审查，1.2 首批事务修复已实现：写操作在检查状态前获取 SQLite 写入权，业务和审计一起提交，异常时统一回滚。`recall()` 因会刷新复核状态，也参与写事务；并发调用可能等待，沿用 30 秒锁超时。此变更不自动修复既有历史异常。
+1.1.1 补丁和 1.2 首批事务修复均已合入 main：写操作在检查状态前获取 SQLite 写入权，业务和审计一起提交，异常时统一回滚。`recall()` 因会刷新复核状态，也参与写事务；并发调用可能等待，沿用 30 秒锁超时。此变更不自动修复既有历史异常。
 
-下一批是来源分级语义和解除锚定的审计契约。具体优先级与验收条件见[工程推进计划](docs/plans/2026-09-17-reliability-roadmap.md)及[事务实现计划](docs/plans/2026-09-17-transaction-integrity.md)。
+本批已实现来源分级语义和解除锚定审计；下一步验证真实客户端跨会话使用，再处理叙事与来源传播边界。具体优先级与验收条件见[工程推进计划](docs/plans/2026-09-17-reliability-roadmap.md)及[来源与审计实现计划](docs/plans/2026-09-17-provenance-audit.md)。
 
 ## 相关工作
 

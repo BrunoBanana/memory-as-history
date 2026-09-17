@@ -493,6 +493,8 @@ class Store:
         `tier` defaults to 'archive' (captured as-is). Pass tier='interpretation'
         when the content is the agent's own inference/summary rather than a
         directly observed fact — this schedules it for periodic review.
+        New testimony must be established through `corroborate()`; directly
+        supplying tier='testimony' is rejected.
 
         Set `security_sensitive=True` for anything touching identity,
         permissions, or standing instructions (e.g. "the developer said I
@@ -518,6 +520,11 @@ class Store:
         content = _require_text(content, "content")
         if tier not in TIERS:
             raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
+        if tier == "testimony":
+            raise ValueError(
+                "testimony requires recorded evidence; remember as archive, "
+                "then corroborate with independent sources"
+            )
         mid = _new_id()
         now = _now()
         review_status = "current" if tier == "interpretation" else None
@@ -625,23 +632,49 @@ class Store:
         origin, at least two different voices are required before any of
         them can be considered independent of wherever the content really
         came from. Blank/whitespace corroborating sources never count."""
-        mem = self.get(memory_id)
-        if mem is None:
-            raise KeyError(f"no such memory: {memory_id}")
+        return self.provenance(memory_id)["independent_corroboration_count"]
+
+    @_locked
+    def provenance(self, memory_id: str) -> dict:
+        """Inspect recorded support without changing historical tiers.
+
+        Source identifiers are caller-supplied, case-sensitive, and trimmed
+        for comparison. They are not authenticated attestations. One query
+        keeps the memory and its evidence in the same SQLite read snapshot.
+        """
         rows = self._conn.execute(
-            "SELECT DISTINCT source FROM corroborations WHERE memory_id=?",
+            "SELECT m.source, m.tier, c.source AS corroborating_source "
+            "FROM memories m LEFT JOIN corroborations c ON c.memory_id=m.id "
+            "WHERE m.id=?",
             (memory_id,),
         ).fetchall()
+        if not rows:
+            raise KeyError(f"no such memory: {memory_id}")
         distinct_sources = {
-            r["source"].strip() for r in rows
-            if r["source"] and r["source"].strip()
+            r["corroborating_source"].strip() for r in rows
+            if r["corroborating_source"] and r["corroborating_source"].strip()
         }
-        origin = (mem.source or "").strip()
-        if not origin:
-            # unknown origin: need at least two distinct voices
-            return max(len(distinct_sources) - 1, 0)
-        distinct_sources.discard(origin)
-        return len(distinct_sources)
+        origin = (rows[0]["source"] or "").strip()
+        count = (
+            len(distinct_sources - {origin}) if origin
+            else max(len(distinct_sources) - 1, 0)
+        )
+        result = {
+            "memory_id": memory_id,
+            "tier": rows[0]["tier"],
+            "source": rows[0]["source"],
+            "origin_known": bool(origin),
+            "corroborating_sources": sorted(distinct_sources),
+            "independent_corroboration_count": count,
+            "corroboration_satisfied": count > 0,
+        }
+        if result["tier"] == "testimony" and count == 0:
+            result["warning"] = (
+                "Historical testimony lacks sufficient recorded independent "
+                "corroboration under the current rule. The stored tier is "
+                "preserved; obtain genuine independent evidence before relying on it."
+            )
+        return result
 
     # -- consolidation module (Assmann) ---------------------------------------
 
@@ -739,8 +772,20 @@ class Store:
         return result
 
     @_transactional
-    def unpin(self, memory_id: str) -> None:
-        self._conn.execute("DELETE FROM anchors WHERE memory_id=?", (memory_id,))
+    def unpin(self, memory_id: str, reason: str | None = None) -> None:
+        """Remove anchor status and audit the outcome in the same transaction.
+
+        Omitted reasons retain the legacy call form with an explicit audit
+        marker. An already-unpinned or unknown ID is an audited no-op.
+        """
+        reason = (
+            "legacy unpin: caller did not provide a reason" if reason is None
+            else _require_text(reason, "reason")
+        )
+        removed = self._conn.execute(
+            "DELETE FROM anchors WHERE memory_id=?", (memory_id,)
+        ).rowcount
+        self._log(memory_id, "unpin" if removed else "unpin_noop", reason)
 
     @_locked
     def is_anchored(self, memory_id: str) -> bool:
@@ -854,7 +899,9 @@ class Store:
     def corroborate(self, memory_id: str, source: str) -> Memory:
         """Record that an independent additional source corroborates this
         memory. An 'archive' (raw, single-source) memory is automatically
-        upgraded to 'testimony' on its first corroboration. 'interpretation'
+        upgraded to 'testimony' only when the independent-source gate used by
+        sensitive pinning is satisfied. Same-source and duplicate reports
+        are recorded but add no independent support. 'interpretation'
         memories are not upgraded by corroboration alone — they must go
         through `review()` instead, since they are inferences, not facts
         that a second source can simply confirm."""
@@ -867,7 +914,8 @@ class Store:
             "INSERT INTO corroborations (id, memory_id, source, at) VALUES (?, ?, ?, ?)",
             (_new_id(), memory_id, source, now),
         )
-        if mem.tier == "archive":
+        self._log(memory_id, "corroborate", f"recorded corroborating source: {source}")
+        if mem.tier == "archive" and self.independent_corroboration_count(memory_id) > 0:
             self._conn.execute(
                 "UPDATE memories SET tier='testimony' WHERE id=?", (memory_id,)
             )

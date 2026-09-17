@@ -5,7 +5,30 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Transaction integrity stage toward 1.2.0 (`1.2.0.dev0`); no schema changes.
+Transaction integrity and provenance/audit stages toward 1.2.0 (`1.2.0.dev0`); no schema changes.
+
+### Changed
+- New testimony classifications require the same independent-source gate as
+  sensitive pinning. Duplicate/same-source evidence cannot upgrade archive;
+  unknown origins need two distinct sources. Direct `remember(tier="testimony")`
+  is rejected; callers must capture archive and supply actual corroboration.
+- Every corroboration is audited, including duplicates and non-upgrading records.
+- `unpin(memory_id, reason?)` audits removal as `unpin` or an already-unpinned/
+  unknown ID as `unpin_noop`. Explicit blank reasons fail; omitted/null reasons
+  retain legacy compatibility with an honest missing-reason audit marker.
+  Python/MCP return shapes are unchanged; failed auditing rolls back removal.
+
+### Added
+- Read-only `provenance(memory_id)` in Store and MCP reports source labels and
+  current corroboration sufficiency, warning on unsupported historical testimony.
+  Old classifications are preserved without invented evidence or audit entries.
+- 21 regression cases for provenance and unpin, including real stdio, concurrent
+  removal and audit fault injection. The full suite now has 177 tests.
+- 28 transaction tests: 15 audit failure scenarios, nested/partial refresh
+  failures, controlled connection and process races, denied-pin persistence,
+  and busy BEGIN/COMMIT recovery. This stage brought the suite to 156 tests.
+- CI runs on PRs targeting `codex/**` branches as well as `main`, allowing
+  this stage to be reviewed and tested on top of the 1.1.1 patch.
 
 ### Fixed
 - State-changing Store calls now reserve SQLite's writer before reading
@@ -19,13 +42,6 @@ Transaction integrity stage toward 1.2.0 (`1.2.0.dev0`); no schema changes.
   transaction. An intentional sensitive-pin denial still commits its denial
   audit and returns the original `PermissionError` contract; failed denial
   auditing rolls back normally.
-
-### Added
-- 28 transaction tests: 15 audit failure scenarios, nested/partial refresh
-  failures, controlled connection and process races, denied-pin persistence,
-  and busy BEGIN/COMMIT recovery. The full suite now has 156 tests.
-- CI runs on PRs targeting `codex/**` branches as well as `main`, allowing
-  this stage to be reviewed and tested on top of the 1.1.1 patch.
 
 ### Tradeoff
 - State-changing calls serialize at SQLite's writer reservation, including

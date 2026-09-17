@@ -27,7 +27,7 @@ Eight modules, deliberately small and composable:
 |---|---|---|
 | **Consolidation** | Memories start as `working`. They only become `consolidated` through an explicit `promote(reason)` call — never automatically, and `reason` cannot be empty. Re-promoting an already-consolidated memory updates the reason without resetting `consolidated_at`. | Assmann: communicative → cultural memory |
 | **Anchors** | A small set of `pin(reason)`-ed memories. Anchors are always surfaced on recall, in full, regardless of query — they do not compete on relevance or recency. **A memory must already be `consolidated` before it can be pinned** — you can't skip from a passing remark to a monument. Exceeding a soft limit (default 12) doesn't block pinning but returns a `warning`, since a large set of "anchors" stops functioning as anchors. | Nora: *lieux de mémoire* |
-| **Provenance tiers** | Every memory carries a tier: `archive` (captured as-is), `testimony` (corroborated by an independent second source — `archive` auto-upgrades to `testimony` on first `corroborate()`), or `interpretation` (the agent's own inference — never auto-upgraded by corroboration; must be periodically re-confirmed via `review()`, and `due_for_review()` surfaces anything overdue). | Ricoeur: archive / testimony / interpretation |
+| **Provenance tiers** | Every memory carries a tier: `archive` (captured as-is), `testimony` (corroborated by an independent second source — `archive` upgrades only when the independent-source gate is satisfied), or `interpretation` (the agent's own inference — never auto-upgraded by corroboration; must be periodically re-confirmed via `review()`, and `due_for_review()` surfaces anything overdue). | Ricoeur: archive / testimony / interpretation |
 | **Forgetting** | `forget(reason)` tombstones a memory: content is retained, not hard-deleted, but it disappears from `recall()`, `list_anchors()`, and `due_for_review()`. Requires a non-empty reason. **An anchored memory cannot be forgotten directly** — `unpin()` first, since removing an identity cornerstone should be its own separately-reasoned step, not a side-effect of an unrelated cleanup. Always reversible via `restore(reason)`, itself logged. | Ricoeur: forgetting as necessary and legitimate, not failure |
 | **Source criticism (memory-poisoning defense)** | A memory can be flagged `security_sensitive` (at `remember()` time, or later via `flag_sensitive(reason)`) when it touches identity, permissions, or standing instructions. `pin()` on a security-sensitive memory additionally requires at least one `corroborate()` from a source *distinct* from the memory's own `source` — otherwise it raises `PermissionError` and logs a `pin_denied` audit entry. A single untrusted claim (e.g. injected via a fetched document or tool output, asserting "the developer said...") can still be *remembered*, but cannot promote itself into a permanent, always-surfaced anchor on its own say-so. | Ricoeur: *l'abus de mémoire* — historiography does not take a single, uncorroborated testimony as settled fact |
 | **Narrative integration** | A plain store cannot compose a narrative itself — that requires judgment and language. `narrate(content, reason, memory_ids?)` gives the *synthesis* a first-class, versioned, accountable existence: an agent reads `recall()`, composes a coherent account of who the user is, and submits it here. The previous current narrative is not deleted, only marked superseded (linked via `superseded_by`) — so the story itself has a history, not just its latest version. `recall()` surfaces the current narrative alongside the discrete memory list. | Ricoeur: *identité narrative* — identity is not a pile of facts but a story that organizes them |
@@ -83,11 +83,12 @@ python -m memory_as_history.server
 
 ### Tools exposed
 
-- `remember(content, source?, tier?)` — store a memory (`tier`: `archive` default, `testimony`, or `interpretation`)
+- `remember(content, source?, tier?)` — store a memory (`tier`: `archive` default or `interpretation`; establish `testimony` through corroboration)
 - `promote(memory_id, reason)` — consolidate a working memory (reason required)
 - `pin(memory_id, reason)` — anchor a **consolidated** memory (reason required; must `promote()` first)
-- `unpin(memory_id)` — remove anchor status (memory itself is kept)
-- `corroborate(memory_id, source)` — record an independent source; `archive` → `testimony` on first call
+- `unpin(memory_id, reason?)` — remove anchor status and audit removal/no-op; provide a reason (legacy calls remain supported)
+- `corroborate(memory_id, source)` — record and audit evidence; `archive` → `testimony` only after independent corroboration
+- `provenance(memory_id)` — inspect recorded sources and corroboration sufficiency; warns about unsupported historical testimony
 - `review(memory_id, note)` — re-confirm an `interpretation`-tier memory, resets its review clock
 - `due_for_review(days?)` — list `interpretation` memories overdue for re-examination (default: 30 days)
 - `due_for_consolidation(days?, limit?)` — list active working memories oldest-first for session-boundary consolidation
@@ -104,12 +105,41 @@ python -m memory_as_history.server
 - `list_frames()` — distinct frames currently in use
 - `mark_conflict(a, b, reason)` / `resolve_conflict(conflict_id, reason, adopted_memory_id?)` / `list_conflicts(resolved?)` — declare and settle conflicting framed versions without deleting either
 - `recall(query?, limit?, frame?)` — anchors + canon first, then ordinary memories ranked by BM25 lexical relevance when a `query` is given; also returns `stale_interpretations`, `narrative`, and open `conflicts`
-- `audit_log(limit?)` — full trail of promote/pin/corroborate/review/forget/restore decisions, with reasons
+- `audit_log(limit?)` — full trail of promote/pin/unpin/corroborate/review/forget/restore decisions, with reasons
+
+## Source evidence and compatibility (1.2 development)
+
+Testimony upgrade and sensitive pinning use the same gate: a known origin needs
+one different corroborating source; an unknown/blank origin needs two distinct
+corroborating sources. Whitespace is trimmed for comparison, case is preserved,
+and repeated labels add no independent support. All corroboration records are
+audited, including duplicates. Interpretation remains interpretation.
+
+Use stable source identifiers: repeated turns from one speaker and copies of
+one document are the same source. Labels are caller-supplied, not authenticated
+proof of independence. Do not invent labels to satisfy the gate.
+
+New `remember(tier="testimony")` calls return a structured error. Change those
+clients to capture `archive`, then call `corroborate()` with actual evidence.
+Existing databases keep their stored tiers and audit history. Use
+`provenance(memory_id)` to inspect `corroboration_satisfied`, the independent
+count, source labels, and any warning on historical testimony. The check is
+read-only; an old testimony label alone does not guarantee sufficient support.
+Sensitive pinning always checks the recorded evidence, even for old testimony.
+
+`unpin(memory_id, reason)` validates nonblank reasons and atomically audits
+actual removal as `unpin` or an already-unpinned/unknown ID as `unpin_noop`.
+Omitting the reason (or passing null) remains supported and records the literal
+note `legacy unpin: caller did not provide a reason`. Earlier unaudited unpins
+cannot be reconstructed. The Python return remains `None`; the MCP return
+remains `{"memory_id": "...", "unpinned": true}`, confirming the requested
+state, not asserting that this call removed an anchor. Audit entries distinguish
+the outcomes. Audit failure rolls back the removal.
 
 ## Reliability
 
-The suite contains **156 tests**, including real MCP stdio calls covering
-successful sensitivity flagging and structured input errors. Run it with
+The suite contains **177 tests**, including real MCP stdio calls covering
+sensitivity flagging, evidence-gated testimony, provenance inspection, optional unpin reasons, and structured input errors. Run it with
 `python -m pytest tests/ -v`. CI includes MCP 1.2.0, latest 1.x, and latest 2.x.
 Sensitive memories with an unknown, empty, or whitespace-only original source
 require two distinct corroborating sources before pinning. Known origins need
@@ -186,10 +216,13 @@ correctly:
 
 ## Roadmap
 
-The eight memory-studies modules are implemented. The 1.1.1 patch is under
-review, and the first 1.2 stage implements transaction integrity. Provenance
-semantics and unpin auditing remain next. See the [development roadmap](docs/plans/2026-09-17-reliability-roadmap.md)
-and [transaction plan](docs/plans/2026-09-17-transaction-integrity.md).
+The eight memory-studies modules are implemented. The 1.1.1 patch and first
+1.2 transaction stage are merged into main. This batch implements provenance
+semantics and unpin auditing. Next: cross-session acceptance in a real MCP
+client, then explicit policy for evidence propagation through canon/narrative
+and narrative review after forgetting. See the
+[development roadmap](docs/plans/2026-09-17-reliability-roadmap.md) and
+[provenance/audit plan](docs/plans/2026-09-17-provenance-audit.md).
 
 ### Verified in v1.0 testing rounds
 
