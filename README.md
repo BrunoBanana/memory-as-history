@@ -4,7 +4,7 @@
 
 > Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
 
-**Code version: 1.1.1 (release candidate); changes are tracked under [Unreleased](CHANGELOG.md#unreleased). CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+**Code version: 1.2.0.dev0; transaction integrity work is tracked under [Unreleased](CHANGELOG.md#unreleased). CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## Why
 
@@ -108,12 +108,21 @@ python -m memory_as_history.server
 
 ## Reliability
 
-The suite contains **128 tests**, including real MCP stdio calls covering
+The suite contains **156 tests**, including real MCP stdio calls covering
 successful sensitivity flagging and structured input errors. Run it with
 `python -m pytest tests/ -v`. CI includes MCP 1.2.0, latest 1.x, and latest 2.x.
 Sensitive memories with an unknown, empty, or whitespace-only original source
 require two distinct corroborating sources before pinning. Known origins need
 one source distinct from the original.
+
+State-changing calls use explicit SQLite transactions: acquire the writer
+before checking state, then commit business changes and audit records together.
+Failures roll back, including failed commits; intentional `pin_denied` auditing
+is preserved. Controlled two-connection and separate-process tests cover the
+race conditions, in addition to fault-injection tests. `recall()` also reserves
+the writer because it refreshes review status; concurrent calls may wait up to
+the existing 30-second busy timeout. These changes prevent new anomalies;
+existing historical inconsistencies are not automatically repaired.
 
 `reliability_test.py` runs a battery of robustness checks beyond the unit tests:
 thread-safety (concurrent tool calls against one `Store`), multi-process
@@ -177,9 +186,10 @@ correctly:
 
 ## Roadmap
 
-The eight memory-studies modules are implemented. The current priority is a
-1.1.1 reliability patch, followed by transaction integrity and provenance
-consistency for 1.2. See the [development plan and acceptance criteria](docs/plans/2026-09-17-reliability-roadmap.md).
+The eight memory-studies modules are implemented. The 1.1.1 patch is under
+review, and the first 1.2 stage implements transaction integrity. Provenance
+semantics and unpin auditing remain next. See the [development roadmap](docs/plans/2026-09-17-reliability-roadmap.md)
+and [transaction plan](docs/plans/2026-09-17-transaction-integrity.md).
 
 ### Verified in v1.0 testing rounds
 
