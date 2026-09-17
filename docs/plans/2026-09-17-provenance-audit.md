@@ -89,4 +89,7 @@ macOS / Python 3.12.13. Reliability battery: 6/6. Mechanism checks retain
 anchors at all four noise sizes and reject uncorroborated poisoning attempts.
 Wheel and sdist build successfully. A fresh environment installed the wheel
 and passed 177/177 from outside the checkout; imports resolved to site-packages.
-Remote CI remains pending until the PR is created.
+Review delivery: [PR #3](https://github.com/BrunoBanana/memory-as-history/pull/3),
+based on main. The PR current-head checks are the authoritative remote CI
+record (six OS/Python jobs and three MCP compatibility jobs). It is kept
+unmerged for review; no release is published by this batch.
