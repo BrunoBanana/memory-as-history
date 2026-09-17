@@ -575,8 +575,8 @@ class Store:
         is the check `pin()` uses for security-sensitive memories.
 
         Strictness on missing origins: a memory with no recorded source
-        (source=None) is treated as having an *unknown* origin, not a blank
-        one. Any single corroborating source therefore cannot be assumed to
+        (None, empty, or whitespace-only) has an *unknown* origin. Any
+        single corroborating source therefore cannot be assumed to
         differ from that unknown origin, so it does not count as
         independent. Such a memory needs two *distinct* corroborating
         sources to count as independently corroborated — with an unknown
@@ -594,10 +594,11 @@ class Store:
             r["source"].strip() for r in rows
             if r["source"] and r["source"].strip()
         }
-        if mem.source is None:
+        origin = (mem.source or "").strip()
+        if not origin:
             # unknown origin: need at least two distinct voices
             return max(len(distinct_sources) - 1, 0)
-        distinct_sources.discard(mem.source.strip())
+        distinct_sources.discard(origin)
         return len(distinct_sources)
 
     # -- consolidation module (Assmann) ---------------------------------------
@@ -661,6 +662,8 @@ class Store:
         mem = self.get(memory_id)
         if mem is None:
             raise KeyError(f"no such memory: {memory_id}")
+        if mem.is_forgotten:
+            raise ValueError("cannot pin a forgotten memory; restore() it first")
         if mem.status != "consolidated":
             raise ValueError(
                 "memory must be consolidated (call promote() first) before "
@@ -1243,11 +1246,13 @@ class Store:
     def list_conflicts(self, resolved: bool | None = None) -> list[dict]:
         """List conflicts. resolved=None → all; False → only open; True →
         only resolved. Each entry includes both memories' content and frame
-        for quick inspection."""
+        for quick inspection, and their forgetting timestamps. Historical
+        conflicts remain inspectable even when a participant is forgotten."""
         sql = (
             "SELECT c.*, "
             "ma.content AS content_a, ma.frame AS frame_a, "
-            "mb.content AS content_b, mb.frame AS frame_b "
+            "mb.content AS content_b, mb.frame AS frame_b, "
+            "ma.forgotten_at AS forgotten_at_a, mb.forgotten_at AS forgotten_at_b "
             "FROM conflicts c "
             "JOIN memories ma ON ma.id = c.memory_id_a "
             "JOIN memories mb ON mb.id = c.memory_id_b"
@@ -1298,7 +1303,9 @@ class Store:
         before working, newest first). A memory never appears in more than
         one section: if it is both pinned and canonized, it shows up under
         `anchors` only (identity takes precedence); if it is canonized, it
-        shows under `canon` only.
+        shows under `canon` only. Multiple active scopes for the same memory
+        consume one slot, represented by its oldest active canon entry;
+        `list_canon()` retains every scope membership.
 
         `limit` bounds the TOTAL number of entries across anchors + canon +
         memories. Anchors are the one exception: they are always returned
@@ -1327,14 +1334,23 @@ class Store:
         recall gives both the story and the raw facts it was built from.
         And `conflicts`: currently open (unresolved) conflicting framed
         versions, so disagreement is surfaced explicitly rather than one
-        version silently winning. These extra sections are informational
+        version silently winning. Conflicts with a forgotten participant
+        are hidden here but remain available through `list_conflicts()`.
+        These extra sections are informational
         and do not count against `limit`."""
+        # Refresh status before taking copies for the other recall sections.
+        stale_interpretations = self.due_for_review()
         anchors = self.list_anchors()
         # canon entries excluding anchors (identity takes precedence over
         # task-scoping for display; the memory is not duplicated)
         all_canon = self.list_canon()
         anchor_ids = {a["id"] for a in anchors}
-        canon = [c for c in all_canon if c["memory_id"] not in anchor_ids]
+        seen_ids = set(anchor_ids)
+        canon = []
+        for entry in all_canon:
+            if entry["memory_id"] not in seen_ids:
+                canon.append(entry)
+                seen_ids.add(entry["memory_id"])
 
         # global budget: anchors always win; canon then memories share what's left
         remaining = max(limit - len(anchors), 0)
@@ -1370,9 +1386,13 @@ class Store:
             "anchors": anchors,
             "canon": canon,
             "memories": rest,
-            "stale_interpretations": self.due_for_review(),
+            "stale_interpretations": stale_interpretations,
             "narrative": self.current_narrative(),
-            "conflicts": self.list_conflicts(resolved=False),
+            "conflicts": [
+                conflict for conflict in self.list_conflicts(resolved=False)
+                if conflict["forgotten_at_a"] is None
+                and conflict["forgotten_at_b"] is None
+            ],
         }
 
     def _rank_by_query(self, rows: list[dict], query: str) -> list[dict]:
