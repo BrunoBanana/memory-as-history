@@ -79,9 +79,10 @@ def _tool_error(e: Exception) -> dict:
         "promote() first": "This memory is still working-tier. Call promote(memory_id, reason) before this operation.",
         "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id) first — removing an anchor must be its own reasoned step.",
         "decanonize()": "This memory is in the active canon. Call decanonize(memory_id, scope, reason) or end_scope(scope, reason) first.",
-        "independent corroboration": "This memory is security-sensitive. Call corroborate(memory_id, source) with a source DIFFERENT from the memory's own source first.",
+        "independent corroboration": "This memory is security-sensitive. Call corroborate(memory_id, source) with a source DIFFERENT from the memory's own source first. An unknown or blank original source requires two distinct corroborating sources.",
         "forgotten": "This memory is tombstoned. Call restore(memory_id, reason) first if it should become active again.",
         "is required and cannot be empty": "A required text field (reason/note/source/content/scope/frame) was empty or whitespace. Provide a meaningful value.",
+        "tier must be one of": "Choose tier='archive', 'testimony', or 'interpretation'.",
     }
     hint = next((h for k, h in hints.items() if k in str(e)), None)
     return {
@@ -119,7 +120,10 @@ def remember(
     belongs to (Halbwachs) — e.g. "team-alpha", "collab-with-B",
     "project-x". Framed memories can disagree across frames without one
     silently overwriting the other: see `mark_conflict()`."""
-    return store.remember(content, source, tier, security_sensitive, frame).to_dict()
+    try:
+        return store.remember(content, source, tier, security_sensitive, frame).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -128,7 +132,7 @@ def flag_sensitive(memory_id: str, reason: str) -> dict:
     permissions / standing-instruction content). Once flagged, `pin()` will
     require independent corroboration. `reason` is required and logged."""
     try:
-        return store.flag_sensitive(memory_id, reason).to_dict()
+        return store.flag_sensitive(memory_id, reason)
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 
@@ -261,7 +265,10 @@ def narrate(content: str, reason: str, memory_ids: list[str] | None = None) -> d
     superseded, so the narrative itself has a history. `reason` is required
     (why this synthesis now, what changed). `memory_ids` optionally records
     which memories this narrative draws on."""
-    return store.narrate(content, reason, memory_ids)
+    try:
+        return store.narrate(content, reason, memory_ids)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
@@ -391,13 +398,13 @@ def list_conflicts(resolved: bool | None = None) -> list[dict]:
 def recall(
     query: str | None = None, limit: int = 10, frame: str | None = None
 ) -> dict:
-    """Recall memories. Anchors and active canon entries are always returned
-    in full regardless of query. Remaining slots are filled by consolidated
-    memories first, then working memories, newest first, optionally filtered
-    by `query`. Also returns `stale_interpretations` due for review,
+    """Recall memories within a shared limit: anchors first (always in full,
+    even above the limit), then distinct active canon memories, then ordinary
+    memories. Query ranks ordinary memories by lexical relevance; without
+    a query, consolidated memories come first, then working, newest first.
+    Also returns `stale_interpretations` due for review,
     `narrative` (the current narrative synthesis, or null), and `conflicts`
-    (currently open conflicting framed versions, surfaced explicitly rather
-    than letting one version silently win).
+    (open conflicting framed versions whose participants are both active).
 
     `frame` optionally restricts the ordinary-memory list to one social
     frame (Halbwachs) — anchors and canon are always returned regardless,
