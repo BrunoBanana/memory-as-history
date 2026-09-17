@@ -87,3 +87,9 @@ Local verification on macOS / Python 3.12.13:
 | Mechanism scripts | Poisoning check passed; usefulness outputs matched expectations |
 | Packaging | wheel and sdist built; clean installed wheel passed all 156 tests from outside the checkout |
 | Diff / CI configuration | Whitespace check and YAML parsing passed |
+
+Review delivery: [PR #2](https://github.com/BrunoBanana/memory-as-history/pull/2)
+is based on [PR #1](https://github.com/BrunoBanana/memory-as-history/pull/1).
+PR #1's nine checks passed at `7dd0bce`. PR #2's current-head CI checks are
+the authoritative remote validation record. Both stages remain unmerged;
+source-tier semantics and unpin audit design are the next P1 roadmap items.
