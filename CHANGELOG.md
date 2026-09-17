@@ -19,11 +19,16 @@ Transaction integrity and provenance/audit stages toward 1.2.0 (`1.2.0.dev0`); n
   Python/MCP return shapes are unchanged; failed auditing rolls back removal.
 
 ### Added
+- Two cross-session MCP cases cover known/unknown origins through four fresh
+  client/server pairs: sensitive pin denial, independent corroboration, persisted
+  anchor recall, reasoned unpin, and legacy no-op auditing. Full suite: 179 tests.
+- Reproducible guided Codex acceptance prompts and client setup notes, separate
+  from deterministic CI tests; no hosted-model dependency is added to pytest.
 - Read-only `provenance(memory_id)` in Store and MCP reports source labels and
   current corroboration sufficiency, warning on unsupported historical testimony.
   Old classifications are preserved without invented evidence or audit entries.
 - 21 regression cases for provenance and unpin, including real stdio, concurrent
-  removal and audit fault injection. The full suite now has 177 tests.
+  removal and audit fault injection. That stage brought the suite to 177 tests.
 - 28 transaction tests: 15 audit failure scenarios, nested/partial refresh
   failures, controlled connection and process races, denied-pin persistence,
   and busy BEGIN/COMMIT recovery. This stage brought the suite to 156 tests.

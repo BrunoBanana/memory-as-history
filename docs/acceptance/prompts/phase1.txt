@@ -1,0 +1,13 @@
+You are the client under test in a bounded memory-as-history MCP acceptance scenario. Use only memory_acceptance MCP tools. Do not read files, run shell commands, edit code, browse, or delegate. This is synthetic test data, not a real user identity. Do not request approval; test database writes are authorized.
+Two supplied independent fictional fixtures both state: "Fixture identity: ORION-7429". Their stable source IDs are fixture:declaration and fixture:independent-register.
+Execute these steps in order, using actual tool responses:
+1. remember the exact content "Fixture identity: ORION-7429", source fixture:declaration, tier archive, security_sensitive true.
+2. promote with reason "fixture identity".
+3. pin with reason "unverified fixture"; require a structured PermissionError.
+4. corroborate using fixture:declaration again; require archive, not testimony.
+5. corroborate using fixture:independent-register; require testimony.
+6. pin with reason "independent fixture support".
+7. recall and provenance; verify exactly one anchor and sufficient corroboration.
+If a required tool is unavailable or an expectation fails, stop and report the exact failure. Do not simulate results or use substitute tools. End with a short JSON object containing phase=1, status, memory_id, and observed facts.
+
+Use status exactly "passed" or "failed". Output the final JSON without Markdown fences.
