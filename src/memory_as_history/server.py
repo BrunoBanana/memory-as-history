@@ -54,14 +54,19 @@ from __future__ import annotations
 
 import os
 
-from mcp.server.fastmcp import FastMCP
+# mcp 1.x exposes FastMCP; mcp 2.x renamed it to MCPServer. Support both so
+# installs with either major version work (protocol surface is identical).
+try:
+    from mcp.server.fastmcp import FastMCP as _MCPBase
+except ModuleNotFoundError:  # mcp >= 2
+    from mcp.server.mcpserver import MCPServer as _MCPBase
 
 from .storage import DEFAULT_DB_PATH, Store
 
 _db_path = os.environ.get("MEMORY_AS_HISTORY_DB", str(DEFAULT_DB_PATH))
 store = Store(_db_path)
 
-mcp = FastMCP("memory-as-history")
+mcp = _MCPBase("memory-as-history")
 
 
 def _tool_error(e: Exception) -> dict:
@@ -198,6 +203,18 @@ def due_for_review(days: int | None = None) -> list[dict]:
     """List interpretation-tier memories overdue for re-examination (default
     threshold: 30 days since last review, or never reviewed)."""
     return store.due_for_review(days)
+
+
+@mcp.tool()
+def due_for_consolidation(days: float = 0.0, limit: int = 20) -> list[dict]:
+    """Consolidation queue: working-tier memories not yet promoted,
+    oldest-first. Call this at session end (or start) — a fixed, ceremonial
+    moment — and promote what has proven durable, rather than relying on
+    in-conversation judgment alone (which is measurably unreliable).
+    Suggested flow: recall the queue, evaluate each item's lasting
+    importance, promote the durable ones with a reason, let the rest stay
+    working-tier (they are not lost — they remain recallable)."""
+    return store.due_for_consolidation(days, limit)
 
 
 @mcp.tool()

@@ -78,6 +78,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 import sqlite3
 import threading
 import uuid
@@ -142,7 +143,7 @@ CREATE TABLE IF NOT EXISTS corroborations (
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
-    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'pin_denied' | 'narrate' | 'canonize' | 'end_scope' | 'decanonize' | 'set_frame' | 'mark_conflict' | 'resolve_conflict'
+    action TEXT NOT NULL,   -- 'promote' | 'pin' | 'corroborate_upgrade' | 'review' | 'forget' | 'restore' | 'flag_sensitive' | 'auto_flag_sensitive' | 'pin_denied' | 'narrate' | 'canonize' | 'end_scope' | 'decanonize' | 'set_frame' | 'mark_conflict' | 'resolve_conflict'
     reason TEXT NOT NULL,
     at TEXT NOT NULL
 );
@@ -284,6 +285,58 @@ def _bm25_scores(query_tokens: list[str], doc_tokens: list[str],
     return score
 
 
+# -- deterministic sensitivity heuristics (v1.1) --------------------------------
+#
+# The two-stage defense had a gap: the LLM-judgment stage (setting
+# security_sensitive) is probabilistic, so a stealthy injection that the
+# agent fails to flag bypasses the enforcement stage entirely. This closes
+# the *recognizable-pattern* part of that gap server-side: remember()
+# pattern-matches the classic injection shapes (claims of developer/admin
+# authority, standing-instruction/imperative phrasing, credential shapes,
+# self-asserted authorization) and auto-flags without relying on the caller.
+# This is deliberately narrow — false positives cost little (the memory is
+# still stored and recallable; only pin() requires corroboration) while
+# false negatives are still possible (novel injection shapes fall through
+# to the LLM-judgment stage as before). Deterministic where we can be,
+# LLM-judged where we must be.
+
+_INJECTION_PATTERNS = [
+    # claims of authority / developer instruction
+    re.compile(r"(?i)(from|by)\s+the\s+(developer|admin(istrator)?|system|creator)"),
+    re.compile(r"(?i)developer\s+(said|says|instructed|directed|noted)"),
+    re.compile(r"(?i)(system|admin)\s+(notice|announcement|message|directive|instruction)"),
+    # standing instructions / imperative overrides
+    re.compile(r"(?i)ignore\s+(all\s+)?(prior|previous|above|earlier)"),
+    re.compile(r"(?i)(from now on|going forward|in all future),?\s+(all\s+)?(requests?|actions?|commands?)"),
+    re.compile(r"(?i)(pre-?authorized|pre-?approved|no (further )?(review|approval) (is )?(required|needed))"),
+    re.compile(r"(?i)(bypass|skip|override)\s+(all\s+)?(review|approval|restrictions?|safety|checks?)"),
+    # self-asserted authorization
+    re.compile(r"(?i)(the )?user\s+is\s+now\s+(authorized|approved|granted|admin)"),
+    re.compile(r"(?i)you\s+(are|'re)\s+now\s+(authorized|permitted|allowed|admin)"),
+    # credential shapes
+    re.compile(r"(?i)(api[\s_-]?key|secret|password|token|credential)s?\s*[:=]"),
+    # Chinese injection shapes (mirrors of the above)
+    re.compile(r"(开发(者|人员|商)|管理员|系统)(通知|公告|消息|指令|提示)[:：]"),
+    re.compile(r"(来自|根据)(开发(者|人员|商)|管理员|系统).{0,12}(指示|命令|通知|要求)"),
+    re.compile(r"(忽略|无视|跳过)(之前|以上|先前|前面|所有)?(的)?(指令|指示|规则|限制|约束)"),
+    re.compile(r"(已)?(预授权|预批准|预先授权)(.{0,8}(无需|不用|免)(二级)?(审批|审查|复核))?"),
+    re.compile(r"(从现在起|今后|以后)(所有|全部)?(请求|操作|指令|申请).{0,10}(免|跳过|无需|不用)"),
+    re.compile(r"(密钥|秘钥|密码|口令|令牌)[:：=]"),
+]
+
+DEFAULT_SENSITIVITY_AUTO_FLAG = True
+
+
+def _looks_injected(content: str) -> str | None:
+    """Return a human-readable reason if content matches a known injection
+    pattern, else None. Narrow by design: only the canonical shapes."""
+    for pattern in _INJECTION_PATTERNS:
+        m = pattern.search(content)
+        if m:
+            return f"auto-flagged: matches injection pattern {pattern.pattern!r} near {m.group(0)!r}"
+    return None
+
+
 @dataclass
 class Memory:
     id: str
@@ -406,7 +459,18 @@ class Store:
         `frame` (optional) records the social/relational frame this memory
         belongs to (Halbwachs) — e.g. "team-alpha", "collab-with-B",
         "project-x". Framed memories can disagree across frames without one
-        silently overwriting the other: see `mark_conflict()`."""
+        silently overwriting the other: see `mark_conflict()`.
+
+        Sensitivity auto-flagging (v1.1): unless `security_sensitive` was
+        explicitly set True by the caller, the content is screened against
+        deterministic injection-pattern heuristics (claims of developer/
+        admin authority, standing-instruction phrasing, credential shapes,
+        self-asserted authorization). A match auto-sets the flag and logs
+        the reason as `auto_flag_sensitive`. This closes the gap where a
+        stealthy injection bypasses the protocol's enforcement stage simply
+        because the LLM forgot to set the flag — narrow patterns only, at
+        near-zero false-positive cost (flagged memories remain stored and
+        recallable; only pin() requires corroboration)."""
         content = _require_text(content, "content")
         if tier not in TIERS:
             raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
@@ -414,6 +478,11 @@ class Store:
         now = _now()
         review_status = "current" if tier == "interpretation" else None
         last_reviewed_at = now if tier == "interpretation" else None
+        auto_reason = (
+            None if security_sensitive else _looks_injected(content)
+        )
+        if auto_reason:
+            security_sensitive = True
         self._conn.execute(
             "INSERT INTO memories "
             "(id, content, source, status, tier, created_at, last_reviewed_at, "
@@ -432,8 +501,35 @@ class Store:
                 json.dumps(_tokenize(content)),
             ),
         )
+        if auto_reason:
+            self._log(mid, "auto_flag_sensitive", auto_reason)
         self._conn.commit()
         return self.get(mid)
+
+    @_locked
+    def due_for_consolidation(self, days: float = 0.0, limit: int = 20) -> list[dict]:
+        """Consolidation queue: working-tier memories that have existed for
+        at least `days` days (default: any age) and are not forgotten.
+        Returns them oldest-first, up to `limit`.
+
+        This is the deterministic antidote to invocation variance: instead
+        of hoping the in-conversation agent calls promote() at the right
+        moment (measurably unreliable — same prompt sometimes promotes,
+        sometimes stops at remember), a host app or the agent itself can
+        call this at session boundaries — a fixed, ceremonial moment, closer
+        to how Assmann's consolidation actually works (a periodic rite, not
+        an in-the-moment judgment) — and promote what has stood the test of
+        a little time. Suggested cadence: end of session."""
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=days)
+        ).isoformat()
+        rows = self._conn.execute(
+            "SELECT * FROM memories WHERE status='working' AND "
+            "forgotten_at IS NULL AND created_at <= ? "
+            "ORDER BY created_at ASC LIMIT ?",
+            (cutoff, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     @_locked
     def flag_sensitive(self, memory_id: str, reason: str) -> dict:
