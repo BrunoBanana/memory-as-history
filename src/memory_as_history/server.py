@@ -80,6 +80,7 @@ def _tool_error(e: Exception) -> dict:
         "promote() first": "This memory is still working-tier. Call promote(memory_id, reason) before this operation.",
         "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id, reason) first — removing an anchor must be its own reasoned step.",
         "decanonize()": "This memory is in the active canon. Call decanonize(memory_id, scope, reason) or end_scope(scope, reason) first.",
+        "source issues": "Inspect current_narrative().source_issues. Restore forgotten sources only when justified, review overdue interpretations, or submit a replacement narrative with valid links. Then explicitly review_narrative(narrative_id, note).",
         "independent corroboration": "This memory is security-sensitive. Call corroborate(memory_id, source) with a source DIFFERENT from the memory's own source first. An unknown or blank original source requires two distinct corroborating sources.",
         "forgotten": "This memory is tombstoned. Call restore(memory_id, reason) first if it should become active again.",
         "is required and cannot be empty": "A required text field (reason/note/source/content/scope/frame) was empty or whitespace. Provide a meaningful value.",
@@ -278,7 +279,8 @@ def list_forgotten(limit: int = 50) -> list[dict]:
 
 
 @mcp.tool()
-def narrate(content: str, reason: str, memory_ids: list[str] | None = None) -> dict:
+def narrate(content: str, reason: str, memory_ids: list[str] | None = None,
+            security_sensitive: bool = False) -> dict:
     """Submit the current narrative synthesis: a coherent account of who the
     user is / where the relationship stands, composed from the discrete
     memories returned by `recall()`. This tool does not write the narrative
@@ -293,7 +295,19 @@ def narrate(content: str, reason: str, memory_ids: list[str] | None = None) -> d
     (why this synthesis now, what changed). `memory_ids` optionally records
     which memories this narrative draws on."""
     try:
-        return store.narrate(content, reason, memory_ids)
+        return store.narrate(content, reason, memory_ids, security_sensitive)
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
+
+
+@mcp.tool()
+def review_narrative(narrative_id: str, note: str) -> dict:
+    """Review the current narrative after fixing all source issues. Inspect its
+    text first; record why it still holds. Restore/corroborate alone do not clear
+    an invalidation. To change the account, submit a new version with narrate().
+    Superseded versions and unresolved sources cannot be approved."""
+    try:
+        return store.review_narrative(narrative_id, note)
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 

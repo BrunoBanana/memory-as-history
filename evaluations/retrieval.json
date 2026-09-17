@@ -1,0 +1,39 @@
+{
+  "description": "Hand-authored bilingual lexical regression fixture; one relevant document per query, not a representative user benchmark.",
+  "documents": [
+    {"id": "en-transactions", "content": "SQLite transactions roll back data and audit writes together after failure."},
+    {"id": "en-ranking", "content": "BM25 lexical ranking uses logarithmic inverse document frequency."},
+    {"id": "en-provenance", "content": "Independent corroboration distinguishes source evidence from repeated claims."},
+    {"id": "en-narrative", "content": "Narrative synthesis preserves historical versions and requires explicit review."},
+    {"id": "en-forgetting", "content": "Forgetting creates a reversible tombstone with a recorded reason."},
+    {"id": "en-canon", "content": "The task canon rotates when a project scope ends."},
+    {"id": "zh-transactions", "content": "数据库事务确保写入与审计同时成功，故障时完整回滚。"},
+    {"id": "zh-ranking", "content": "中文检索采用字符双字组，结合文档词频进行相关性排序。"},
+    {"id": "zh-provenance", "content": "独立来源佐证与重复陈述不同，来源不明时需要两个不同来源。"},
+    {"id": "zh-narrative", "content": "叙事版本保留历史，来源被遗忘后需要显式复核。"},
+    {"id": "zh-forgetting", "content": "主动遗忘保留墓碑和理由，恢复记忆也留下审计记录。"},
+    {"id": "zh-canon", "content": "任务结束时退出典范集合，记忆仍然保留在档案中。"},
+    {"id": "noise-en-1", "content": "The meeting was moved to Thursday afternoon."},
+    {"id": "noise-en-2", "content": "Coffee preferences changed after the office moved."},
+    {"id": "noise-en-3", "content": "Review the lunch menu before ordering."},
+    {"id": "noise-en-4", "content": "The project uses blue icons and a dark background."},
+    {"id": "noise-zh-1", "content": "今天下午会议调整到三点，请带上笔记本。"},
+    {"id": "noise-zh-2", "content": "办公室咖啡机需要维护，周末天气晴朗。"},
+    {"id": "noise-zh-3", "content": "项目界面采用深色背景，图标需要统一。"},
+    {"id": "noise-zh-4", "content": "文档补充安装说明，会议记录放在共享目录。"}
+  ],
+  "queries": [
+    {"query": "SQLite roll back audit", "target": "en-transactions"},
+    {"query": "BM25 document frequency", "target": "en-ranking"},
+    {"query": "independent corroboration source", "target": "en-provenance"},
+    {"query": "narrative historical versions", "target": "en-narrative"},
+    {"query": "reversible tombstone", "target": "en-forgetting"},
+    {"query": "task canon scope", "target": "en-canon"},
+    {"query": "事务故障回滚", "target": "zh-transactions"},
+    {"query": "中文检索词频", "target": "zh-ranking"},
+    {"query": "独立来源佐证", "target": "zh-provenance"},
+    {"query": "叙事历史显式复核", "target": "zh-narrative"},
+    {"query": "主动遗忘墓碑理由", "target": "zh-forgetting"},
+    {"query": "任务典范集合", "target": "zh-canon"}
+  ]
+}
