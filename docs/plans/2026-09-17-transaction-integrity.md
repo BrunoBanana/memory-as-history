@@ -91,5 +91,6 @@ Local verification on macOS / Python 3.12.13:
 Review delivery: [PR #2](https://github.com/BrunoBanana/memory-as-history/pull/2)
 is based on [PR #1](https://github.com/BrunoBanana/memory-as-history/pull/1).
 PR #1's nine checks passed at `7dd0bce`. PR #2's current-head CI checks are
-the authoritative remote validation record. Both stages remain unmerged;
-source-tier semantics and unpin audit design are the next P1 roadmap items.
+the authoritative remote validation record. Both stages were subsequently merged into main (PR #1: `558558d`;
+PR #2: `bc5ae62`). Source-tier semantics and unpin auditing are tracked in
+[the next implementation plan](2026-09-17-provenance-audit.md).

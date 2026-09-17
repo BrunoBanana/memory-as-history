@@ -147,7 +147,7 @@ def test_recall_prefers_consolidated_over_working(store: Store):
 
 
 def test_archive_upgrades_to_testimony_on_corroboration(store: Store):
-    mem = store.remember("the game launched on 2026-01-15", tier="archive")
+    mem = store.remember("the game launched on 2026-01-15", source="original report", tier="archive")
     corroborated = store.corroborate(mem.id, source="second independent report")
     assert corroborated.tier == "testimony"
 

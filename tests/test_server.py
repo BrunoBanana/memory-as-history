@@ -72,3 +72,41 @@ async def test_capture_errors_are_structured_and_do_not_change_state(
     recalled = await call(session, "recall", {})
     assert recalled["memories"] == []
     assert recalled["narrative"] is None
+
+
+@pytest.mark.anyio
+async def test_provenance_gate_and_testimony_error_over_stdio(session):
+    error = await call(session, "remember", {"content": "Claim", "tier": "testimony"})
+    assert error["error"] == "ValueError"
+    assert "corroborate" in error["hint"]
+    memory = await call(session, "remember", {"content": "Claim"})
+    first = await call(session, "corroborate", {"memory_id": memory["id"], "source": "one"})
+    assert first["tier"] == "archive"
+    support = await call(session, "provenance", {"memory_id": memory["id"]})
+    assert support["corroboration_satisfied"] is False
+    second = await call(session, "corroborate", {"memory_id": memory["id"], "source": "two"})
+    assert second["tier"] == "testimony"
+    support = await call(session, "provenance", {"memory_id": memory["id"]})
+    assert support["corroboration_satisfied"] is True
+    missing = await call(session, "provenance", {"memory_id": "missing"})
+    assert missing["error"] == "KeyError"
+
+
+@pytest.mark.anyio
+async def test_unpin_optional_reason_and_legacy_response_over_stdio(session):
+    tools = await session.list_tools()
+    schema = next(t for t in tools.tools if t.name == "unpin").model_dump(by_alias=True)["inputSchema"]
+    assert "reason" in schema["properties"]
+    assert "reason" not in schema.get("required", [])
+    memory = await call(session, "remember", {"content": "Preference"})
+    args = {"memory_id": memory["id"], "reason": "durable"}
+    await call(session, "promote", args)
+    await call(session, "pin", args)
+    invalid = await call(session, "unpin", {**args, "reason": " "})
+    assert invalid["error"] == "ValueError"
+    assert invalid["hint"]
+    assert len((await call(session, "recall", {}))["anchors"]) == 1
+    expected = {"memory_id": memory["id"], "unpinned": True}
+    assert await call(session, "unpin", args) == expected
+    assert await call(session, "unpin", {"memory_id": memory["id"]}) == expected
+    assert (await call(session, "recall", {}))["anchors"] == []
