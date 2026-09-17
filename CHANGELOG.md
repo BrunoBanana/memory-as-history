@@ -5,9 +5,14 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Transaction integrity and provenance/audit stages toward 1.2.0 (`1.2.0.dev0`); no schema changes.
+1.2.0 release candidate (`1.2.0rc1`), not yet published. Additive narrative schema migration; existing text and history preserved.
 
 ### Changed
+- Sensitive canon and narrative routes enforce independent corroboration. A
+  sensitive synthesis requires supported evidence for every linked memory.
+  Retroactive flags decommission unsupported canon memberships atomically.
+- New narrative links must be existing active sources; unlinked nonsensitive
+  accounts remain supported with an explicit provenance warning.
 - New testimony classifications require the same independent-source gate as
   sensitive pinning. Duplicate/same-source evidence cannot upgrade archive;
   unknown origins need two distinct sources. Direct `remember(tier="testimony")`
@@ -19,6 +24,15 @@ Transaction integrity and provenance/audit stages toward 1.2.0 (`1.2.0.dev0`); n
   Python/MCP return shapes are unchanged; failed auditing rolls back removal.
 
 ### Added
+- Narrative dependency issues, persistent invalidation metadata and
+  `review_narrative(id, note)` in storage/MCP. Default recall suppresses stale
+  text and returns `narrative_review`; explicit inspection preserves history.
+- Serialized additive migrations with failure rollback and concurrent startup
+  coverage; new audit fault tests, two-order races and a seeded history sequence.
+- Asserted JSON evaluation, 12 bilingual queries over 20 fixture documents,
+  independent BM25 numerical tests and evaluator negative controls.
+- Full suite now has 239 tests. Protocol/migration contracts and evaluation
+  scope are documented separately from claims about real-world agent quality.
 - Two cross-session MCP cases cover known/unknown origins through four fresh
   client/server pairs: sensitive pin denial, independent corroboration, persisted
   anchor recall, reasoned unpin, and legacy no-op auditing. Full suite: 179 tests.
@@ -36,6 +50,14 @@ Transaction integrity and provenance/audit stages toward 1.2.0 (`1.2.0.dev0`); n
   this stage to be reviewed and tested on top of the 1.1.1 patch.
 
 ### Fixed
+- Forgetting and unsupported sensitivity invalidate linked narratives. Restoring,
+  reviewing or corroborating a source cannot silently approve a stale synthesis.
+- Legacy malformed narrative links fail closed without breaking recall; legacy
+  unsupported canon remains inspectable but is not prioritized.
+- BM25 uses logarithmic IDF and correct positive average length, counts each
+  query term once, and returns zero scores for empty/stopword queries.
+- Malformed caches fall back to content; CJK runs no longer join across embedded
+  ASCII words, including affected old token caches.
 - State-changing Store calls now reserve SQLite's writer before reading
   preconditions and commit business/audit changes together. Separate
   connections and processes cannot create duplicate current narratives,

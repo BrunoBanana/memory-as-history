@@ -1,0 +1,552 @@
+{
+  "scenario": "guided narrative withdrawal, restoration and explicit review",
+  "date": "2026-09-18 Asia/Shanghai",
+  "implementation_commit": "208b36c (narrative implementation unchanged by subsequent retrieval/doc changes)",
+  "client": "Codex CLI 0.155.0-alpha.2.6; gpt-6-astra; xhigh",
+  "server": "Python 3.12.13; MCP 2.2.0; macOS",
+  "fresh_conversations": 3,
+  "completed_mcp_calls": 15,
+  "passed": true,
+  "limitations": [
+    "Guided synthetic fixture, not spontaneous tool use",
+    "No semantic entailment or source authentication measurement"
+  ],
+  "phases": [
+    [
+      {
+        "tool": "remember",
+        "arguments": {
+          "content": "Fixture project LANTERN-8531 uses a blue archive.",
+          "source": "fixture:project-register"
+        },
+        "response": {
+          "id": "7fb85ef0e538",
+          "content": "Fixture project LANTERN-8531 uses a blue archive.",
+          "source": "fixture:project-register",
+          "status": "working",
+          "tier": "archive",
+          "created_at": "2026-09-17T17:07:10.104545+00:00",
+          "consolidated_at": null,
+          "consolidation_reason": null,
+          "last_reviewed_at": null,
+          "review_status": null,
+          "forgotten_at": null,
+          "forgotten_reason": null,
+          "security_sensitive": false,
+          "frame": null
+        }
+      },
+      {
+        "tool": "narrate",
+        "arguments": {
+          "content": "The fixture project uses a blue archive.",
+          "reason": "initial fixture synthesis",
+          "memory_ids": [
+            "7fb85ef0e538"
+          ]
+        },
+        "response": {
+          "id": "b444532d651a",
+          "content": "The fixture project uses a blue archive.",
+          "reason": "initial fixture synthesis",
+          "memory_ids": [
+            "7fb85ef0e538"
+          ],
+          "created_at": "2026-09-17T17:07:15.546928+00:00",
+          "superseded_at": null,
+          "superseded_by": null,
+          "security_sensitive": false,
+          "review_required_at": null,
+          "review_reason": null,
+          "last_reviewed_at": null,
+          "review_note": null,
+          "source_issues": [],
+          "review_status": "current",
+          "provenance_status": "linked"
+        }
+      },
+      {
+        "tool": "recall",
+        "arguments": {},
+        "response": {
+          "anchors": [],
+          "canon": [],
+          "memories": [
+            {
+              "id": "7fb85ef0e538",
+              "content": "Fixture project LANTERN-8531 uses a blue archive.",
+              "source": "fixture:project-register",
+              "status": "working",
+              "tier": "archive",
+              "created_at": "2026-09-17T17:07:10.104545+00:00",
+              "consolidated_at": null,
+              "consolidation_reason": null,
+              "last_reviewed_at": null,
+              "review_status": null,
+              "forgotten_at": null,
+              "forgotten_reason": null,
+              "security_sensitive": 0,
+              "frame": null,
+              "content_tokens": "[\"fixture\", \"project\", \"lantern\", \"8531\", \"uses\", \"blue\", \"archive\"]"
+            }
+          ],
+          "stale_interpretations": [],
+          "narrative": {
+            "id": "b444532d651a",
+            "content": "The fixture project uses a blue archive.",
+            "reason": "initial fixture synthesis",
+            "memory_ids": [
+              "7fb85ef0e538"
+            ],
+            "created_at": "2026-09-17T17:07:15.546928+00:00",
+            "superseded_at": null,
+            "superseded_by": null,
+            "security_sensitive": false,
+            "review_required_at": null,
+            "review_reason": null,
+            "last_reviewed_at": null,
+            "review_note": null,
+            "source_issues": [],
+            "review_status": "current",
+            "provenance_status": "linked"
+          },
+          "narrative_review": null,
+          "conflicts": []
+        }
+      },
+      {
+        "tool": "forget",
+        "arguments": {
+          "memory_id": "7fb85ef0e538",
+          "reason": "fixture project evidence withdrawn"
+        },
+        "response": {
+          "id": "7fb85ef0e538",
+          "content": "Fixture project LANTERN-8531 uses a blue archive.",
+          "source": "fixture:project-register",
+          "status": "working",
+          "tier": "archive",
+          "created_at": "2026-09-17T17:07:10.104545+00:00",
+          "consolidated_at": null,
+          "consolidation_reason": null,
+          "last_reviewed_at": null,
+          "review_status": null,
+          "forgotten_at": "2026-09-17T17:07:22.143393+00:00",
+          "forgotten_reason": "fixture project evidence withdrawn",
+          "security_sensitive": false,
+          "frame": null
+        }
+      },
+      {
+        "tool": "recall",
+        "arguments": {},
+        "response": {
+          "anchors": [],
+          "canon": [],
+          "memories": [],
+          "stale_interpretations": [],
+          "narrative": null,
+          "narrative_review": {
+            "id": "b444532d651a",
+            "review_status": "stale",
+            "source_issues": [
+              {
+                "memory_id": "7fb85ef0e538",
+                "issue": "forgotten"
+              }
+            ],
+            "review_required_at": "2026-09-17T17:07:22.143998+00:00",
+            "review_reason": "source forgotten"
+          },
+          "conflicts": []
+        }
+      }
+    ],
+    [
+      {
+        "tool": "recall",
+        "arguments": {},
+        "response": {
+          "anchors": [],
+          "canon": [],
+          "memories": [],
+          "stale_interpretations": [],
+          "narrative": null,
+          "narrative_review": {
+            "id": "b444532d651a",
+            "review_status": "stale",
+            "source_issues": [
+              {
+                "memory_id": "7fb85ef0e538",
+                "issue": "forgotten"
+              }
+            ],
+            "review_required_at": "2026-09-17T17:07:22.143998+00:00",
+            "review_reason": "source forgotten"
+          },
+          "conflicts": []
+        }
+      },
+      {
+        "tool": "current_narrative",
+        "arguments": {},
+        "response": {
+          "id": "b444532d651a",
+          "content": "The fixture project uses a blue archive.",
+          "reason": "initial fixture synthesis",
+          "memory_ids": [
+            "7fb85ef0e538"
+          ],
+          "created_at": "2026-09-17T17:07:15.546928+00:00",
+          "superseded_at": null,
+          "superseded_by": null,
+          "security_sensitive": false,
+          "review_required_at": "2026-09-17T17:07:22.143998+00:00",
+          "review_reason": "source forgotten",
+          "last_reviewed_at": null,
+          "review_note": null,
+          "source_issues": [
+            {
+              "memory_id": "7fb85ef0e538",
+              "issue": "forgotten"
+            }
+          ],
+          "review_status": "stale",
+          "provenance_status": "linked"
+        }
+      },
+      {
+        "tool": "review_narrative",
+        "arguments": {
+          "narrative_id": "b444532d651a",
+          "note": "premature fixture review"
+        },
+        "response": {
+          "error": "ValueError",
+          "message": "narrative has unresolved source issues: [{'memory_id': '7fb85ef0e538', 'issue': 'forgotten'}]",
+          "hint": "Inspect current_narrative().source_issues. Restore forgotten sources only when justified, review overdue interpretations, or submit a replacement narrative with valid links. Then explicitly review_narrative(narrative_id, note)."
+        }
+      },
+      {
+        "tool": "restore",
+        "arguments": {
+          "memory_id": "7fb85ef0e538",
+          "reason": "fixture evidence revalidated"
+        },
+        "response": {
+          "id": "7fb85ef0e538",
+          "content": "Fixture project LANTERN-8531 uses a blue archive.",
+          "source": "fixture:project-register",
+          "status": "working",
+          "tier": "archive",
+          "created_at": "2026-09-17T17:07:10.104545+00:00",
+          "consolidated_at": null,
+          "consolidation_reason": null,
+          "last_reviewed_at": null,
+          "review_status": null,
+          "forgotten_at": null,
+          "forgotten_reason": null,
+          "security_sensitive": false,
+          "frame": null
+        }
+      },
+      {
+        "tool": "recall",
+        "arguments": {},
+        "response": {
+          "anchors": [],
+          "canon": [],
+          "memories": [
+            {
+              "id": "7fb85ef0e538",
+              "content": "Fixture project LANTERN-8531 uses a blue archive.",
+              "source": "fixture:project-register",
+              "status": "working",
+              "tier": "archive",
+              "created_at": "2026-09-17T17:07:10.104545+00:00",
+              "consolidated_at": null,
+              "consolidation_reason": null,
+              "last_reviewed_at": null,
+              "review_status": null,
+              "forgotten_at": null,
+              "forgotten_reason": null,
+              "security_sensitive": 0,
+              "frame": null,
+              "content_tokens": "[\"fixture\", \"project\", \"lantern\", \"8531\", \"uses\", \"blue\", \"archive\"]"
+            }
+          ],
+          "stale_interpretations": [],
+          "narrative": null,
+          "narrative_review": {
+            "id": "b444532d651a",
+            "review_status": "stale",
+            "source_issues": [],
+            "review_required_at": "2026-09-17T17:07:22.143998+00:00",
+            "review_reason": "source forgotten"
+          },
+          "conflicts": []
+        }
+      }
+    ],
+    [
+      {
+        "tool": "recall",
+        "arguments": {},
+        "response": {
+          "anchors": [],
+          "canon": [],
+          "memories": [
+            {
+              "id": "7fb85ef0e538",
+              "content": "Fixture project LANTERN-8531 uses a blue archive.",
+              "source": "fixture:project-register",
+              "status": "working",
+              "tier": "archive",
+              "created_at": "2026-09-17T17:07:10.104545+00:00",
+              "consolidated_at": null,
+              "consolidation_reason": null,
+              "last_reviewed_at": null,
+              "review_status": null,
+              "forgotten_at": null,
+              "forgotten_reason": null,
+              "security_sensitive": 0,
+              "frame": null,
+              "content_tokens": "[\"fixture\", \"project\", \"lantern\", \"8531\", \"uses\", \"blue\", \"archive\"]"
+            }
+          ],
+          "stale_interpretations": [],
+          "narrative": null,
+          "narrative_review": {
+            "id": "b444532d651a",
+            "review_status": "stale",
+            "source_issues": [],
+            "review_required_at": "2026-09-17T17:07:22.143998+00:00",
+            "review_reason": "source forgotten"
+          },
+          "conflicts": []
+        }
+      },
+      {
+        "tool": "current_narrative",
+        "arguments": {},
+        "response": {
+          "id": "b444532d651a",
+          "content": "The fixture project uses a blue archive.",
+          "reason": "initial fixture synthesis",
+          "memory_ids": [
+            "7fb85ef0e538"
+          ],
+          "created_at": "2026-09-17T17:07:15.546928+00:00",
+          "superseded_at": null,
+          "superseded_by": null,
+          "security_sensitive": false,
+          "review_required_at": "2026-09-17T17:07:22.143998+00:00",
+          "review_reason": "source forgotten",
+          "last_reviewed_at": null,
+          "review_note": null,
+          "source_issues": [],
+          "review_status": "stale",
+          "provenance_status": "linked"
+        }
+      },
+      {
+        "tool": "review_narrative",
+        "arguments": {
+          "narrative_id": "b444532d651a",
+          "note": "fixture synthesis checked against restored evidence"
+        },
+        "response": {
+          "id": "b444532d651a",
+          "content": "The fixture project uses a blue archive.",
+          "reason": "initial fixture synthesis",
+          "memory_ids": [
+            "7fb85ef0e538"
+          ],
+          "created_at": "2026-09-17T17:07:15.546928+00:00",
+          "superseded_at": null,
+          "superseded_by": null,
+          "security_sensitive": false,
+          "review_required_at": null,
+          "review_reason": null,
+          "last_reviewed_at": "2026-09-17T17:11:07.836091+00:00",
+          "review_note": "fixture synthesis checked against restored evidence",
+          "source_issues": [],
+          "review_status": "current",
+          "provenance_status": "linked"
+        }
+      },
+      {
+        "tool": "recall",
+        "arguments": {},
+        "response": {
+          "anchors": [],
+          "canon": [],
+          "memories": [
+            {
+              "id": "7fb85ef0e538",
+              "content": "Fixture project LANTERN-8531 uses a blue archive.",
+              "source": "fixture:project-register",
+              "status": "working",
+              "tier": "archive",
+              "created_at": "2026-09-17T17:07:10.104545+00:00",
+              "consolidated_at": null,
+              "consolidation_reason": null,
+              "last_reviewed_at": null,
+              "review_status": null,
+              "forgotten_at": null,
+              "forgotten_reason": null,
+              "security_sensitive": 0,
+              "frame": null,
+              "content_tokens": "[\"fixture\", \"project\", \"lantern\", \"8531\", \"uses\", \"blue\", \"archive\"]"
+            }
+          ],
+          "stale_interpretations": [],
+          "narrative": {
+            "id": "b444532d651a",
+            "content": "The fixture project uses a blue archive.",
+            "reason": "initial fixture synthesis",
+            "memory_ids": [
+              "7fb85ef0e538"
+            ],
+            "created_at": "2026-09-17T17:07:15.546928+00:00",
+            "superseded_at": null,
+            "superseded_by": null,
+            "security_sensitive": false,
+            "review_required_at": null,
+            "review_reason": null,
+            "last_reviewed_at": "2026-09-17T17:11:07.836091+00:00",
+            "review_note": "fixture synthesis checked against restored evidence",
+            "source_issues": [],
+            "review_status": "current",
+            "provenance_status": "linked"
+          },
+          "narrative_review": null,
+          "conflicts": []
+        }
+      },
+      {
+        "tool": "audit_log",
+        "arguments": {
+          "limit": 1000
+        },
+        "response": [
+          {
+            "id": "5196c45f603d",
+            "memory_id": "b444532d651a",
+            "action": "review_narrative",
+            "reason": "fixture synthesis checked against restored evidence",
+            "at": "2026-09-17T17:11:07.836615+00:00"
+          },
+          {
+            "id": "79b5ff2a2226",
+            "memory_id": "7fb85ef0e538",
+            "action": "restore",
+            "reason": "fixture evidence revalidated",
+            "at": "2026-09-17T17:09:34.302040+00:00"
+          },
+          {
+            "id": "17372ea8c3c9",
+            "memory_id": "7fb85ef0e538",
+            "action": "forget",
+            "reason": "fixture project evidence withdrawn",
+            "at": "2026-09-17T17:07:22.144139+00:00"
+          },
+          {
+            "id": "3b0d9244344d",
+            "memory_id": "b444532d651a",
+            "action": "narrative_invalidated",
+            "reason": "source=7fb85ef0e538: source forgotten",
+            "at": "2026-09-17T17:07:22.144084+00:00"
+          },
+          {
+            "id": "987955a770af",
+            "memory_id": "b444532d651a",
+            "action": "narrate",
+            "reason": "initial fixture synthesis",
+            "at": "2026-09-17T17:07:15.547580+00:00"
+          }
+        ]
+      }
+    ]
+  ],
+  "database_snapshot": {
+    "memories": [
+      {
+        "id": "7fb85ef0e538",
+        "content": "Fixture project LANTERN-8531 uses a blue archive.",
+        "source": "fixture:project-register",
+        "status": "working",
+        "tier": "archive",
+        "created_at": "2026-09-17T17:07:10.104545+00:00",
+        "consolidated_at": null,
+        "consolidation_reason": null,
+        "last_reviewed_at": null,
+        "review_status": null,
+        "forgotten_at": null,
+        "forgotten_reason": null,
+        "security_sensitive": 0,
+        "frame": null,
+        "content_tokens": "[\"fixture\", \"project\", \"lantern\", \"8531\", \"uses\", \"blue\", \"archive\"]"
+      }
+    ],
+    "narratives": [
+      {
+        "id": "b444532d651a",
+        "content": "The fixture project uses a blue archive.",
+        "reason": "initial fixture synthesis",
+        "memory_ids": "[\"7fb85ef0e538\"]",
+        "created_at": "2026-09-17T17:07:15.546928+00:00",
+        "superseded_at": null,
+        "superseded_by": null,
+        "security_sensitive": 0,
+        "review_required_at": null,
+        "review_reason": null,
+        "last_reviewed_at": "2026-09-17T17:11:07.836091+00:00",
+        "review_note": "fixture synthesis checked against restored evidence"
+      }
+    ],
+    "audits": [
+      {
+        "id": "987955a770af",
+        "memory_id": "b444532d651a",
+        "action": "narrate",
+        "reason": "initial fixture synthesis",
+        "at": "2026-09-17T17:07:15.547580+00:00"
+      },
+      {
+        "id": "3b0d9244344d",
+        "memory_id": "b444532d651a",
+        "action": "narrative_invalidated",
+        "reason": "source=7fb85ef0e538: source forgotten",
+        "at": "2026-09-17T17:07:22.144084+00:00"
+      },
+      {
+        "id": "17372ea8c3c9",
+        "memory_id": "7fb85ef0e538",
+        "action": "forget",
+        "reason": "fixture project evidence withdrawn",
+        "at": "2026-09-17T17:07:22.144139+00:00"
+      },
+      {
+        "id": "79b5ff2a2226",
+        "memory_id": "7fb85ef0e538",
+        "action": "restore",
+        "reason": "fixture evidence revalidated",
+        "at": "2026-09-17T17:09:34.302040+00:00"
+      },
+      {
+        "id": "5196c45f603d",
+        "memory_id": "b444532d651a",
+        "action": "review_narrative",
+        "reason": "fixture synthesis checked against restored evidence",
+        "at": "2026-09-17T17:11:07.836615+00:00"
+      }
+    ],
+    "integrity_check": "ok"
+  },
+  "raw_event_sha256": {
+    "phase1": "15b3696ceafe579ff0b58d842c597555bc47efa1b8d07239bc3822c86ba3df77",
+    "phase2": "6eee96cf8229b7806f3ab4bd8d0a07be2645e55a1aa9b665ab26c667b9f86dec",
+    "phase3": "cf3852ae73ecc4d97c98b551cf04a898cb9725767ccd099a4d477a4bbfd5e7c1"
+  }
+}

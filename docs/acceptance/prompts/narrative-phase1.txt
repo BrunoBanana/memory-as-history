@@ -1,0 +1,7 @@
+Run a guided acceptance check against the provided memory_acceptance MCP server using synthetic data only. Do not use shell, files, web, or other servers. Call tools sequentially and inspect responses. Any unmet assertion means status failed.
+1. Remember exactly "Fixture project LANTERN-8531 uses a blue archive." with source "fixture:project-register". This is a fictional ordinary project fact.
+2. Narrate exactly "The fixture project uses a blue archive." with reason "initial fixture synthesis", linked to the returned memory ID.
+3. Recall and verify the narrative is current with that exact text and link.
+4. Forget the memory with reason "fixture project evidence withdrawn".
+5. Recall and verify narrative is null, a narrative_review notice refers to the same narrative with a forgotten source issue, and the narrative text is absent from recall.
+Return only JSON: {"status":"passed" or "failed","memory_id":...,"narrative_id":...,"checks":[...]}.
