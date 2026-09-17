@@ -113,3 +113,51 @@ async def test_sensitive_anchor_lifecycle_survives_client_and_server_restarts(tm
         assert len(noops) == 1
         assert noops[0]["reason"] == "legacy unpin: caller did not provide a reason"
         assert (await call(client, "recall"))["anchors"] == []
+
+
+@pytest.mark.anyio
+async def test_narrative_withdrawal_and_review_survive_three_server_restarts(tmp_path):
+    db_path = tmp_path / 'narrative.db'
+    async with connect(db_path) as client:
+        tools = await client.list_tools()
+        assert any(t.name == 'review_narrative' for t in tools.tools)
+        memory = await call(client, 'remember', content='Fixture affiliation', source='origin')
+        mid = memory['id']
+        narrative = await call(client, 'narrate', content='A fixture account', reason='synthesis', memory_ids=[mid])
+        nid = narrative['id']
+        await call(client, 'forget', memory_id=mid, reason='affiliation withdrawn')
+
+    async with connect(db_path) as client:
+        recalled = await call(client, 'recall')
+        assert recalled['narrative'] is None
+        assert recalled['narrative_review']['id'] == nid
+        assert 'A fixture account' not in json.dumps(recalled)
+        inspected = await call(client, 'current_narrative')
+        assert inspected['content'] == 'A fixture account'
+        denied = await call(client, 'review_narrative', narrative_id=nid, note='premature')
+        assert denied['error'] == 'ValueError'
+        assert denied['hint']
+        await call(client, 'restore', memory_id=mid, reason='affiliation revalidated')
+
+    async with connect(db_path) as client:
+        assert (await call(client, 'recall'))['narrative'] is None
+        reviewed = await call(client, 'review_narrative', narrative_id=nid, note='account checked against restored evidence')
+        assert reviewed['review_status'] == 'current'
+        await call(client, 'flag_sensitive', memory_id=mid, reason='identity claim')
+        assert (await call(client, 'recall'))['narrative'] is None
+        await call(client, 'promote', memory_id=mid, reason='durable')
+        denied = await call(client, 'canonize', memory_id=mid, scope='fixture', reason='active')
+        assert denied['error'] == 'PermissionError'
+        denied = await call(client, 'narrate', content='Sensitive synthesis', reason='replacement',
+                            memory_ids=[mid], security_sensitive=True)
+        assert denied['error'] == 'PermissionError'
+        await call(client, 'corroborate', memory_id=mid, source='independent register')
+        await call(client, 'review_narrative', narrative_id=nid, note='new evidence checked')
+
+    async with connect(db_path) as client:
+        assert (await call(client, 'recall'))['narrative']['id'] == nid
+        logs = await call(client, 'audit_log', limit=100)
+        assert sum(r['action'] == 'narrative_invalidated' for r in logs) == 2
+        assert sum(r['action'] == 'review_narrative' for r in logs) == 2
+        assert any(r['action'] == 'canonize_denied' for r in logs)
+        assert any(r['action'] == 'narrate_denied' for r in logs)
