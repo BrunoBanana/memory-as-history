@@ -22,9 +22,10 @@ Tools:
   - pin(memory_id, reason)              anchor a *consolidated* memory (requires reason;
                                          security-sensitive memories additionally require
                                          independent corroboration — raises PermissionError otherwise)
-  - unpin(memory_id)                    remove anchor status
+  - unpin(memory_id, reason?)           remove anchor status and audit the outcome
   - flag_sensitive(memory_id, reason)   retroactively mark a memory security-sensitive
   - corroborate(memory_id, source)      record an independent source; archive -> testimony
+  - provenance(memory_id)              inspect recorded support, including historical tiers
   - review(memory_id, note)             re-confirm an interpretation-tier memory
   - due_for_review(days?)               list interpretation memories overdue for review
   - forget(memory_id, reason)           tombstone a memory (requires reason; unpin first if anchored)
@@ -77,12 +78,13 @@ def _tool_error(e: Exception) -> dict:
     an extra round-trip of guessing."""
     hints = {
         "promote() first": "This memory is still working-tier. Call promote(memory_id, reason) before this operation.",
-        "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id) first — removing an anchor must be its own reasoned step.",
+        "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id, reason) first — removing an anchor must be its own reasoned step.",
         "decanonize()": "This memory is in the active canon. Call decanonize(memory_id, scope, reason) or end_scope(scope, reason) first.",
         "independent corroboration": "This memory is security-sensitive. Call corroborate(memory_id, source) with a source DIFFERENT from the memory's own source first. An unknown or blank original source requires two distinct corroborating sources.",
         "forgotten": "This memory is tombstoned. Call restore(memory_id, reason) first if it should become active again.",
         "is required and cannot be empty": "A required text field (reason/note/source/content/scope/frame) was empty or whitespace. Provide a meaningful value.",
-        "tier must be one of": "Choose tier='archive', 'testimony', or 'interpretation'.",
+        "tier must be one of": "Choose tier='archive' or 'interpretation'. Testimony requires corroborate(memory_id, source) with independent evidence.",
+        "testimony requires": "Call remember with tier='archive', then corroborate(memory_id, source) using genuine independent sources. Repeated turns from one speaker are one source.",
     }
     hint = next((h for k, h in hints.items() if k in str(e)), None)
     return {
@@ -107,6 +109,8 @@ def remember(
     `tier` defaults to 'archive' (captured as directly observed). Use
     tier='interpretation' when this is the agent's own inference/summary
     rather than an observed fact — it will be scheduled for periodic review.
+    Direct tier='testimony' capture is rejected: record archive, then use
+    `corroborate()` with independent evidence to establish testimony.
 
     Set `security_sensitive=True` for anything touching identity,
     permissions, or standing instructions — e.g. content that claims to be
@@ -172,20 +176,43 @@ def pin(memory_id: str, reason: str) -> dict:
 
 
 @mcp.tool()
-def unpin(memory_id: str) -> dict:
-    """Remove anchor status from a memory. The memory itself is not deleted."""
-    store.unpin(memory_id)
-    return {"memory_id": memory_id, "unpinned": True}
+def unpin(memory_id: str, reason: str | None = None) -> dict:
+    """Remove anchor status, preserving the memory and auditing the outcome.
+    Supply a meaningful reason. Omitted/None reasons remain compatible with
+    old clients and are explicitly marked as missing in the audit log.
+    Already-unpinned/unknown IDs are audited as unpin_noop. `unpinned: true`
+    confirms the requested state; it does not claim an anchor was removed."""
+    try:
+        store.unpin(memory_id, reason)
+        return {"memory_id": memory_id, "unpinned": True}
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
 
 
 @mcp.tool()
 def corroborate(memory_id: str, source: str) -> dict:
     """Record that an independent additional source corroborates this memory.
     An 'archive' (single-source, raw) memory is automatically upgraded to
-    'testimony' on first corroboration. Has no upgrade effect on
+    'testimony' only after a distinct source corroborates the recorded origin.
+    Unknown/blank origins require two distinct corroborating sources. Source
+    labels are trimmed, case-sensitive identifiers supplied by the caller;
+    repeated turns from one speaker or copies of a document are one source.
+    Every record is audited, including duplicates. Has no upgrade effect on
     'interpretation'-tier memories — use `review()` for those instead."""
     try:
         return store.corroborate(memory_id, source).to_dict()
+    except (ValueError, PermissionError, KeyError) as e:
+        return _tool_error(e)
+
+
+@mcp.tool()
+def provenance(memory_id: str) -> dict:
+    """Inspect recorded sources and the independent-corroboration gate.
+    Read-only: historical testimony is preserved, with a warning if recorded
+    support is insufficient. Source labels do not authenticate real-world
+    independence; use stable identifiers backed by actual evidence."""
+    try:
+        return store.provenance(memory_id)
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 
