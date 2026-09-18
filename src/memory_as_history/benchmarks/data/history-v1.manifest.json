@@ -1,0 +1,17 @@
+{
+  "name": "history-v1",
+  "sha256": "132824cb52459c31eba28f5c16c7166e594d20117659d7b8dde80cd32ec6fa96",
+  "episodes": 120,
+  "families": 12,
+  "language_counts": {
+    "en": 60,
+    "zh": 60
+  },
+  "split_counts": {
+    "dev": 72,
+    "test": 48
+  },
+  "license": "MIT",
+  "provenance": "Synthetic, author-visible; 12 templates, 5 situations with paired translations. Not independent user histories.",
+  "generator_sha256": "ff26a195b3d838a2adac449230b54822f417d8c5138bccda2aff022408a95acb"
+}
