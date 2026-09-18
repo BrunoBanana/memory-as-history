@@ -24,6 +24,15 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
   Python/MCP return shapes are unchanged; failed auditing rolls back removal.
 
 ### Added
+- Public two-track benchmark: 120 frozen bilingual history episodes, 990 explicit
+  protocol assertions, and pinned LoCoMo evidence retrieval with equal budgets
+  for the product, reference BM25 and recency. Includes hash/coverage checks,
+  complete JSON traces, negative controls and a credential-free CI artifact.
+- External baseline report: 1,527 eligible questions, 42.76% mean evidence recall
+  for both product and reference BM25; exclusions and limitations are published.
+  This is not official QA accuracy or a comparative product leaderboard.
+- 28 benchmark harness tests bring the suite to 267 tests, including denominator
+  preservation when implementation or scoring fails partway through a case.
 - Narrative dependency issues, persistent invalidation metadata and
   `review_narrative(id, note)` in storage/MCP. Default recall suppresses stale
   text and returns `narrative_review`; explicit inspection preserves history.
@@ -31,7 +40,7 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
   coverage; new audit fault tests, two-order races and a seeded history sequence.
 - Asserted JSON evaluation, 12 bilingual queries over 20 fixture documents,
   independent BM25 numerical tests and evaluator negative controls.
-- Full suite now has 239 tests. Protocol/migration contracts and evaluation
+- The history-integrity stage brought the suite to 239 tests. Protocol/migration contracts and evaluation
   scope are documented separately from claims about real-world agent quality.
 - Two cross-session MCP cases cover known/unknown origins through four fresh
   client/server pairs: sensitive pin denial, independent corroboration, persisted
