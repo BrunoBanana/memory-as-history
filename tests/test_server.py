@@ -110,3 +110,18 @@ async def test_unpin_optional_reason_and_legacy_response_over_stdio(session):
     assert await call(session, "unpin", args) == expected
     assert await call(session, "unpin", {"memory_id": memory["id"]}) == expected
     assert (await call(session, "recall", {}))["anchors"] == []
+
+
+@pytest.mark.anyio
+async def test_search_schema_empty_store_and_input_error_over_stdio(session):
+    tools = await session.list_tools()
+    search = next((t for t in tools.tools if t.name == 'search'), None)
+    assert search is not None
+    schema = search.model_dump(by_alias=True)['inputSchema']
+    assert schema['required'] == ['query']
+    assert {'mode', 'limit', 'frame'} <= schema['properties'].keys()
+    result = await call(session, 'search', {'query': 'question'})
+    assert result['memories'] == []
+    assert result['retrieval']['inference_performed'] is False
+    error = await call(session, 'search', {'query': 'question', 'mode': 'invalid'})
+    assert error['error'] == 'ValueError' and error['hint']
