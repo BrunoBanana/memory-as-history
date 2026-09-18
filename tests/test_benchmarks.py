@@ -182,6 +182,29 @@ def test_report_fingerprints_the_actual_selected_cases():
     assert a['selected_cases_sha256'] != b['selected_cases_sha256']
 
 
+def test_partial_scoring_failure_preserves_remaining_assertions(monkeypatch):
+    protocol = module('protocol')
+    case = protocol.load_corpus()['cases'][0]
+    first_check = next(s for s in case['steps'] if s['op'] == 'check')
+    first_check['assertions'].append(dict(first_check['assertions'][0]))
+    declared = sum(len(s.get('assertions', [])) + bool(s.get('expect_error')) for s in case['steps'])
+    original = protocol.score_check
+    calls = 0
+    def fail_second(response, assertion):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError('simulated scorer failure')
+        return original(response, assertion)
+    monkeypatch.setattr(protocol, 'score_check', fail_second)
+    report = protocol.run_protocol([case])
+    assert report['passed'] is False
+    assert sum(m['total'] for m in report['metrics'].values()) == declared
+    checks = report['results'][0]['checks']
+    assert checks[0]['passed'] is True
+    assert all(c.get('blocked') for c in checks[1:])
+
+
 def test_zero_coverage_is_an_error_instead_of_a_perfect_result():
     data = toy_data()
     data[0]['qa'] = data[0]['qa'][1:]

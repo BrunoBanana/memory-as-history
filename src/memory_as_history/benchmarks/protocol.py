@@ -171,17 +171,15 @@ def run_case(case, directory):
                 errors.append({'step': index, 'op': op, 'error': type(exc).__name__, 'message': str(exc)})
                 # Keep the predeclared denominator: blocked checks are failures,
                 # separately labeled so they are not mistaken for observations.
-                completed_steps = {check['step'] for check in checks}
                 for remaining_index in range(index, len(case['steps'])):
-                    if remaining_index in completed_steps:
-                        continue
                     remaining = case['steps'][remaining_index]
                     pending = list(remaining.get('assertions', []))
                     if remaining.get('expect_error'):
                         pending.append({'metric': 'guard', 'expected': remaining['expect_error']})
+                    completed = sum(check['step'] == remaining_index for check in checks)
                     checks.extend({'step': remaining_index, **assertion, 'passed': False,
                                    'blocked': True, 'actual': {'blocked_by_step': index}}
-                                  for assertion in pending)
+                                  for assertion in pending[completed:])
                 break
     finally:
         store.close()
