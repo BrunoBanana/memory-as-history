@@ -1,0 +1,13 @@
+{
+  "name": "semantic-dev-v1",
+  "license": "MIT",
+  "sha256": "c3a5f50a8f28e725a9147ef1bfefc48b40d0dbd785729bb0d927a4dbc2d3108e",
+  "documents": 64,
+  "questions": 32,
+  "languages": [
+    "en",
+    "zh"
+  ],
+  "provenance": "Eight authored topic groups with paired translations. Author-visible development only; not a blind holdout. Frozen before model scoring.",
+  "generator_sha256": "3f174a950c8670d53f1777733a882e2bd3e717f93871c8f9fb37a852e7840b7b"
+}
