@@ -6,6 +6,12 @@ there is no combined leaderboard. See the [measured results](2026-09-18-results.
 and the [design frozen before scoring](../plans/2026-09-18-longitudinal-benchmark.md).
 No hosted model, API key or production memory database is used.
 
+The optional [semantic follow-up](2026-09-18-semantic-results.md) adds local E5
+and lexical/semantic fusion under the same external budgets. Enable it with
+`locomo --semantic` after [explicit setup](../semantic-search.md); `development`
+runs the separately frozen bilingual development corpus. The commands below
+describe the original model-free three-system comparison.
+
 ## Run from a checkout or an installed wheel
 
 ```sh
@@ -108,7 +114,8 @@ documents, without gold-derived pinning, promotion, canon or narrative hints.
 
 BM25 ties use latest insertion order, as does the product. The reference is an
 in-memory lexical ranker, not an independent tokenizer or competing memory
-product. No semantic baseline or hosted reader/judge is included.
+product. The default run includes no semantic baseline or hosted reader/judge;
+`--semantic` adds the two documented local-encoder modes.
 
 Each ranking passes through the same selector: at most five whole turns and
 4096 **UTF-8 content bytes**. Oversized turns are skipped in rank order, without
@@ -154,7 +161,7 @@ summary records the runner commit and SHA-256 of both raw and compressed reports
 Timings, environment strings and generated timestamps need not repeat; check
 selected IDs, assertion outcomes, counts and scores for deterministic equality.
 
-Independent reproduction, a genuinely unseen evaluation set, semantic/temporal
+Independent reproduction, a genuinely unseen evaluation set, temporal
 baselines, online history updates and repeated unguided client trials remain
 necessary before claiming a reference implementation. This benchmark makes
 those gaps measurable; its synthetic pass rate does not resolve them.

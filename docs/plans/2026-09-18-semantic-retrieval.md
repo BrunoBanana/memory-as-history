@@ -123,3 +123,24 @@ do not rewrite the corpus to favor the new system.
 Keep both predeclared modes, equal RRF k=60 and the pinned multilingual model.
 Hybrid remains the conservative explicit-search default; semantic is selectable.
 The external run will measure both without further model/parameter selection.
+
+## Completed local validation
+
+- Implementation/runner `15ff9a3`: 298/298 tests on MCP 1.2.0, 1.30.0 and 2.2.0,
+  plus the environment with Sentence Transformers 5.7.0 / PyTorch 2.14.0 installed.
+  Reliability 6/6; existing mechanism scripts; history-v1 120/120 and 990/990.
+- Real cached-model acceptance over MCP passes English/Chinese retrieval and
+  withdrawal checks across two server processes and four searches, with the Hub
+  offline. This is scripted protocol acceptance, not autonomous agent evaluation.
+- External hybrid recall is 51.8971% overall and 26.0417% on 405 multi-evidence
+  questions. Versus lexical recall: 245 wins / 1213 ties / 69 losses. All ten
+  conversations improve in mean recall. No model/fusion parameter was changed
+  after viewing these results. Complete multi-evidence coverage is still 35/405.
+- Repeated CPU runs match every selection/quality result in 7635 rows. All 4581
+  original lexical/reference/recency rows also match the historical report.
+- Fresh installed wheel outside the checkout: 298/298 tests, protocol and
+  development CLI, actual-model MCP acceptance; all 160 development and 7635
+  external semantic rows match source runs and code hashes. Wheel/sdist contain
+  synthetic fixtures/manifests, no model weights or external conversation data.
+- Full traces, summary checksums, per-row metrics and aggregate means were read
+  back and verified. Exact PR/main CI checks remain the integration authority.

@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "server_processes": 2,
+  "search_calls": 4,
+  "checks": [
+    {
+      "check": "hybrid_paraphrase",
+      "passed": true
+    },
+    {
+      "check": "semantic_paraphrase",
+      "passed": true
+    },
+    {
+      "check": "withdrawal_after_cached_ranking",
+      "passed": true
+    },
+    {
+      "check": "withdrawal_after_server_restart",
+      "passed": true
+    }
+  ],
+  "backend": {
+    "model": "intfloat/multilingual-e5-small",
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "device": "cpu",
+    "max_sequence_tokens": 512,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: ",
+    "normalized": true,
+    "local_files_only": true,
+    "document_cache_capacity": 10000,
+    "dependencies": {
+      "sentence-transformers": "5.7.0",
+      "transformers": "5.17.0",
+      "torch": "2.14.0",
+      "numpy": "2.5.3"
+    }
+  },
+  "runner_commit": "15ff9a37a3bdf795282375f0d4f00d09f477aa66",
+  "script_sha256": "14217f150fb7a73b2a92208f31806b68f6851015df3b2a765e953a227df5ae25"
+}

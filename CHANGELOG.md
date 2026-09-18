@@ -24,6 +24,18 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
   Python/MCP return shapes are unchanged; failed auditing rolls back removal.
 
 ### Added
+- Optional `search(query, mode="semantic"|"hybrid")` in Store and MCP, backed by
+  a pinned local multilingual E5 encoder. The semantic extra/model download is
+  explicit; ordinary recall and default dependencies remain model-free.
+- Encoding runs outside SQLite writer transactions, followed by fresh eligibility
+  and priority checks. A bounded derived-vector cache cannot resurrect forgotten
+  rows or upgrade source authority. No schema migration is added.
+- On unchanged LoCoMo evidence budgets, hybrid mean Recall@5 improves from 42.76%
+  to 51.90%, and multi-evidence recall from 17.02% to 26.04%; all 69 regressed
+  questions remain in the public trace. This is a public reference set, not a
+  blind test. Corpus, fixed model/fusion settings and actual MCP acceptance are
+  recorded in docs/benchmarks/2026-09-18-semantic-results.md.
+- 31 search/provider/benchmark/transport tests bring the suite to 298 tests.
 - Public two-track benchmark: 120 frozen bilingual history episodes, 990 explicit
   protocol assertions, and pinned LoCoMo evidence retrieval with equal budgets
   for the product, reference BM25 and recency. Includes hash/coverage checks,
@@ -31,7 +43,7 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 - External baseline report: 1,527 eligible questions, 42.76% mean evidence recall
   for both product and reference BM25; exclusions and limitations are published.
   This is not official QA accuracy or a comparative product leaderboard.
-- 28 benchmark harness tests bring the suite to 267 tests, including denominator
+- 28 benchmark harness tests brought that stage to 267 tests, including denominator
   preservation when implementation or scoring fails partway through a case.
 - Narrative dependency issues, persistent invalidation metadata and
   `review_narrative(id, note)` in storage/MCP. Default recall suppresses stale
