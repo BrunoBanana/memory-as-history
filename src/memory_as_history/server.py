@@ -56,6 +56,7 @@ Environment:
 from __future__ import annotations
 
 import os
+from typing import get_args
 
 # mcp 1.x exposes FastMCP; mcp 2.x renamed it to MCPServer. Support both so
 # installs with either major version work (protocol surface is identical).
@@ -493,6 +494,41 @@ def audit_log(limit: int = 50) -> list[dict]:
     action, with its reason and timestamp. Every accountable decision about
     what became history, and why."""
     return store.audit_log(limit)
+
+
+def _preserve_literal_string_arguments() -> None:
+    """Keep the MCP SDK's JSON convenience parser from coercing strings.
+
+    Older SDKs parse every string as JSON, including numeric memory IDs and
+    content such as "null"; MCP 2.x still coerces optional strings. Adapt only
+    this server's tool metadata; structured arguments still use the SDK parser.
+    """
+    try:
+        from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
+    except ModuleNotFoundError:
+        from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
+
+    class LiteralStringMetadata(FuncMetadata):
+        def pre_parse_json(self, data: dict) -> dict:
+            literal = {
+                name: data[name]
+                for name, field in self.arg_model.model_fields.items()
+                if name in data and isinstance(data[name], str)
+                and (field.annotation is str or str in get_args(field.annotation))
+            }
+            parsed = super().pre_parse_json(
+                {name: value for name, value in data.items() if name not in literal}
+            )
+            return {**parsed, **literal}
+
+    for tool in mcp._tool_manager.list_tools():
+        metadata = tool.fn_metadata
+        tool.fn_metadata = LiteralStringMetadata(**{
+            name: getattr(metadata, name) for name in type(metadata).model_fields
+        })
+
+
+_preserve_literal_string_arguments()
 
 
 def main() -> None:

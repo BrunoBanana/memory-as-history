@@ -109,6 +109,11 @@ priority; frame filters apply only to ordinary memories.
 
 ## Migration and compatibility
 
+MCP arguments declared as strings (including optional strings) preserve their
+literal values. For example, source `"null"` is text, while JSON `null` means
+no source. Numeric or exponent-shaped legacy IDs remain valid string IDs.
+Structured list arguments retain the SDK's JSON-string decoding support.
+
 Opening a database adds the five narrative columns inside a serialized
 `BEGIN IMMEDIATE` schema transaction. Concurrent startups cannot race column
 creation; failed upgrades roll back schema and data. Existing text, IDs, source

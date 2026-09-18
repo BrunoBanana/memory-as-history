@@ -125,3 +125,36 @@ async def test_search_schema_empty_store_and_input_error_over_stdio(session):
     assert result['retrieval']['inference_performed'] is False
     error = await call(session, 'search', {'query': 'question', 'mode': 'invalid'})
     assert error['error'] == 'ValueError' and error['hint']
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('literal', ['123456789012', '1e999', 'null', 'false', '[]', '{"x":1}'])
+async def test_string_arguments_remain_literal_over_stdio(session, literal):
+    memory = await call(session, 'remember', {'content': literal, 'source': literal, 'frame': literal})
+    assert memory['content'] == memory['source'] == memory['frame'] == literal
+    recalled = await call(session, 'recall', {'query': literal, 'frame': literal})
+    assert recalled['memories'][0]['id'] == memory['id']
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('memory_id', ['123456789012', '1e9999999999'])
+async def test_legacy_numeric_or_exponent_ids_survive_stdio(session, tmp_path, monkeypatch, memory_id):
+    from memory_as_history import storage
+    # Existing databases can already contain these valid twelve-hex-digit IDs.
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, '_new_id', lambda: memory_id)
+        store = storage.Store(tmp_path / 'mcp.db')
+        try:
+            store.remember('legacy ID fixture')
+        finally:
+            store.close()
+    forgotten = await call(session, 'forget', {'memory_id': memory_id, 'reason': 'withdraw legacy record'})
+    assert forgotten['id'] == memory_id
+
+
+@pytest.mark.anyio
+async def test_json_encoded_list_keeps_legacy_structured_argument_support(session):
+    memory = await call(session, 'remember', {'content': 'fixture evidence'})
+    narrative = await call(session, 'narrate', {'content': 'fixture narrative', 'reason': 'synthesis',
+                                              'memory_ids': json.dumps([memory['id']])})
+    assert narrative['memory_ids'] == [memory['id']]
