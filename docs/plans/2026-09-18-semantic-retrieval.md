@@ -144,3 +144,17 @@ The external run will measure both without further model/parameter selection.
   synthetic fixtures/manifests, no model weights or external conversation data.
 - Full traces, summary checksums, per-row metrics and aggregate means were read
   back and verified. Exact PR/main CI checks remain the integration authority.
+
+## CI-discovered MCP string coercion
+
+The first PR run failed on MCP 1.2.0 when a random legacy ID looked like JSON
+scientific notation. Deterministic stdio regressions reproduced eight failures
+on 1.2.0; MCP 2.2.0 also coerced optional string values such as `"null"`.
+Per-tool metadata now preserves declared string arguments before the SDK's
+convenience JSON parser, retaining structured-list parsing and existing IDs.
+No storage, ranking, model or benchmark-harness code changed after scoring.
+
+Final validation after this fix: 307/307 tests on MCP 1.2.0, 1.30.0 and 2.2.0
+(the latter with the semantic extra), and 307/307 from the rebuilt installed
+wheel outside the checkout. Both source and installed wheel also pass the
+cached-model, two-process/four-search MCP acceptance again with the Hub offline.

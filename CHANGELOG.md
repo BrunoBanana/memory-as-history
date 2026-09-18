@@ -8,6 +8,10 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 1.2.0 release candidate (`1.2.0rc1`), not yet published. Additive narrative schema migration; existing text and history preserved.
 
 ### Changed
+- MCP string arguments preserve literal text across supported SDK versions,
+  including numeric/exponent-shaped legacy IDs and optional fields containing
+  `"null"` or JSON-shaped text. Structured list arguments retain SDK parsing.
+  Nine real stdio regressions bring the full suite to 307 tests.
 - Sensitive canon and narrative routes enforce independent corroboration. A
   sensitive synthesis requires supported evidence for every linked memory.
   Retroactive flags decommission unsupported canon memberships atomically.
@@ -35,7 +39,7 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
   questions remain in the public trace. This is a public reference set, not a
   blind test. Corpus, fixed model/fusion settings and actual MCP acceptance are
   recorded in docs/benchmarks/2026-09-18-semantic-results.md.
-- 31 search/provider/benchmark/transport tests bring the suite to 298 tests.
+- 31 search/provider/benchmark/transport tests brought that stage to 298 tests.
 - Public two-track benchmark: 120 frozen bilingual history episodes, 990 explicit
   protocol assertions, and pinned LoCoMo evidence retrieval with equal budgets
   for the product, reference BM25 and recency. Includes hash/coverage checks,

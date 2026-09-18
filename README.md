@@ -161,7 +161,7 @@ See [the complete API contract](docs/protocol-1.2.md).
 
 ## Reliability
 
-The suite contains **298 tests**, including real MCP stdio calls covering
+The suite contains **307 tests**, including real MCP stdio calls covering
 sensitivity flagging, evidence-gated testimony, provenance inspection, optional unpin reasons, structured input errors, and anchor/narrative lifecycles across client/server restarts. Additional cases cover migration rollback/concurrency, narrative invalidation races, malformed historical data, BM25 numerics and evaluator negative controls. Run it with
 `python -m pytest tests/ -v`. CI includes MCP 1.2.0, latest 1.x, and latest 2.x.
 Sensitive memories with an unknown, empty, or whitespace-only original source
