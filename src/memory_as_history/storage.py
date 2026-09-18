@@ -263,8 +263,8 @@ def _require_text(value: str, field: str) -> str:
 
 # -- lexical relevance ranking (v1.0) -----------------------------------------
 #
-# Embedding-backed semantic recall is deliberately out of scope (no model
-# dependency, offline-friendly). But pure substring matching is too brittle:
+# Ordinary recall has no model dependency and stays offline-friendly. Optional
+# semantic search is separate (see semantic.py). Pure substring matching is too brittle:
 # "查一下上次那个方案" won't match "初步方案已定：采用分层设计". This is a
 # middle layer: an Okapi BM25-style lexical scorer over normalized token sets
 # (CJK bigrams + alphanumeric words, lowercase). It ranks rather than
