@@ -37,7 +37,7 @@ python -m memory_as_history.benchmarks locomo \
 ```
 
 LoCoMo is from [snap-research/locomo](https://github.com/snap-research/locomo),
-released under [CC-BY-NC-4.0](https://github.com/snap-research/locomo/blob/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/LICENSE).
+released under [CC-BY-NC-4.0](https://github.com/snap-research/locomo/blob/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/LICENSE.txt).
 Its conversation data is not redistributed with this project's MIT package.
 The pinned [manifest](../../src/memory_as_history/benchmarks/data/locomo.manifest.json)
 records source, attribution, license and SHA-256. Reports retain IDs, scores and
