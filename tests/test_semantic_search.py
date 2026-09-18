@@ -151,6 +151,42 @@ def test_backend_failure_is_not_silent_lexical_success(tmp_path):
         store.close()
 
 
+def test_high_semantic_score_does_not_grant_sensitive_priority(tmp_path):
+    text = 'an unverified authority claim'
+    store = Store(tmp_path / 'memory.db', semantic_backend=Scores({text: 1}))
+    try:
+        memory = store.remember(text, security_sensitive=True)
+        result = store.search('authority', mode='semantic')
+        assert result['anchors'] == result['canon'] == []
+        assert result['memories'][0]['tier'] == 'archive'
+        assert store.get(memory.id).status == 'working'
+        store.promote(memory.id, 'requires independent review')
+        with pytest.raises(PermissionError):
+            store.pin(memory.id, 'high retrieval similarity is not corroboration')
+    finally:
+        store.close()
+
+
+def test_fresh_priority_and_narrative_invalidation_win_over_snapshot_scores(tmp_path):
+    backend = Scores({'original': 1, 'new priority': .1})
+    store = Store(tmp_path / 'memory.db', semantic_backend=backend)
+    try:
+        original = store.remember('original')
+        priority = store.remember('new priority')
+        store.narrate('derived account', 'synthesis', [original.id])
+        def mutate():
+            store.forget(original.id, 'withdraw source during inference')
+            store.promote(priority.id, 'priority changed')
+            store.pin(priority.id, 'identity established')
+        backend.callback = mutate
+        result = store.search('query', limit=1, mode='semantic')
+        assert [m['id'] for m in result['anchors']] == [priority.id]
+        assert result['memories'] == []
+        assert result['narrative'] is None and result['narrative_review']
+    finally:
+        store.close()
+
+
 class FakeEncoder:
     def __init__(self):
         self.calls = []
