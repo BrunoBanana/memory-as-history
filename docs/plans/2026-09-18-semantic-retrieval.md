@@ -110,3 +110,16 @@ sync local main and verify main tests/CI. Do not publish to PyPI.
 
 Sources: [E5 model card](https://huggingface.co/intfloat/multilingual-e5-small/blob/614241f622f53c4eeff9890bdc4f31cfecc418b3/README.md),
 [SentenceTransformer API](https://sbert.net/docs/package_reference/sentence_transformer/model.html).
+
+## Development observation before external semantic scoring
+
+Corpus frozen at `79a9355`: 64 documents / 32 questions across paired English
+and Chinese examples. At five turns / 4096 bytes, lexical, semantic and hybrid
+all reach Recall@5=1.0. MRR is 0.8098958333, 1.0 and 0.90625 respectively.
+This small development workload saturates recall and does not demonstrate
+generalization or differentiate multi-evidence coverage. Preserve all results;
+do not rewrite the corpus to favor the new system.
+
+Keep both predeclared modes, equal RRF k=60 and the pinned multilingual model.
+Hybrid remains the conservative explicit-search default; semantic is selectable.
+The external run will measure both without further model/parameter selection.
