@@ -1,6 +1,5 @@
 """Run deterministic history contracts or pinned external evidence retrieval."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import sys

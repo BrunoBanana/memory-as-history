@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8", "anyio>=4"]
-semantic = ["sentence-transformers>=3,<6"]
+semantic = ["sentence-transformers>=5.7,<6"]
 
 [project.scripts]
 memory-as-history = "memory_as_history.server:main"
