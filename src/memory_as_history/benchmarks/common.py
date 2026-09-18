@@ -11,5 +11,6 @@ def environment():
     return {'python': platform.python_version(), 'platform': platform.platform(),
             'sqlite': sqlite3.sqlite_version, 'package': version('memory-as-history'),
             'storage_sha256': hashlib.sha256(Path(storage.__file__).read_bytes()).hexdigest(),
+            'semantic_sha256': hashlib.sha256(Path(storage.__file__).with_name('semantic.py').read_bytes()).hexdigest(),
             'harness_sha256': {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
                                for path in sorted(Path(__file__).parent.glob('*.py'))}}
