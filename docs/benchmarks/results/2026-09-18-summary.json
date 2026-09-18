@@ -1,0 +1,641 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-18",
+  "runner_commit": "83d9a97e032cc5ceb027b79c7a21bab3669705dd",
+  "artifacts": {
+    "protocol": {
+      "file": "2026-09-18-protocol.json.gz",
+      "json_sha256": "3f3c096f68301d871aaa7bfaf56ef78a6528d5fcde85c106a3095e28588f9e2d",
+      "gzip_sha256": "76f65e25d7d58024511878a5716e7604b35571c9844ca7cd79a07dc0d4cb9099",
+      "json_bytes": 323859,
+      "gzip_bytes": 8056
+    },
+    "locomo": {
+      "file": "2026-09-18-locomo.json.gz",
+      "json_sha256": "902c44ade2796cef3233296435277dcc122e3069131c45727a303e227be30218",
+      "gzip_sha256": "2c274019d7ddc3a22c4620fd982ac4574a286a44abaf506578a9eb3a9fb54b23",
+      "json_bytes": 2353542,
+      "gzip_bytes": 117933
+    }
+  },
+  "tracks": {
+    "protocol": {
+      "schema_version": 1,
+      "track": "synthetic_protocol",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "4784023d5615275692b7ce37e0e4a13422e3d20ab3a8019484e21667bd683502",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "be95d6827d8fe5bc7d2f29e18d7262b65470fff0d80a47eb8b5ee05687fdd5cf",
+          "common.py": "6b361e5c655ec33e0985e67265d039d81c8fc73cfbd0ff7950ad552ecc9a25d0",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "b04bc39a1bd5fd9f03289744520199a45cf3861b9f4fc3428157b85a76049484"
+        }
+      },
+      "corpus_sha256": "132824cb52459c31eba28f5c16c7166e594d20117659d7b8dde80cd32ec6fa96",
+      "selected_cases_sha256": "aa6f1a307437641db86169fd5588d453a2269e5d8b25b5fa370cf4191fb2d657",
+      "episodes": 120,
+      "passed": true,
+      "failed_episodes": 0,
+      "metrics": {
+        "history_preservation": {
+          "passed": 170,
+          "failed": 0,
+          "blocked": 0,
+          "total": 170,
+          "pass_rate": 1.0
+        },
+        "retention": {
+          "passed": 130,
+          "failed": 0,
+          "blocked": 0,
+          "total": 130,
+          "pass_rate": 1.0
+        },
+        "lifecycle": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "retrieval": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "audit_coverage": {
+          "passed": 320,
+          "failed": 0,
+          "blocked": 0,
+          "total": 320,
+          "pass_rate": 1.0
+        },
+        "stale_exposure": {
+          "passed": 110,
+          "failed": 0,
+          "blocked": 0,
+          "total": 110,
+          "pass_rate": 1.0
+        },
+        "narrative_review": {
+          "passed": 60,
+          "failed": 0,
+          "blocked": 0,
+          "total": 60,
+          "pass_rate": 1.0
+        },
+        "guard": {
+          "passed": 60,
+          "failed": 0,
+          "blocked": 0,
+          "total": 60,
+          "pass_rate": 1.0
+        },
+        "source_count": {
+          "passed": 20,
+          "failed": 0,
+          "blocked": 0,
+          "total": 20,
+          "pass_rate": 1.0
+        },
+        "unsupported_priority": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "frame_isolation": {
+          "passed": 10,
+          "failed": 0,
+          "blocked": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        },
+        "conflict_visibility": {
+          "passed": 20,
+          "failed": 0,
+          "blocked": 0,
+          "total": 20,
+          "pass_rate": 1.0
+        }
+      },
+      "groups": {
+        "family": {
+          "anchor_noise": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "canon_rotation": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "fact_update": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "framed_conflict": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "interpretation_review": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "known_source": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "lexical_restart": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "restore_review": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "retroactive_flag": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "sensitive_synthesis": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "unknown_source": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "version_history": {
+            "episodes": 10,
+            "passed": 10
+          }
+        },
+        "language": {
+          "en": {
+            "episodes": 60,
+            "passed": 60
+          },
+          "zh": {
+            "episodes": 60,
+            "passed": 60
+          }
+        },
+        "split": {
+          "dev": {
+            "episodes": 72,
+            "passed": 72
+          },
+          "test": {
+            "episodes": 48,
+            "passed": 48
+          }
+        }
+      },
+      "limits": [
+        "12 authored templates; variants/translations are correlated",
+        "Author-visible dev/test splits; not independent held-out histories",
+        "Explicit public API actions; not autonomous tool choice or source authentication"
+      ]
+    },
+    "locomo": {
+      "schema_version": 1,
+      "track": "external_evidence_retrieval",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "4784023d5615275692b7ce37e0e4a13422e3d20ab3a8019484e21667bd683502",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "be95d6827d8fe5bc7d2f29e18d7262b65470fff0d80a47eb8b5ee05687fdd5cf",
+          "common.py": "6b361e5c655ec33e0985e67265d039d81c8fc73cfbd0ff7950ad552ecc9a25d0",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "b04bc39a1bd5fd9f03289744520199a45cf3861b9f4fc3428157b85a76049484"
+        }
+      },
+      "completed": true,
+      "total_questions": 1986,
+      "scored_questions": 1527,
+      "exclusions": {
+        "no_evidence": 4,
+        "unresolved_evidence": 9,
+        "adversarial": 446
+      },
+      "budget": {
+        "max_items": 5,
+        "max_utf8_content_bytes": 4096
+      },
+      "diagnostics": {
+        "gold_exceeds_item_budget": 21,
+        "gold_exceeds_byte_budget": 0,
+        "mean_budget_recall_ceiling": 0.9950222044095784,
+        "gold_without_query_token_overlap": 20
+      },
+      "systems": {
+        "memory_as_history": {
+          "queries": 1527,
+          "recall": 0.42758640734776177,
+          "hit": 0.47609692206941717,
+          "mrr": 0.3336935166994106,
+          "query_ms_p50": 4.661916987970471,
+          "query_ms_p95": 5.150167009560391,
+          "mean_content_bytes": 682.0157170923379,
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.1392048698703375,
+              "hit": 0.3057553956834532,
+              "mrr": 0.17883693045563548
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.49453125,
+              "hit": 0.525,
+              "mrr": 0.37203125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.18699052654769774,
+              "hit": 0.2696629213483146,
+              "mrr": 0.15262172284644196
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.523015873015873,
+              "hit": 0.5357142857142857,
+              "mrr": 0.38952380952380955
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.3959731543624161,
+              "hit": 0.42953020134228187,
+              "mrr": 0.2746085011185682
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.4777777777777778,
+              "hit": 0.5061728395061729,
+              "mrr": 0.36872427983539097
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4525219298245614,
+              "hit": 0.506578947368421,
+              "mrr": 0.3406798245614035
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.45682056240431873,
+              "hit": 0.5076142131979695,
+              "mrr": 0.3523688663282572
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.4580979284369115,
+              "hit": 0.5141242937853108,
+              "mrr": 0.38926553672316383
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3732384823848238,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2727642276422764
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.38814317673378074,
+              "hit": 0.4161073825503356,
+              "mrr": 0.29384787472035795
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4582024432809773,
+              "hit": 0.5340314136125655,
+              "mrr": 0.3655322862129145
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.41572413873451936,
+              "hit": 0.47058823529411764,
+              "mrr": 0.3293028322440087
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.3903225806451613,
+              "hit": 0.4258064516129032,
+              "mrr": 0.32989247311827957
+            }
+          }
+        },
+        "reference_bm25": {
+          "queries": 1527,
+          "recall": 0.42758640734776177,
+          "hit": 0.47609692206941717,
+          "mrr": 0.3336935166994106,
+          "query_ms_p50": 0.5565829924307764,
+          "query_ms_p95": 0.7920410134829581,
+          "mean_content_bytes": 682.0157170923379,
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.1392048698703375,
+              "hit": 0.3057553956834532,
+              "mrr": 0.17883693045563548
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.49453125,
+              "hit": 0.525,
+              "mrr": 0.37203125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.18699052654769774,
+              "hit": 0.2696629213483146,
+              "mrr": 0.15262172284644196
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.523015873015873,
+              "hit": 0.5357142857142857,
+              "mrr": 0.38952380952380955
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.3959731543624161,
+              "hit": 0.42953020134228187,
+              "mrr": 0.2746085011185682
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.4777777777777778,
+              "hit": 0.5061728395061729,
+              "mrr": 0.36872427983539097
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4525219298245614,
+              "hit": 0.506578947368421,
+              "mrr": 0.3406798245614035
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.45682056240431873,
+              "hit": 0.5076142131979695,
+              "mrr": 0.3523688663282572
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.4580979284369115,
+              "hit": 0.5141242937853108,
+              "mrr": 0.38926553672316383
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3732384823848238,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2727642276422764
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.38814317673378074,
+              "hit": 0.4161073825503356,
+              "mrr": 0.29384787472035795
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4582024432809773,
+              "hit": 0.5340314136125655,
+              "mrr": 0.3655322862129145
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.41572413873451936,
+              "hit": 0.47058823529411764,
+              "mrr": 0.3293028322440087
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.3903225806451613,
+              "hit": 0.4258064516129032,
+              "mrr": 0.32989247311827957
+            }
+          }
+        },
+        "recency": {
+          "queries": 1527,
+          "recall": 0.0018009168303863784,
+          "hit": 0.0026195153896529143,
+          "mrr": 0.00114603798297315,
+          "query_ms_p50": 0.002500019036233425,
+          "query_ms_p95": 0.0036249984987080097,
+          "mean_content_bytes": 561.7164374590701,
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.0017985611510791368,
+              "hit": 0.0035971223021582736,
+              "mrr": 0.0035971223021582736
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.0028089887640449437,
+              "hit": 0.011235955056179775,
+              "mrr": 0.0028089887640449437
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.002380952380952381,
+              "hit": 0.002380952380952381,
+              "mrr": 0.0005952380952380953
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.001644736842105263,
+              "hit": 0.006578947368421052,
+              "mrr": 0.001644736842105263
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.005649717514124294,
+              "hit": 0.005649717514124294,
+              "mrr": 0.0014124293785310734
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.0040650406504065045,
+              "hit": 0.008130081300813009,
+              "mrr": 0.008130081300813009
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.006711409395973154,
+              "hit": 0.006711409395973154,
+              "mrr": 0.0016778523489932886
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            }
+          }
+        }
+      },
+      "paired_recall_outcomes": {
+        "reference_bm25": {
+          "win": 0,
+          "tie": 1527,
+          "loss": 0
+        },
+        "recency": {
+          "win": 727,
+          "tie": 796,
+          "loss": 4
+        }
+      },
+      "index_stats": [
+        {
+          "conversation": "conv-26",
+          "documents": 419,
+          "database_bytes": 274432,
+          "product_index_ms": 108.69145800825208,
+          "reference_index_ms": 4.733874986413866
+        },
+        {
+          "conversation": "conv-30",
+          "documents": 369,
+          "database_bytes": 225280,
+          "product_index_ms": 94.43450000253506,
+          "reference_index_ms": 3.7053330161143094
+        },
+        {
+          "conversation": "conv-41",
+          "documents": 663,
+          "database_bytes": 380928,
+          "product_index_ms": 200.71670899051242,
+          "reference_index_ms": 8.151750022079796
+        },
+        {
+          "conversation": "conv-42",
+          "documents": 629,
+          "database_bytes": 331776,
+          "product_index_ms": 162.33687501517124,
+          "reference_index_ms": 6.112834002124146
+        },
+        {
+          "conversation": "conv-43",
+          "documents": 680,
+          "database_bytes": 376832,
+          "product_index_ms": 182.85754200769588,
+          "reference_index_ms": 7.2959589888341725
+        },
+        {
+          "conversation": "conv-44",
+          "documents": 675,
+          "database_bytes": 368640,
+          "product_index_ms": 184.67074999352917,
+          "reference_index_ms": 7.394415995804593
+        },
+        {
+          "conversation": "conv-47",
+          "documents": 689,
+          "database_bytes": 356352,
+          "product_index_ms": 195.79599998542108,
+          "reference_index_ms": 6.986499996855855
+        },
+        {
+          "conversation": "conv-48",
+          "documents": 681,
+          "database_bytes": 348160,
+          "product_index_ms": 200.93999998061918,
+          "reference_index_ms": 6.362125015584752
+        },
+        {
+          "conversation": "conv-49",
+          "documents": 509,
+          "database_bytes": 290816,
+          "product_index_ms": 155.14679098851047,
+          "reference_index_ms": 5.25262500741519
+        },
+        {
+          "conversation": "conv-50",
+          "documents": 568,
+          "database_bytes": 344064,
+          "product_index_ms": 188.07241701870225,
+          "reference_index_ms": 6.831834005424753
+        }
+      ],
+      "limits": [
+        "Evidence-turn retrieval only; not official LoCoMo QA accuracy or abstention",
+        "Shared tokenization; independent BM25 equation; no semantic baseline",
+        "Questions within each conversation are correlated; no iid confidence interval",
+        "Product latency includes SQLite; reference rankers are in memory",
+        "Whole-item UTF-8 content budget excludes metadata and is not a model-token budget"
+      ],
+      "dataset": {
+        "name": "LoCoMo locomo10",
+        "repository": "https://github.com/snap-research/locomo",
+        "revision": "3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376",
+        "url": "https://raw.githubusercontent.com/snap-research/locomo/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/data/locomo10.json",
+        "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "license": "CC-BY-NC-4.0",
+        "license_url": "https://github.com/snap-research/locomo/blob/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/LICENSE.txt",
+        "attribution": "Maharana, Lee, Tulyakov, Bansal, Barbieri and Fang. Evaluating Very Long-Term Conversational Memory of LLM Agents. ACL 2024.",
+        "redistribution": "Dataset is downloaded separately, not included in this MIT-licensed package. Reports contain IDs and measurements, not conversation text or answers."
+      },
+      "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4"
+    }
+  }
+}

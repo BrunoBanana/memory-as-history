@@ -89,3 +89,25 @@ External references: [LoCoMo official repository](https://github.com/snap-resear
 and [LongMemEval official repository](https://github.com/xiaowu0162/LongMemEval).
 LongMemEval's oracle variant contains evidence sessions only; it is not chosen
 as a distractor-retrieval comparison. Official QA evaluation remains separate.
+
+## Implementation evidence
+
+- Data/expected outcomes frozen at `8a42c43`; scoring and reports use runner
+  `83d9a97`. The 28 added harness tests include observed failing tests before
+  implementation and before denominator fixes. Production storage is unchanged.
+- history-v1 passes 120/120 episodes and 990/990 assertions. External evaluation
+  scores 1,527 of 1,986 questions with all exclusions accounted for. Product and
+  reference BM25 tie at 42.7586% mean evidence recall. No labels or expectations
+  were changed to improve the measured result.
+- Full suite: 267/267 on Python 3.12.13 with MCP 1.2.0, 1.30.0 and 2.2.0;
+  reliability 6/6; mechanism and poisoning scripts pass. Wheel and sdist build.
+- Installed wheel in a fresh environment outside the checkout: 267/267 via
+  `python -I -m pytest`, 120 episodes / 990 protocol checks, and all 4,581 external
+  result rows match the source run's selected IDs, budgets and quality scores.
+  Wheel contains the synthetic corpus and two manifests, not external data.
+- Compressed traces and summary checksums were independently read back; per-row
+  recall/MRR, aggregate means, coverage counts and current runner hashes agree.
+  Repeated source runs preserve quality/selection; latency is descriptive only.
+- PR and main integration are tracked through GitHub's exact-commit checks.
+  Independent reproduction, blind holdout, semantic/temporal baselines and
+  unguided clients remain explicit future criteria in `docs/evaluation.md`.

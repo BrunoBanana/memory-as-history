@@ -26,21 +26,29 @@ success does not establish spontaneous tool selection or broad model reliability
 
 ## Requirements before claiming a reference implementation
 
-The 1.2 RC closes the specified reliability roadmap. The next evidence milestone
-should use a public, versioned workload and independent reproduction:
+The 1.2 RC closes the specified reliability roadmap. The first public benchmark
+now separates [history conformance from external evidence retrieval](benchmarks/README.md).
+The [2026-09-18 report](benchmarks/2026-09-18-results.md) publishes all 120 synthetic
+episodes and 1,527 scorable LoCoMo questions with frozen data hashes, exclusions
+and traces. Protocol checks pass; ordinary retrieval ties the reference BM25
+ranker at 42.76% mean evidence recall. This does not establish industry leadership.
 
-1. At least 100 longitudinal scenarios covering revised facts, conflicting
-   perspectives, repeated-source evidence, forgetting, multi-session use and
-   both languages. Separate development fixtures from held-out evaluation;
-   publish expected behavior and annotation rules before tuning.
-2. Reproduce appropriate recency, lexical, semantic and temporal-memory baselines
-   under the same context budget, with versions and configurations recorded.
-   Measure retrieval quality, stale-fact leakage, unsupported priority claims,
-   audit completeness, latency and storage growth; report uncertainty.
+Remaining evidence requirements are:
+
+1. Independently reproduce the public workload and collect genuinely unseen
+   histories. The 120 published episodes cover both languages and the intended
+   state transitions, but derive from 12 correlated templates. Their public
+   dev/test split is author-visible, not an independent holdout.
+2. Extend the recorded recency/lexical comparisons with semantic and temporal
+   baselines under matching budgets. Validate multi-evidence retrieval, online
+   updates, stale-fact exposure and audit completeness outside authored protocol
+   cases. Measure storage growth and use conversation-aware uncertainty estimates;
+   do not treat questions from the same history as independent trials.
 3. Compare guided versus unguided clients across repeated model runs. Report
    memory use and source correctness separately from the storage mechanism.
 4. Validate larger histories, backup/restore and interruption recovery, and
    address source authentication/semantic entailment before expanding security
    claims. Current source labels and known-pattern screening do not solve these.
 
-These are future acceptance criteria, not results already achieved by this RC.
+These remaining criteria are not results already achieved by this RC. The
+external evidence track does not measure official LoCoMo QA or abstention.
