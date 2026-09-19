@@ -58,6 +58,8 @@ from __future__ import annotations
 import os
 from typing import get_args
 
+from pydantic import StrictInt
+
 # mcp 1.x exposes FastMCP; mcp 2.x renamed it to MCPServer. Support both so
 # installs with either major version work (protocol surface is identical).
 try:
@@ -80,6 +82,7 @@ def _tool_error(e: Exception) -> dict:
     This matters in practice: without it, a failed tool call costs the agent
     an extra round-trip of guessing."""
     hints = {
+        "history mode must": "Choose lexical (no model), semantic or hybrid for history search.",
         "timestamp": "Use a full ISO timestamp with timezone, such as 2025-03-01T00:00:00Z; omit unknown event times.",
         "session_position": "Use a unique nonnegative position within a caller-scoped session_id.",
         "expand must": "Choose none, links, session or both; expansion is one hop within the shared budget.",
@@ -114,11 +117,15 @@ def remember(
     frame: str | None = None,
     event_at: str | None = None,
     session_id: str | None = None,
-    session_position: int | None = None,
+    session_position: StrictInt | None = None,
 ) -> dict:
     """Store a new working memory. Working memories are ordinary recollections
     that have not yet gone through consolidation — they can still be recalled,
     but they compete on recency, not on declared importance.
+
+    Optional event_at records a known occurrence time with timezone, separately
+    from capture time; leave unknown dates null. session_id scopes one session,
+    and session_position is its unique nonnegative integer turn position.
 
     `tier` defaults to 'archive' (captured as directly observed). Use
     tier='interpretation' when this is the agent's own inference/summary
@@ -506,7 +513,7 @@ def audit_log(limit: int = 50) -> list[dict]:
 
 @mcp.tool()
 def set_history_context(memory_id: str, reason: str, event_at: str | None = None,
-                        session_id: str | None = None, session_position: int | None = None) -> dict:
+                        session_id: str | None = None, session_position: StrictInt | None = None) -> dict:
     """Replace ALL event/session context with an audited reason. Omitted fields clear.
 
     event_at is a caller-supplied timezone-aware occurrence timestamp, not capture
@@ -553,7 +560,7 @@ def memory_links(memory_id: str, include_retired: bool = False) -> list[dict]:
 
 @mcp.tool()
 def timeline(frame: str | None = None, session_id: str | None = None,
-             since: str | None = None, until: str | None = None, limit: int = 50) -> dict:
+             since: str | None = None, until: str | None = None, limit: StrictInt = 50) -> dict:
     """Inspect active records ordered by explicit event time, unknown times last.
 
     since/until are inclusive timezone-aware timestamps; bounded views exclude
@@ -567,7 +574,7 @@ def timeline(frame: str | None = None, session_id: str | None = None,
 
 
 @mcp.tool()
-def search_history(query: str, limit: int = 10, frame: str | None = None,
+def search_history(query: str, limit: StrictInt = 10, frame: str | None = None,
                    mode: str = 'hybrid', since: str | None = None,
                    until: str | None = None, expand: str = 'both') -> dict:
     """Retrieve related evidence within a shared budget, with inspectable paths.
