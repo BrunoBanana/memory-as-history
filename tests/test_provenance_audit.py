@@ -101,6 +101,7 @@ def test_provenance_normalizes_sources_and_is_read_only(store):
         "memory_id": memory.id, "tier": "testimony", "source": " origin ",
         "origin_known": True, "corroborating_sources": ["origin", "other"],
         "independent_corroboration_count": 1, "corroboration_satisfied": True,
+        "independence_verified": False, "verification_basis": "caller_supplied_source_labels",
     }
     assert store.independent_corroboration_count(memory.id) == 1
     assert store._conn.total_changes == before

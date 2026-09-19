@@ -3,7 +3,7 @@
 Modules:
   Consolidation (Assmann)    — remember() / promote(reason)
   Anchors (Nora)             — pin(reason) / unpin() / list_anchors()
-  Provenance tiers (Ricoeur) — tier at remember(), corroborate(), review(),
+  Legacy provenance tiers (project-defined) — tier at remember(), corroborate(), review(),
                                 due_for_review()
   Forgetting (Ricoeur)       — forget(reason) / restore(reason) / list_forgotten()
   Source criticism / memory-poisoning defense (Ricoeur: l'abus de mémoire) —
@@ -47,6 +47,9 @@ Tools:
   - list_conflicts(resolved?)           conflicts (None=all, False=open, True=resolved)
   - recall(query?, limit?, frame?)      anchors + canon first, then consolidated/working memories, plus current narrative and open conflicts
   - search(query, limit?, frame?, mode?) optional local semantic/hybrid ranking with the same history priorities
+  - create_claim / add_evidence / adopt_claim / revise_claim / withdraw_claim
+  - retract_evidence / inspect_claim / recall_claims (recording-time ledger)
+  - list_narratives / search_archive (scoped accounts and independent investigation)
   - audit_log(limit?)                   full trail of every accountable decision
 
 Environment:
@@ -58,7 +61,7 @@ from __future__ import annotations
 import os
 from typing import get_args
 
-from pydantic import StrictInt
+from pydantic import StrictInt, StrictBool
 
 # mcp 1.x exposes FastMCP; mcp 2.x renamed it to MCPServer. Support both so
 # installs with either major version work (protocol surface is identical).
@@ -82,6 +85,13 @@ def _tool_error(e: Exception) -> dict:
     This matters in practice: without it, a failed tool call costs the agent
     an extra round-trip of guessing."""
     hints = {
+        "kind must be": "Choose assertion, observation, plan, commitment, interpretation or self_report; type is not a truth score.",
+        "material_type must be": "Choose unspecified, document, utterance, observation or summary; keep unknown origins null.",
+        "stance must be": "Choose supports, challenges or context for this particular claim.",
+        "quote must be": "Use an exact source substring for quote. Put your interpretation in reason instead.",
+        "supporting evidence": "Add usable supporting material with add_evidence before adopting; do not invent support.",
+        "no such claim": "Discover claim IDs with recall_claims(include_inactive=True), then inspect_claim.",
+        "replacement must": "Create a proposed replacement in the same scope, attach evidence, then revise_claim.",
         "history mode must": "Choose lexical (no model), semantic or hybrid for history search.",
         "timestamp": "Use a full ISO timestamp with timezone, such as 2025-03-01T00:00:00Z; omit unknown event times.",
         "session_position": "Use a unique nonnegative position within a caller-scoped session_id.",
@@ -100,7 +110,8 @@ def _tool_error(e: Exception) -> dict:
         "tier must be one of": "Choose tier='archive' or 'interpretation'. Testimony requires corroborate(memory_id, source) with independent evidence.",
         "testimony requires": "Call remember with tier='archive', then corroborate(memory_id, source) using genuine independent sources. Repeated turns from one speaker are one source.",
     }
-    hint = next((h for k, h in hints.items() if k in str(e)), None)
+    hint = next((h for k, h in hints.items() if k in str(e)),
+                "Check the tool parameters and referenced IDs; inspect the source record before retrying.")
     return {
         "error": type(e).__name__,
         "message": str(e),
@@ -118,6 +129,9 @@ def remember(
     event_at: str | None = None,
     session_id: str | None = None,
     session_position: StrictInt | None = None,
+    material_type: str = 'unspecified',
+    origin_id: str | None = None,
+    capture_context: str | None = None,
 ) -> dict:
     """Store a new working memory. Working memories are ordinary recollections
     that have not yet gone through consolidation — they can still be recalled,
@@ -126,6 +140,11 @@ def remember(
     Optional event_at records a known occurrence time with timezone, separately
     from capture time; leave unknown dates null. session_id scopes one session,
     and session_position is its unique nonnegative integer turn position.
+
+    Optional material_type separates document/utterance/observation/summary from
+    provenance tiers. origin_id identifies a shared original across reposts;
+    leave it null if unknown. capture_context states the known collection scope,
+    such as "published meeting summary only". None of these establish truth.
 
     `tier` defaults to 'archive' (captured as directly observed). Use
     tier='interpretation' when this is the agent's own inference/summary
@@ -147,7 +166,8 @@ def remember(
     silently overwriting the other: see `mark_conflict()`."""
     try:
         return store.remember(content, source, tier, security_sensitive, frame,
-                              event_at=event_at, session_id=session_id, session_position=session_position).to_dict()
+                              event_at=event_at, session_id=session_id, session_position=session_position,
+                              material_type=material_type, origin_id=origin_id, capture_context=capture_context).to_dict()
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 
@@ -302,12 +322,20 @@ def list_forgotten(limit: int = 50) -> list[dict]:
 
 @mcp.tool()
 def narrate(content: str, reason: str, memory_ids: list[str] | None = None,
-            security_sensitive: bool = False) -> dict:
+            security_sensitive: bool = False, scope: str = 'global',
+            perspective: str | None = None, coverage: str | None = None,
+            claim_ids: list[str] | None = None, link_ids: list[str] | None = None) -> dict:
     """Submit the current narrative synthesis: a coherent account of who the
     user is / where the relationship stands, composed from the discrete
     memories returned by `recall()`. This tool does not write the narrative
     for you — read `recall()` first, compose the synthesis yourself, then
     submit it here.
+
+    scope defaults to global; each scope has an independent version chain.
+    perspective states viewpoint/criteria; coverage states known material limits.
+    claim_ids must reference usable adopted judgments; link_ids must reference
+    active relationships. Their material is checked too. Changes invalidate this
+    account; a relationship asserts an interpretation, not proven causality.
 
     Call this periodically (e.g. every several sessions, or when enough new
     memories have accumulated that the old narrative feels stale) rather
@@ -323,7 +351,8 @@ def narrate(content: str, reason: str, memory_ids: list[str] | None = None,
     accounts are explicitly labeled unverified. Source invalidation hides the
     account from recall until review_narrative() or a valid replacement."""
     try:
-        return store.narrate(content, reason, memory_ids, security_sensitive)
+        return store.narrate(content, reason, memory_ids, security_sensitive, scope=scope,
+                             perspective=perspective, coverage=coverage, claim_ids=claim_ids, link_ids=link_ids)
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 
@@ -341,18 +370,24 @@ def review_narrative(narrative_id: str, note: str) -> dict:
 
 
 @mcp.tool()
-def current_narrative() -> dict | None:
+def current_narrative(scope: str = 'global') -> dict | None:
     """Inspect the latest stored narrative, including stale text, or null if
     none exists. Check review_status and source_issues before using the account
     as current evidence. Default recall withholds stale narrative text."""
-    return store.current_narrative()
+    try:
+        return store.current_narrative(scope)
+    except ValueError as exc:
+        return _tool_error(exc)
 
 
 @mcp.tool()
-def narrative_history(limit: int = 20) -> list[dict]:
+def narrative_history(limit: StrictInt = 20, scope: str | None = None) -> list[dict] | dict:
     """Return past narrative versions, most recent first (including the
     current one) — how the story of the user has been told and re-told."""
-    return store.narrative_history(limit)
+    try:
+        return store.narrative_history(limit, scope)
+    except ValueError as exc:
+        return _tool_error(exc)
 
 
 @mcp.tool()
@@ -588,6 +623,146 @@ def search_history(query: str, limit: StrictInt = 10, frame: str | None = None,
     try:
         return store.search_history(query, limit, frame, mode, since, until, expand)
     except (ValueError, RuntimeError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def create_claim(content: str, kind: str, reason: str, scope: str = 'global',
+                 asserted_by: str | None = None, statement_at: str | None = None,
+                 valid_from: str | None = None, valid_until: str | None = None,
+                 security_sensitive: bool = False) -> dict:
+    """Record a proposed assertion about material, separately from the material.
+
+    kind: assertion, observation, plan, commitment, interpretation or self_report.
+    Attribution and statement/validity times are caller-declared; unknowns stay
+    null. valid_until is exclusive. A plan never becomes an outcome automatically.
+    Add evidence then explicitly adopt or revise a claim for current use.
+    """
+    try:
+        return store.create_claim(content, kind, reason, scope=scope, asserted_by=asserted_by,
+                                  statement_at=statement_at, valid_from=valid_from,
+                                  valid_until=valid_until, security_sensitive=security_sensitive)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def add_evidence(claim_id: str, memory_id: str, stance: str, reason: str,
+                 quote: str | None = None, locator: str | None = None) -> dict:
+    """Link material to this particular claim: supports, challenges or context.
+
+    quote must be a verbatim substring, locator may name a page/section. This
+    does not verify entailment. Origin groups come from remember(origin_id),
+    are caller-asserted, and never prove independent corroboration. Changing
+    evidence requires re-adoption of an adopted claim and dependent review.
+    """
+    try:
+        return store.add_evidence(claim_id, memory_id, stance, reason, quote=quote, locator=locator)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def retract_evidence(evidence_id: str, reason: str) -> dict:
+    """Retire an evidence association, preserving its history and requiring review."""
+    try:
+        return store.retract_evidence(evidence_id, reason)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def adopt_claim(claim_id: str, reason: str) -> dict:
+    """Adopt or explicitly re-review a supported claim; adoption is a judgment.
+
+    Inspect challenges and source issues first. Sensitive material retains its
+    corroboration gate. Withdrawn/superseded claims require a new claim instead.
+    """
+    try:
+        return store.adopt_claim(claim_id, reason)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def revise_claim(claim_id: str, replacement_id: str, reason: str) -> dict:
+    """Atomically adopt a supported proposed replacement in the same scope and
+    supersede the old adopted judgment. Original claims/material stay recorded;
+    dependent narratives require a new version. Returns the adopted replacement.
+    """
+    try:
+        return store.revise_claim(claim_id, replacement_id, reason)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def withdraw_claim(claim_id: str, reason: str) -> dict:
+    """Withdraw a proposed/adopted judgment without erasing material or events."""
+    try:
+        return store.withdraw_claim(claim_id, reason)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def inspect_claim(claim_id: str, as_of: str | None = None) -> dict | None:
+    """Inspect a claim, evidence and decisions, optionally at a system recording
+    timestamp. Late records cannot enter earlier knowledge. This is not a person's
+    knowledge or replay of legacy memory state. Current forgetting redacts derived
+    text even for historical queries; returns null before this claim was recorded.
+    """
+    try:
+        return store.inspect_claim(claim_id, as_of)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def recall_claims(query: str | None = None, limit: StrictInt = 10, scope: str | None = None,
+                  as_of: str | None = None, valid_at: str | None = None,
+                  include_inactive: StrictBool = False) -> dict:
+    """Find current usable adopted judgments, with a strict independent budget.
+
+    as_of selects system-recorded knowledge; valid_at filters declared validity
+    [valid_from,valid_until). Null bounds are unknown, not evidence of applicability.
+    include_inactive discovers proposed/withdrawn/superseded/review-pending claims
+    with status labels. Forgotten-source claims are omitted in every mode.
+    Material recall remains separate and never means a claim has been adopted.
+    """
+    try:
+        return store.recall_claims(query, limit, scope, as_of, valid_at, include_inactive)
+    except (ValueError, KeyError, PermissionError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def list_narratives(limit: StrictInt = 20) -> list[dict] | dict:
+    """Discover current accounts in different scopes. Stale accounts return only
+    metadata and null content; current_narrative(scope) deliberately inspects
+    retained text. Scope is a narrative boundary, not access control. Default
+    recall still uses only the global account and suppresses stale text.
+    """
+    try:
+        return store.list_narratives(limit)
+    except ValueError as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def search_archive(query: str, limit: StrictInt = 10, frame: str | None = None,
+                   session_id: str | None = None, since: str | None = None,
+                   until: str | None = None) -> dict:
+    """Investigate stored active material with no reserved anchor/canon slots.
+
+    Model-free lexical ranking, strict result budget, frame/session/event filters
+    for every candidate. since/until are inclusive; unknown times are excluded
+    from bounded queries. Coverage counts describe stored material only, not
+    completeness or consensus. This is a present archive view, not past-state replay.
+    """
+    try:
+        return store.search_archive(query, limit, frame, session_id, since, until)
+    except ValueError as exc:
         return _tool_error(exc)
 
 

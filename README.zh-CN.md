@@ -2,37 +2,46 @@
 
 > **[English](README.md)** | 简体中文
 
-> 多数 Agent 记忆系统用时效性和相似度打分来决定"记住什么"。本项目借用记忆研究（memory studies）看待人类记忆的方式对待 Agent 记忆：记忆通过**刻意巩固**、**身份锚点**、**来源分级**与**负责任的遗忘**成为"历史"——而不只是存储和检索的副产品。
+Memory as History 保存**说过什么、主张依据什么，以及被采用的认识如何改变**。
+项目提供基于 SQLite 的 MCP 服务，让巩固、来源判断、修订、叙事版本与遗忘都有明确记录。
 
-**代码版本：1.2.0rc1；事务、来源分级与解除锚定审计变更记录在 [Unreleased](CHANGELOG.md#unreleased)。CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+**代码版本：1.3.0a1（未发布预览版）；变更见 [Changelog](CHANGELOG.md#unreleased)。
+CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## 为什么做这个
 
-存储和检索之外，还有一组需要明确回答的问题：哪些陈述值得长期保留、依据是谁提供的、何时停止适用、谁记录了这个决定？本项目让这些决定显式、可追溯；不声称其他记忆系统都缺少这些能力。
+保存下来的文字可能是旧计划、自述、引文或解释。重要不等于真实，较新的说法也不能解释为什么改变了旧判断。
+本项目保留原材料，同时让证据、采纳决定和修订过程可以检查。
 
-而记忆研究学界（Halbwachs、Nora、Assmann、Ricoeur）用一个世纪描述了人类记忆如何真正变得持久，答案从来不是"得分最高的事实自动存活"：
+历史学与记忆研究提供了值得借鉴的问题：如何批判来源、理解社会视角、区分活跃使用与档案保存，以及允许重释。
+这里的实现是工程选择，不是人类记忆的原样模型，也不是 Halbwachs、Nora、Assmann 与 Ricoeur 共同提出的统一算法。
+尤其是旧接口的 `archive/testimony/interpretation` 标签，**不等于 Ricoeur 的历史认识三阶段**。
+理论出处、区别及选读范围见[阅读报告](docs/research/2026-09-19-history-memory-reading.md)。
 
-- 记忆是被**社会框架**建构的，不是私人录音（Halbwachs，*cadres sociaux*）
-- 身份锚定在一小撮**记忆之场**上——它们不与日常回忆竞争注意力（Nora，*lieux de mémoire*）
-- 持久的"文化记忆"要通过明确的**巩固**过程从日常"交往记忆"中沉淀——是一场仪式，不是一个阈值（Assmann）
-- 记忆分层为**档案 / 证词 / 解释**，遗忘是必要且正当的，不是失败（Ricoeur，*La mémoire, l'histoire, l'oubli*）
+## 基础模块
 
-本项目关注记忆成为持久历史的过程，以及证据变化后如何重新审视这段历史。
+| 能力 | 机制 |
+| --- | --- |
+| **巩固** | `promote(reason)` 明确采用需要长期维护的材料；重要性不构成真实性证明。 |
+| **锚点** | `pin(reason)` 让已巩固材料优先进入普通召回，设有软限制；这种优先策略是本项目设计。 |
+| **原有来源层级** | 保留 `archive/testimony/interpretation`；来源标签门槛控制 testimony 升级，解释需要定期复核。 |
+| **负责任的遗忘** | `forget(reason)` 停止普通召回、保留墓碑；需要时先解除锚定或 canon，`restore(reason)` 记录恢复。 |
+| **来源护栏** | 敏感材料进入锚点、canon、叙事时检查已记录佐证；有限模式识别和标签计数不等于来源认证。 |
+| **叙事版本** | `narrate()` 按范围维护版本；材料、主张和关键关系变化后要求复核相关叙事。 |
+| **经典／档案流转** | `canonize(scope, reason)` 与 `end_scope()` 管理任务关注范围；借鉴活跃使用与保存的区别，不声称完整实现文化经典。 |
+| **框架与分歧** | 框架标签和显式冲突保留不同记录；标签不是完整社会关系模型或访问隔离。 |
 
-## 八个模块
+## 主张与认识变化
 
-| 模块 | 机制 | 理论来源 |
-|---|---|---|
-| **巩固协议** | 记忆初始为 `working`，只有显式 `promote(reason)` 才升格为 `consolidated`，理由必填并记入审计日志。永不自动升格。 | Assmann：交往记忆 → 文化记忆 |
-| **锚点记忆** | 少数 `pin(reason)` 的记忆在 recall 时永远优先返回、不参与相关性竞争。**必须先巩固才能锚定**；超过软限制（12）返回警告。 | Nora：记忆之场 |
-| **三级溯源** | 每条记忆带层级：`archive`（原始记录）/ `testimony`（独立来源佐证后自动升级）/ `interpretation`（AI 自身推断，必须定期 `review()` 复核，逾期标记 stale）。 | Ricoeur：档案 / 证词 / 解释 |
-| **主动遗忘** | `forget(reason)` 打墓碑标记：内容保留不硬删，但从召回中消失；**锚点必须先解除才能遗忘**；`restore(reason)` 永远可逆。 | Ricoeur：遗忘的正当性 |
-| **投毒防御** | 身份/权限/指令类记忆可标记 `security_sensitive`；此类记忆 `pin()` 时**强制要求来自不同来源的独立佐证**，否则拒绝并记 `pin_denied`。单次注入的伪造指令无法自我晋升为永久锚点。 | Ricoeur：记忆之滥用（*l'abus de mémoire*）/ 史料批判 |
-| **叙事整合** | `narrate(content, reason, memory_ids?)` 给"综合叙事"一个版本化、可问责的存在：旧叙事标记 superseded 不删除——**叙事本身有历史**。`recall()` 返回离散事实与可用叙事；依赖失效后隐藏叙事正文，提示显式复核，历史文本仍保留。 | Ricoeur：叙事身份（*identité narrative*） |
-| **经典/档案流转** | 任务级流动的"经典圈"（区别于永久锚点）：`canonize(scope, reason)` 纳入当前任务优先注入；任务结束 `end_scope(reason)` 整圈退场——不是遗忘也不是降级。解决上下文膨胀。 | Assmann：Kanon / Archiv |
-| **社会框架** | 记忆可携带社会/关系框架标签；两条记忆冲突时 `mark_conflict(a, b, reason)` 显式声明、**两个版本都保留**；`resolve_conflict` 记录裁决但失败版本不删除。 | Halbwachs：社会框架 |
+材料与被采用的判断分开使用：
 
-所有状态变更（promote / pin / unpin / corroborate / review / forget / restore / canonize / narrate / 标记敏感 / 声明冲突……）统一写入审计日志，带理由和时间戳——**什么成为了历史、为什么，全部可查询**。
+- `create_claim()` → `add_evidence()` → `adopt_claim()` 保存针对具体材料的判断。计划、观察、承诺和自述保持各自类型；同源转载按共同原件分组。
+- `revise_claim()` / `withdraw_claim()` 记录有理由的改判；`recall_claims(as_of=...)` 查看某个录入时点已经记录的认识，晚到证据不会提前出现。
+- `narrate(scope=..., perspective=..., coverage=...)` 维护并行视角；`list_narratives()` 发现不同范围的当前版本，失效正文不在列表中展示。
+- `search_archive()` 为档案调查提供独立条数预算，相关未置顶材料不会被锚点额度挤掉。
+
+运行 `python examples/historical_claims.py` 可以看到“六月计划—晚到延期通知—七月计划”的完整临时库示例。
+接口、迁移与访问边界见[使用契约](docs/knowledge-history.md)。这些是显式存储操作；服务端不会自动裁定证据、推断某个人当时知情，或从没有异议记录推出全体同意。
 
 ## 安装
 
@@ -107,7 +116,7 @@ MCP Server，Python，使用 SQLite。默认安装与 `recall(query)` 保持无�
 
 ## 可靠性与机制验证
 
-- **349 个自动化测试**（含真实 MCP stdio 协议回归、事务故障与独立进程竞争测试）+ **6 项可靠性检查**（线程安全、多进程并发、重启持久化、5000 条规模、含 SQL 注入形态的边界输入、嵌套目录）。CI 保留 ubuntu/macos × Python 3.10–3.12 六矩阵，并增加 MCP 1.2.0、最新 1.x 和最新 2.x 的兼容性检查
+- **419 个自动化测试**（含真实 MCP stdio 协议回归、事务故障与独立进程竞争测试）+ **6 项可靠性检查**（线程安全、多进程并发、重启持久化、5000 条规模、含 SQL 注入形态的边界输入、嵌套目录）。CI 保留 ubuntu/macos × Python 3.10–3.12 六矩阵，并增加 MCP 1.2.0、最新 1.x 和最新 2.x 的兼容性检查
 - `usefulness_test.py --json`：4 组噪声下锚点保留；20 文档、12 个中英查询的固定语料 Hit@1=1.0、MRR=1.0。违反预期时退出非零，故障对照验证评测确实会失败。朴素时间排序基线不代表其他产品；这是机制回归，不是行业排名
 - `poisoning_test.py`（三组确定性对照）：朴素基线保留注入声明；v1.1 即使调用方漏设敏感标记，也会自动识别已知模式；自动标记和显式标记两组都在缺少独立佐证时拦截 `pin()`
 - **公开双轨基准**：120 个冻结的中英协议场景通过 990 项断言；外部 LoCoMo 的 1,527 个可评分问题中，项目普通检索与独立 BM25 公式均为 42.76% 平均证据 Recall@5，统一限 5 条、4096 字节内容。这不是官方问答准确率。[复现方法](docs/benchmarks/README.md)与[完整结果及限制](docs/benchmarks/2026-09-18-results.md)均已公开。
