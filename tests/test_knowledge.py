@@ -292,3 +292,31 @@ def test_query_and_half_open_validity_limit_are_explicit(store):
     assert store.recall_claims(scope='profile', valid_at='2024-01-02T00:00:00Z')['claims'] == []
     assert store.recall_claims(limit=0)['claims'] == []
     assert store.recall_claims(limit=0)['truncated']
+
+
+def test_evidence_arrival_and_review_requirement_share_one_recording_time(store, monkeypatch):
+    from memory_as_history import knowledge
+    _, claim, _ = supported(store)
+    store.adopt_claim(claim['id'], 'adopt')
+    counter = store.remember('Opposing report')
+    ticks = iter(f'2099-01-01T00:00:{second:02d}+00:00' for second in range(20))
+    monkeypatch.setattr(knowledge, '_now', lambda: next(ticks))
+    evidence = store.add_evidence(claim['id'], counter.id, 'challenges', 'new report')
+    observed = store.inspect_claim(claim['id'], as_of=evidence['recorded_at'])
+    assert observed['support']['challenging_records'] == 1
+    assert observed['review_required'] and not observed['eligible_for_recall']
+
+
+def test_changed_self_description_retires_old_judgment_without_rewriting_speech(store):
+    old_material = store.remember('I think I am bad at public speaking', material_type='utterance')
+    new_material = store.remember('I no longer describe myself that way', material_type='utterance')
+    old = store.create_claim(old_material.content, 'self_report', 'self-description', asserted_by='user')
+    new = store.create_claim(new_material.content, 'self_report', 'reinterpretation', asserted_by='user')
+    for claim, material in ((old, old_material), (new, new_material)):
+        store.add_evidence(claim['id'], material.id, 'supports', 'verbatim self-report', quote=material.content)
+    store.adopt_claim(old['id'], 'prior description')
+    store.revise_claim(old['id'], new['id'], 'user changed their interpretation')
+    current = store.recall_claims()['claims']
+    assert len(current) == 1 and current[0]['id'] == new['id'] and current[0]['kind'] == 'self_report'
+    assert store.get(old_material.id).content == old_material.content
+    assert store.inspect_claim(old['id'])['status'] == 'superseded'

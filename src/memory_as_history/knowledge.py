@@ -97,6 +97,7 @@ class KnowledgeMixin:
         self._conn.execute(
             'INSERT INTO claim_events(claim_id,action,reason,recorded_at,replacement_id) VALUES (?,?,?,?,?)',
             (claim_id, action, reason, recorded_at or self._knowledge_time(), replacement_id))
+        self._invalidate_narrative_dependency('claim_ids', claim_id, 'claim changed: ' + action)
 
     @_transactional
     def create_claim(self, content: str, kind: str, reason: str, *, scope: str = 'global',
@@ -112,12 +113,13 @@ class KnowledgeMixin:
         statement_at = event_time(statement_at, 'statement_at')
         valid_from, valid_until = time_range(valid_from, valid_until)
         cid = uuid.uuid4().hex[:12]
+        now = self._knowledge_time()
         self._conn.execute(
             'INSERT INTO claims(id,content,kind,scope,asserted_by,statement_at,valid_from,valid_until,'
             'recorded_at,security_sensitive) VALUES (?,?,?,?,?,?,?,?,?,?)',
             (cid, content, kind, scope, asserted_by, statement_at, valid_from, valid_until,
-             self._knowledge_time(), int(bool(security_sensitive or _looks_injected(content)))))
-        self._claim_event(cid, 'proposed', reason)
+             now, int(bool(security_sensitive or _looks_injected(content)))))
+        self._claim_event(cid, 'proposed', reason, recorded_at=now)
         self._log(cid, 'create_claim', reason)
         return self._claim_view(cid)
 
@@ -146,11 +148,12 @@ class KnowledgeMixin:
         if existing:
             return dict(existing)
         eid = uuid.uuid4().hex[:12]
+        now = max(self._knowledge_time(), memory.created_at)
         self._conn.execute(
             'INSERT INTO claim_evidence(id,claim_id,memory_id,stance,reason,quote,locator,origin_id,recorded_at) '
             'VALUES (?,?,?,?,?,?,?,?,?)',
-            (eid, claim_id, memory_id, stance, reason, quote, locator, memory.origin_id, self._knowledge_time()))
-        self._claim_event(claim_id, 'evidence_added', f'evidence={eid}: {reason}')
+            (eid, claim_id, memory_id, stance, reason, quote, locator, memory.origin_id, now))
+        self._claim_event(claim_id, 'evidence_added', f'evidence={eid}: {reason}', recorded_at=now)
         self._log(claim_id, 'add_evidence', f'evidence={eid} memory={memory_id} stance={stance}: {reason}')
         return dict(self._conn.execute('SELECT * FROM claim_evidence WHERE id=?', (eid,)).fetchone())
 
@@ -161,9 +164,10 @@ class KnowledgeMixin:
         if row is None:
             raise KeyError(f'no such evidence: {evidence_id}')
         if row['retracted_at'] is None:
+            now = self._knowledge_time()
             self._conn.execute('UPDATE claim_evidence SET retracted_at=?,retraction_reason=? WHERE id=?',
-                               (self._knowledge_time(), reason, evidence_id))
-            self._claim_event(row['claim_id'], 'evidence_retracted', f'evidence={evidence_id}: {reason}')
+                               (now, reason, evidence_id))
+            self._claim_event(row['claim_id'], 'evidence_retracted', f'evidence={evidence_id}: {reason}', recorded_at=now)
             self._log(row['claim_id'], 'retract_evidence', f'evidence={evidence_id}: {reason}')
         # Use the same access overlay as claim inspection: no forgotten quote leaks.
         viewed = self._claim_view(row['claim_id'])
