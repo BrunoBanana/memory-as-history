@@ -180,3 +180,15 @@ async def test_history_tools_chronology_and_retractable_links_over_stdio(session
     assert changed['event_at'] is None and changed['session_id'] is None
     error=await call(session,'search_history',{'query':'deadline','since':'2024-01-01','mode':'lexical'})
     assert error['error']=='ValueError' and error['hint']
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('tool,args', [
+    ('remember', {'content':'invalid boolean position','session_id':'s','session_position':True}),
+    ('timeline', {'limit':True}),
+    ('search_history', {'query':'q','limit':True,'mode':'lexical'}),
+])
+async def test_history_integer_fields_reject_booleans_on_wire(session,tool,args):
+    wire=(await session.call_tool(tool,args)).model_dump(by_alias=True)
+    assert wire['isError'], wire
+    assert (await call(session,'recall',{}))['memories']==[]

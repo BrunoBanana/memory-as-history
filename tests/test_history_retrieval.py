@@ -262,3 +262,63 @@ def test_changed_event_context_requires_dependent_narrative_review(store):
     store.set_history_context(m.id, 'date was misrecorded', event_at='2025-02-01T00:00:00Z')
     assert store.recall()['narrative'] is None
     assert store.current_narrative()['review_status'] == 'stale'
+
+
+def test_one_hop_does_not_follow_link_chains_or_duplicate_targets(store):
+    seed,neighbor,prior,noise,edge=history_fixture(store)
+    deep=store.remember('unrelated code R0',frame='a')
+    store.link_memories(seed.id,prior.id,'related','same target different relation')
+    store.link_memories(prior.id,seed.id,'related','cycle')
+    store.link_memories(prior.id,deep.id,'updates','older version')
+    result=store.search_history('launch deadline',mode='lexical',expand='links',frame='a',limit=5)
+    ids=[r['id'] for r in result['memories']]
+    assert prior.id in ids and deep.id not in ids and len(set(ids))==5
+    assert len(result['retrieval']['evidence_paths'])==1
+
+
+def test_empty_time_window_does_not_call_encoder(store):
+    store.remember('dated',event_at='2020-01-01T00:00:00Z')
+    class Backend:
+        def similarities(self,*_): raise AssertionError('no eligible candidates')
+        def describe(self): return {}
+    store._semantic_backend=Backend()
+    result=store.search_history('dated',since='2025-01-01T00:00:00Z')
+    assert result['memories']==[] and not result['retrieval']['inference_performed']
+
+
+def test_failed_context_migration_rolls_back_new_table_and_columns(tmp_path,monkeypatch):
+    from memory_as_history.storage import SCHEMA
+    path=tmp_path/'failed-upgrade.db'
+    con=sqlite3.connect(path);con.executescript(SCHEMA)
+    for column in ('event_at','session_id','session_position'):
+        con.execute(f'ALTER TABLE memories DROP COLUMN {column}')
+    con.execute('DROP TABLE memory_links');con.commit();con.close()
+    migrate=Store._migrate
+    def fail(self):
+        migrate(self)
+        raise sqlite3.OperationalError('migration interrupted')
+    monkeypatch.setattr(Store,'_migrate',fail)
+    with pytest.raises(sqlite3.OperationalError): Store(path)
+    con=sqlite3.connect(path)
+    try:
+        assert 'event_at' not in {r[1] for r in con.execute('PRAGMA table_info(memories)')}
+        assert con.execute("SELECT name FROM sqlite_master WHERE name='memory_links'").fetchone() is None
+    finally: con.close()
+
+
+def test_concurrent_session_position_claims_have_one_winner(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    path=tmp_path/'race.db'
+    a,b=Store(path),Store(path)
+    barrier=threading.Barrier(2)
+    def claim(s):
+        barrier.wait()
+        try:
+            return s.remember('claim',session_id='shared',session_position=0).id
+        except ValueError: return None
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            left=pool.submit(claim,a);right=pool.submit(claim,b)
+            assert sum(x is not None for x in (left.result(),right.result()))==1
+        assert len(a.timeline(session_id='shared')['memories'])==1
+    finally: a.close();b.close()
