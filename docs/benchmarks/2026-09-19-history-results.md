@@ -112,7 +112,9 @@ calls, not autonomous LLM tool-choice or answer-generation trials.
 
 A fresh wheel installed outside the checkout also passes all 349 tests and the
 actual-model MCP acceptance. Its 240 evaluation-split selections/quality rows
-exactly match source. Wheel/sdist build checks confirm source bytes and exclude
+exactly match source. Repeating the full external evaluation from the installed
+wheel reproduces all 10,689 selections/quality rows and scorer code hashes.
+Wheel/sdist build checks confirm source bytes and exclude
 model weights and external conversation data.
 
 ## Reproduce and inspect
