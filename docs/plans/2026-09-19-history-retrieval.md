@@ -83,4 +83,6 @@ Pre-scoring review: a seed can need both its previous version and its explanatio
 Installed-wheel validation: fresh environment outside checkout passes 349/349,
 actual-model MCP acceptance and all 240 evaluation-split selections/quality rows
 match source. Archive checks confirm code bytes and no model/external dataset.
-The full external installed-wheel replay is running before merge.
+The full external installed-wheel replay also matches all 10,689 selected-ID,
+quality and content-budget rows, with matching scorer hashes. PR #8 is submitted;
+merge/main completion is verified against the exact GitHub commits.
