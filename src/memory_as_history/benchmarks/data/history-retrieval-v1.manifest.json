@@ -1,0 +1,9 @@
+{
+  "file": "history-retrieval-v1.json",
+  "sha256": "1d534ae934ee8aefec599f15078cfec2d903f7a2bbd927624cd01f8039c1db49",
+  "cases": 48,
+  "dev_cases": 24,
+  "test_cases": 24,
+  "license": "MIT",
+  "policy": "Freeze before scoring. Test split never used for parameter selection; author-visible, not blind."
+}
