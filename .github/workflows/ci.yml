@@ -42,6 +42,7 @@ jobs:
           python -m memory_as_history.benchmarks development --output semantic-development-lexical.json
           python -m memory_as_history.benchmarks history --output history-retrieval-lexical.json
           python scripts/history_acceptance.py --output history-mcp-lexical.json
+          python examples/historical_claims.py > historical-claims-example.json
 
       - name: Preserve synthetic evaluation metrics
         if: always()
@@ -54,6 +55,7 @@ jobs:
             semantic-development-lexical.json
             history-retrieval-lexical.json
             history-mcp-lexical.json
+            historical-claims-example.json
           if-no-files-found: warn
 
   mcp-compatibility:

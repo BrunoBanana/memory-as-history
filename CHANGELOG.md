@@ -5,6 +5,37 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 1.3.0a1 — knowledge-history preview (not published)
+
+- Separate immutable claims from captured material, with claim-specific support,
+  challenge/context evidence, exact quote checks and declared common-origin groups.
+  Material type, capture context and provenance labels remain separate dimensions.
+- Record explicit adoption, revision and withdrawal in a claim event ledger.
+  Recording-time queries exclude late evidence and later decisions. Revisions
+  share one atomic recording time; concurrent alternatives cannot both win.
+- Overlay current source access on historical claim queries. Forgotten material
+  redacts derived text; restore does not silently re-adopt judgments. Sensitive
+  claims retain existing source-label guards; neither origins nor adoption prove truth.
+- Maintain independent narrative version chains by scope, perspective/coverage
+  metadata, and explicit claim/relationship dependencies. Relationship retirement
+  and evidence changes invalidate affected accounts. Discovery withholds stale text;
+  legacy deliberate narrative inspection retains historical text.
+- Add model-free `search_archive` with strict independent result budgets, filters
+  across all material and explicit coverage counts. Anchor/canon priority cannot
+  consume its result slots. It is not semantic proof or a historical state replay.
+- Additive atomic migrations preserve legacy tiers, text and audits, with no
+  fabricated historical claims. All new operations are exposed over MCP. A
+  disposable bilingual-context example and detailed migration/API guide are included.
+- Correct simplified theory attribution and expose the limit of legacy provenance
+  counts: source-label distinctness is not verified independence. Existing fields
+  and gate semantics remain, with two additive explanatory provenance fields.
+- The suite now includes 419 tests: 70 new behavioral/protocol regressions covering
+  late evidence, reposts, self-reinterpretation, source withdrawal, migrations,
+  faults, concurrency and real stdio restarts. These are authored conformance
+  tests, not blind historical-reasoning results or a retrieval improvement claim.
+
+### Previously integrated 1.2 RC work
+
 1.2.0 release candidate (`1.2.0rc1`), not yet published. Additive narrative/context schema and relationship migration; existing text and history preserved.
 
 ### Changed

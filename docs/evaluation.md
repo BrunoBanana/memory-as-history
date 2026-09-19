@@ -69,3 +69,28 @@ challenge corpus and test split are authored and correlated. External adjacency
 does not improve complete multi-evidence coverage and has 107 regressions against
 hybrid. Real two-process MCP checks establish protocol behavior, not autonomous
 source interpretation, causal reasoning, generated-answer quality or abstention.
+
+## Claims and knowledge-history preview
+
+The [1.3 contract](knowledge-history.md) adds separate judgments/evidence,
+recording-time queries, scoped narratives and independent archive budgets.
+`tests/test_knowledge.py`, `tests/test_historical_views.py` and
+`tests/test_knowledge_protocol.py` contain 70 new authored cases, including
+parameterized invalid-input/fault cases. Do not count them as 70 independent
+real-world histories. The example in `examples/historical_claims.py` is also authored.
+
+These checks establish explicit-call behavior: no late-record leakage, stable
+claim kinds, common-origin reporting, atomic revision, current forgetting overlays,
+dependency invalidation and separate narrative scopes. Real stdio tests cover
+process restarts and protocol discovery. They do not test whether an unguided
+model notices evidence, assigns its stance correctly, distinguishes sources,
+avoids unsupported causality/consensus or chooses the right tool spontaneously.
+
+The nine scenarios in the reading report remain a framework for model evaluation.
+Storage fixtures now exercise relevant mechanics; semantic support and useful
+abstention still require independent adjudication. Collect previously unseen
+histories from independent authors, fix answer/evidence criteria before running,
+and report repeated unguided-client results, errors and invocation cost. Preserve
+separate scores for extraction, source support, temporal correctness, perspective
+coverage and unsupported claims. No new external retrieval/QA score is claimed
+by this preview; the previously published negative results remain applicable.
