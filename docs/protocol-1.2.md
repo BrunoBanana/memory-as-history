@@ -114,7 +114,8 @@ literal values. For example, source `"null"` is text, while JSON `null` means
 no source. Numeric or exponent-shaped legacy IDs remain valid string IDs.
 Structured list arguments retain the SDK's JSON-string decoding support.
 
-Opening a database adds the five narrative columns inside a serialized
+Opening a database adds the five narrative columns, three nullable event/session
+columns, a retractable memory_links table and uniqueness indexes inside a serialized
 `BEGIN IMMEDIATE` schema transaction. Concurrent startups cannot race column
 creation; failed upgrades roll back schema and data. Existing text, IDs, source
 labels, and audit rows are preserved. Old malformed links are labeled stale
@@ -126,3 +127,11 @@ nonsensitive accounts. Clients must honor `narrative_review`, examine structured
 errors, and tolerate additional response fields. Older servers do not enforce
 these rules even if they can open the upgraded schema; do not treat downgrade
 as behaviorally equivalent. Formal release packaging is separate from this RC.
+
+## Explicit history context
+
+See [chronology and evidence links](history-retrieval.md) for exact timestamp,
+whole-context replacement, relationship retirement and search budget contracts.
+Context corrections invalidate dependent narratives transactionally. Unknown
+event times are never inferred from capture/session time; relationships are caller
+assertions, not source corroboration or an automatic latest-fact resolution.

@@ -40,6 +40,8 @@ jobs:
           python poisoning_test.py
           python -m memory_as_history.benchmarks protocol --output history-protocol-results.json
           python -m memory_as_history.benchmarks development --output semantic-development-lexical.json
+          python -m memory_as_history.benchmarks history --output history-retrieval-lexical.json
+          python scripts/history_acceptance.py --output history-mcp-lexical.json
 
       - name: Preserve synthetic evaluation metrics
         if: always()
@@ -50,6 +52,8 @@ jobs:
             usefulness-results.json
             history-protocol-results.json
             semantic-development-lexical.json
+            history-retrieval-lexical.json
+            history-mcp-lexical.json
           if-no-files-found: warn
 
   mcp-compatibility:

@@ -33,3 +33,19 @@ In-conversation judgment about *when* to promote/pin is unreliable. Fix the timi
 This mirrors how human memory consolidation actually works: a periodic rite at a fixed time, not an in-the-moment judgment.
 
 Do not narrate tool usage unless asked. Do not ask the user "should I remember this?" — just act, then optionally mention briefly what you stored.
+
+
+## Explicit chronology and related evidence
+
+Record `event_at` only when the occurrence timestamp and timezone are known;
+never substitute capture time or an uncertain session date. Scope `session_id`
+to one conversation/session and use unique positions. `set_history_context`
+replaces all optional context, so pass retained fields explicitly.
+
+For historical changes, use `timeline` or `search_history` with explicit time
+bounds when justified. `mode="lexical"` needs no model. Inspect evidence paths
+and original source tiers. A `related`, `updates` or `explains` link is a caller
+assertion; it does not prove causality or grant trust. Record links only when the
+underlying records justify them; retract mistakes with `unlink_memories` and a
+reason. Do not invent links or times to improve retrieval. A date change may
+invalidate a dependent narrative: review evidence before explicitly revalidating.
