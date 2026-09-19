@@ -58,7 +58,9 @@ original reason and recording retirement time/reason. Repeating retirement is a
 no-op. `memory_links(memory_id, include_retired=False)` is explicit historical
 inspection and can show links to forgotten endpoints. Default search expansion
 only traverses currently eligible endpoints and never uses forgotten records
-as intermediate context.
+as intermediate context. Narrative dependencies remain memory IDs, not link IDs;
+retiring a link alone does not invalidate a narrative. If its conclusion relied
+on that relationship, the caller must submit a corrected account.
 
 ## Views and budgets
 
