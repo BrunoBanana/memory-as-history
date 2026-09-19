@@ -1,0 +1,580 @@
+[
+  {
+    "sample_id": "semantic-dev-en",
+    "conversation": {
+      "session_1": [
+        {
+          "dia_id": "D1:1",
+          "speaker": "Notes",
+          "text": "Mira requests an aisle seat because she needs room to stretch her legs."
+        },
+        {
+          "dia_id": "D1:2",
+          "speaker": "Notes",
+          "text": "For her flight meal, Mira asks for food without dairy products."
+        },
+        {
+          "dia_id": "D1:3",
+          "speaker": "Notes",
+          "text": "Noah prefers a window seat on his flights."
+        },
+        {
+          "dia_id": "D1:4",
+          "speaker": "Notes",
+          "text": "Mira bought a new blue suitcase for the journey."
+        },
+        {
+          "dia_id": "D1:5",
+          "speaker": "Notes",
+          "text": "Before Atlas can go live, two engineers must sign the release checklist."
+        },
+        {
+          "dia_id": "D1:6",
+          "speaker": "Notes",
+          "text": "An Atlas deployment must be reversed if the error rate exceeds two percent."
+        },
+        {
+          "dia_id": "D1:7",
+          "speaker": "Notes",
+          "text": "The Atlas logo was redesigned in orange last week."
+        },
+        {
+          "dia_id": "D1:8",
+          "speaker": "Notes",
+          "text": "The Birch service requires just one reviewer for documentation updates."
+        },
+        {
+          "dia_id": "D1:9",
+          "speaker": "Notes",
+          "text": "Leena practices the cello every Tuesday evening."
+        },
+        {
+          "dia_id": "D1:10",
+          "speaker": "Notes",
+          "text": "On Saturday mornings Leena sings with the neighborhood choir."
+        },
+        {
+          "dia_id": "D1:11",
+          "speaker": "Notes",
+          "text": "Leena's brother plays football on Tuesdays."
+        },
+        {
+          "dia_id": "D1:12",
+          "speaker": "Notes",
+          "text": "Owen has piano lessons on Sunday afternoon."
+        },
+        {
+          "dia_id": "D1:13",
+          "speaker": "Notes",
+          "text": "The Cedar reading club selected a biography of a polar explorer for October."
+        },
+        {
+          "dia_id": "D1:14",
+          "speaker": "Notes",
+          "text": "For November the Cedar reading club chose a collection of short stories."
+        },
+        {
+          "dia_id": "D1:15",
+          "speaker": "Notes",
+          "text": "The Maple reading club chose a cookbook for October."
+        },
+        {
+          "dia_id": "D1:16",
+          "speaker": "Notes",
+          "text": "The Cedar reading club meets in the library basement."
+        },
+        {
+          "dia_id": "D1:17",
+          "speaker": "Notes",
+          "text": "In 2023, Jun lived in a rented apartment in Porto."
+        },
+        {
+          "dia_id": "D1:18",
+          "speaker": "Notes",
+          "text": "Jun relocated to a house in Helsinki in February 2025."
+        },
+        {
+          "dia_id": "D1:19",
+          "speaker": "Notes",
+          "text": "Jun visited Kyoto on holiday in 2024 but did not move there."
+        },
+        {
+          "dia_id": "D1:20",
+          "speaker": "Notes",
+          "text": "Jun's friend Sam has lived in Porto since 2020."
+        },
+        {
+          "dia_id": "D1:21",
+          "speaker": "Notes",
+          "text": "Order ZX-417 contains twelve replacement keyboard switches."
+        },
+        {
+          "dia_id": "D1:22",
+          "speaker": "Notes",
+          "text": "Order ZX-417 is scheduled to arrive on June 14."
+        },
+        {
+          "dia_id": "D1:23",
+          "speaker": "Notes",
+          "text": "Order ZX-471 contains a computer monitor and arrives on June 19."
+        },
+        {
+          "dia_id": "D1:24",
+          "speaker": "Notes",
+          "text": "The warehouse stocks twelve different types of mouse pad."
+        },
+        {
+          "dia_id": "D1:25",
+          "speaker": "Notes",
+          "text": "The orchard workshop asks volunteers to bring waterproof boots."
+        },
+        {
+          "dia_id": "D1:26",
+          "speaker": "Notes",
+          "text": "For the orchard workshop, volunteers should also pack reusable drinking bottles."
+        },
+        {
+          "dia_id": "D1:27",
+          "speaker": "Notes",
+          "text": "The museum workshop asks visitors to bring sketchbooks."
+        },
+        {
+          "dia_id": "D1:28",
+          "speaker": "Notes",
+          "text": "The orchard workshop registration closes on Friday."
+        },
+        {
+          "dia_id": "D1:29",
+          "speaker": "Notes",
+          "text": "Nora's essay argues that museum displays must explain where objects came from."
+        },
+        {
+          "dia_id": "D1:30",
+          "speaker": "Notes",
+          "text": "Nora's essay also asks museums to acknowledge competing interpretations of the past."
+        },
+        {
+          "dia_id": "D1:31",
+          "speaker": "Notes",
+          "text": "Nora designed a poster about the museum's opening hours."
+        },
+        {
+          "dia_id": "D1:32",
+          "speaker": "Notes",
+          "text": "Eli's essay is about lowering museum ticket prices."
+        }
+      ]
+    },
+    "qa": [
+      {
+        "question": "What seating and dietary accommodations does Mira need when flying?",
+        "evidence": [
+          "D1:1",
+          "D1:2"
+        ],
+        "category": 1
+      },
+      {
+        "question": "Which passenger must avoid milk in the airplane meal?",
+        "evidence": [
+          "D1:2"
+        ],
+        "category": 4
+      },
+      {
+        "question": "What approval and rollback conditions govern an Atlas launch?",
+        "evidence": [
+          "D1:5",
+          "D1:6"
+        ],
+        "category": 1
+      },
+      {
+        "question": "When must an Atlas rollout be undone?",
+        "evidence": [
+          "D1:6"
+        ],
+        "category": 4
+      },
+      {
+        "question": "Which two musical activities are part of Leena's weekly routine?",
+        "evidence": [
+          "D1:9",
+          "D1:10"
+        ],
+        "category": 1
+      },
+      {
+        "question": "When does Leena rehearse with other singers?",
+        "evidence": [
+          "D1:10"
+        ],
+        "category": 4
+      },
+      {
+        "question": "What genres did the Cedar club pick for October and November?",
+        "evidence": [
+          "D1:13",
+          "D1:14"
+        ],
+        "category": 1
+      },
+      {
+        "question": "Which reading group chose a life story about exploring the polar regions?",
+        "evidence": [
+          "D1:13"
+        ],
+        "category": 4
+      },
+      {
+        "question": "Where did Jun live before and after his February 2025 move?",
+        "evidence": [
+          "D1:17",
+          "D1:18"
+        ],
+        "category": 1
+      },
+      {
+        "question": "In which city was Jun renting a home in 2023?",
+        "evidence": [
+          "D1:17"
+        ],
+        "category": 4
+      },
+      {
+        "question": "What was ordered under ZX-417 and when should it arrive?",
+        "evidence": [
+          "D1:21",
+          "D1:22"
+        ],
+        "category": 1
+      },
+      {
+        "question": "What is the expected delivery date for ZX-417?",
+        "evidence": [
+          "D1:22"
+        ],
+        "category": 4
+      },
+      {
+        "question": "What footwear and drink container should orchard volunteers bring?",
+        "evidence": [
+          "D1:25",
+          "D1:26"
+        ],
+        "category": 1
+      },
+      {
+        "question": "What should volunteers wear to keep their feet dry at the orchard?",
+        "evidence": [
+          "D1:25"
+        ],
+        "category": 4
+      },
+      {
+        "question": "Which two principles does Nora propose for presenting history in museums?",
+        "evidence": [
+          "D1:29",
+          "D1:30"
+        ],
+        "category": 1
+      },
+      {
+        "question": "Who wants exhibitions to disclose the origin of their artifacts?",
+        "evidence": [
+          "D1:29"
+        ],
+        "category": 4
+      }
+    ]
+  },
+  {
+    "sample_id": "semantic-dev-zh",
+    "conversation": {
+      "session_1": [
+        {
+          "dia_id": "D1:1",
+          "speaker": "记录",
+          "text": "米拉坐飞机时要求靠过道的位置，方便伸展双腿。"
+        },
+        {
+          "dia_id": "D1:2",
+          "speaker": "记录",
+          "text": "米拉的机上餐食需要不含乳制品。"
+        },
+        {
+          "dia_id": "D1:3",
+          "speaker": "记录",
+          "text": "诺亚坐飞机喜欢靠窗的位置。"
+        },
+        {
+          "dia_id": "D1:4",
+          "speaker": "记录",
+          "text": "米拉为这次旅行买了一个蓝色行李箱。"
+        },
+        {
+          "dia_id": "D1:5",
+          "speaker": "记录",
+          "text": "阿特拉斯上线之前，必须有两名工程师签署发布清单。"
+        },
+        {
+          "dia_id": "D1:6",
+          "speaker": "记录",
+          "text": "阿特拉斯发布后如果错误率超过百分之二，必须回滚。"
+        },
+        {
+          "dia_id": "D1:7",
+          "speaker": "记录",
+          "text": "阿特拉斯的标志上周改成了橙色。"
+        },
+        {
+          "dia_id": "D1:8",
+          "speaker": "记录",
+          "text": "白桦服务的文档更新只需要一名审核人。"
+        },
+        {
+          "dia_id": "D1:9",
+          "speaker": "记录",
+          "text": "莉娜每周二晚上练习大提琴。"
+        },
+        {
+          "dia_id": "D1:10",
+          "speaker": "记录",
+          "text": "每周六上午，莉娜都参加社区合唱团。"
+        },
+        {
+          "dia_id": "D1:11",
+          "speaker": "记录",
+          "text": "莉娜的哥哥每周二踢足球。"
+        },
+        {
+          "dia_id": "D1:12",
+          "speaker": "记录",
+          "text": "欧文在周日下午上钢琴课。"
+        },
+        {
+          "dia_id": "D1:13",
+          "speaker": "记录",
+          "text": "雪松读书会十月选的是一本极地探险家的传记。"
+        },
+        {
+          "dia_id": "D1:14",
+          "speaker": "记录",
+          "text": "雪松读书会十一月选了一本短篇小说集。"
+        },
+        {
+          "dia_id": "D1:15",
+          "speaker": "记录",
+          "text": "枫树读书会十月选了一本食谱。"
+        },
+        {
+          "dia_id": "D1:16",
+          "speaker": "记录",
+          "text": "雪松读书会在图书馆地下室聚会。"
+        },
+        {
+          "dia_id": "D1:17",
+          "speaker": "记录",
+          "text": "2023年，俊住在波尔图的一套出租公寓里。"
+        },
+        {
+          "dia_id": "D1:18",
+          "speaker": "记录",
+          "text": "2025年2月，俊搬到了赫尔辛基的一栋房子里。"
+        },
+        {
+          "dia_id": "D1:19",
+          "speaker": "记录",
+          "text": "俊在2024年度假时去过京都，但没有搬到那里。"
+        },
+        {
+          "dia_id": "D1:20",
+          "speaker": "记录",
+          "text": "俊的朋友山姆从2020年起一直住在波尔图。"
+        },
+        {
+          "dia_id": "D1:21",
+          "speaker": "记录",
+          "text": "订单ZX-417包含十二个替换键盘轴体。"
+        },
+        {
+          "dia_id": "D1:22",
+          "speaker": "记录",
+          "text": "订单ZX-417预计6月14日送达。"
+        },
+        {
+          "dia_id": "D1:23",
+          "speaker": "记录",
+          "text": "订单ZX-471包含一台显示器，预计6月19日送达。"
+        },
+        {
+          "dia_id": "D1:24",
+          "speaker": "记录",
+          "text": "仓库有十二种不同的鼠标垫。"
+        },
+        {
+          "dia_id": "D1:25",
+          "speaker": "记录",
+          "text": "果园工作坊要求志愿者带防水靴。"
+        },
+        {
+          "dia_id": "D1:26",
+          "speaker": "记录",
+          "text": "参加果园工作坊的志愿者还需要自备可重复使用的水瓶。"
+        },
+        {
+          "dia_id": "D1:27",
+          "speaker": "记录",
+          "text": "博物馆工作坊要求参观者带素描本。"
+        },
+        {
+          "dia_id": "D1:28",
+          "speaker": "记录",
+          "text": "果园工作坊的报名周五截止。"
+        },
+        {
+          "dia_id": "D1:29",
+          "speaker": "记录",
+          "text": "诺拉的文章主张博物馆展陈必须交代文物来源。"
+        },
+        {
+          "dia_id": "D1:30",
+          "speaker": "记录",
+          "text": "诺拉的文章还要求博物馆承认对过去存在不同解释。"
+        },
+        {
+          "dia_id": "D1:31",
+          "speaker": "记录",
+          "text": "诺拉设计过一张关于博物馆开放时间的海报。"
+        },
+        {
+          "dia_id": "D1:32",
+          "speaker": "记录",
+          "text": "伊莱的文章讨论降低博物馆门票价格。"
+        }
+      ]
+    },
+    "qa": [
+      {
+        "question": "米拉乘机时在座位和饮食方面有哪些要求？",
+        "evidence": [
+          "D1:1",
+          "D1:2"
+        ],
+        "category": 1
+      },
+      {
+        "question": "谁的航空餐需要避开牛奶？",
+        "evidence": [
+          "D1:2"
+        ],
+        "category": 4
+      },
+      {
+        "question": "阿特拉斯发布需要满足哪些审批和回退条件？",
+        "evidence": [
+          "D1:5",
+          "D1:6"
+        ],
+        "category": 1
+      },
+      {
+        "question": "阿特拉斯上线后什么情况下需要撤回版本？",
+        "evidence": [
+          "D1:6"
+        ],
+        "category": 4
+      },
+      {
+        "question": "莉娜每周固定参加哪两项音乐活动？",
+        "evidence": [
+          "D1:9",
+          "D1:10"
+        ],
+        "category": 1
+      },
+      {
+        "question": "莉娜什么时候和其他人一起练唱？",
+        "evidence": [
+          "D1:10"
+        ],
+        "category": 4
+      },
+      {
+        "question": "雪松读书会十月和十一月分别阅读哪类书？",
+        "evidence": [
+          "D1:13",
+          "D1:14"
+        ],
+        "category": 1
+      },
+      {
+        "question": "哪个读书会选择了讲述极地探险人生的书？",
+        "evidence": [
+          "D1:13"
+        ],
+        "category": 4
+      },
+      {
+        "question": "俊在2025年2月搬家前后分别住在哪里？",
+        "evidence": [
+          "D1:17",
+          "D1:18"
+        ],
+        "category": 1
+      },
+      {
+        "question": "俊在2023年在哪个城市租房住？",
+        "evidence": [
+          "D1:17"
+        ],
+        "category": 4
+      },
+      {
+        "question": "ZX-417买了什么，预计什么时候到？",
+        "evidence": [
+          "D1:21",
+          "D1:22"
+        ],
+        "category": 1
+      },
+      {
+        "question": "ZX-417预计哪天送达？",
+        "evidence": [
+          "D1:22"
+        ],
+        "category": 4
+      },
+      {
+        "question": "果园志愿者应该准备什么鞋子和饮水容器？",
+        "evidence": [
+          "D1:25",
+          "D1:26"
+        ],
+        "category": 1
+      },
+      {
+        "question": "果园志愿者要穿什么才能避免脚被打湿？",
+        "evidence": [
+          "D1:25"
+        ],
+        "category": 4
+      },
+      {
+        "question": "诺拉提出了哪两条在博物馆呈现历史的原则？",
+        "evidence": [
+          "D1:29",
+          "D1:30"
+        ],
+        "category": 1
+      },
+      {
+        "question": "谁主张展览应说明藏品的出处？",
+        "evidence": [
+          "D1:29"
+        ],
+        "category": 4
+      }
+    ]
+  }
+]

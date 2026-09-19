@@ -262,3 +262,36 @@ def test_cli_reports_hash_failure_without_succeeding_or_overwriting_report(tmp_p
     assert cli.main(['locomo', '--data', str(path), '--output', str(report)]) == 2
     assert 'SHA-256' in capsys.readouterr().err
     assert report.read_text() == 'existing report'
+
+
+def test_semantic_comparison_keeps_equal_budgets_and_labels_out_of_encoder():
+    seen = []
+    class Backend:
+        def prepare_documents(self, texts):
+            seen.extend(texts)
+        def similarities(self, query, texts):
+            seen.extend(texts)
+            return [1 if 'alpha' in text else 0 for text in texts]
+        def describe(self):
+            return {'model': 'test-only', 'revision': 'fixed'}
+    report = module('retrieval').run_retrieval(toy_data(), max_items=1, semantic_backend=Backend())
+    assert set(report['systems']) == {'memory_as_history', 'reference_bm25', 'recency', 'semantic', 'hybrid'}
+    assert report['systems']['semantic']['recall'] == 1
+    assert report['systems']['semantic']['by_evidence_count']['single']['queries'] == 1
+    assert report['systems']['semantic']['by_evidence_count']['multiple']['queries'] == 0
+    assert report['semantic_backend']['model'] == 'test-only'
+    assert len(report['results']) == report['scored_questions'] * 5
+    assert not any('NEVER_INDEX_THIS_ANSWER' in text or 'broken annotation' in text for text in seen)
+    assert all(len(r['selected_ids']) <= 1 and r['content_bytes'] <= 4096 for r in report['results'])
+
+
+def test_development_corpus_is_hash_frozen_and_cli_runs_without_model(tmp_path):
+    retrieval = module('retrieval')
+    data = retrieval.load_development()
+    prepared = retrieval.prepare_locomo(data)
+    assert len(prepared) == 2
+    assert sum(len(c['documents']) for c in prepared) == 64
+    assert sum(len(c['queries']) for c in prepared) == 32
+    report = tmp_path / 'development.json'
+    assert module('__main__').main(['development', '--output', str(report)]) == 0
+    assert json.loads(report.read_text())['scored_questions'] == 32

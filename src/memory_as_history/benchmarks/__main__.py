@@ -1,12 +1,11 @@
 """Run deterministic history contracts or pinned external evidence retrieval."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import sys
 
 from .protocol import load_corpus, run_protocol
-from .retrieval import MANIFEST, load_locomo, run_retrieval
+from .retrieval import MANIFEST, DEVELOPMENT_MANIFEST, load_development, load_locomo, run_retrieval
 
 
 def main(argv=None):
@@ -16,9 +15,13 @@ def main(argv=None):
     protocol.add_argument('--split', choices=('all', 'dev', 'test'), default='all')
     external = commands.add_parser('locomo')
     external.add_argument('--data', type=Path, required=True)
-    external.add_argument('--max-items', type=int, default=5)
-    external.add_argument('--max-bytes', type=int, default=4096)
-    for command in (protocol, external):
+    development = commands.add_parser('development')
+    for command in (external, development):
+        command.add_argument('--max-items', type=int, default=5)
+        command.add_argument('--max-bytes', type=int, default=4096)
+        command.add_argument('--semantic', action='store_true', help='include the optional cached local encoder and fusion')
+        command.add_argument('--device', default='cpu', choices=('cpu', 'mps', 'cuda'))
+    for command in (protocol, external, development):
         command.add_argument('--output', type=Path, help='write JSON report (otherwise stdout)')
     args = parser.parse_args(argv)
     try:
@@ -29,9 +32,16 @@ def main(argv=None):
             report = run_protocol(cases)
             exit_code = 0 if report['passed'] else 1
         else:
-            report = run_retrieval(load_locomo(args.data), args.max_items, args.max_bytes)
-            report['dataset'] = MANIFEST
-            report['dataset_sha256'] = hashlib.sha256(args.data.read_bytes()).hexdigest()
+            data = load_development() if args.track == 'development' else load_locomo(args.data)
+            backend = None
+            if args.semantic:
+                from memory_as_history.semantic import LocalE5
+                backend = LocalE5(device=args.device)
+            report = run_retrieval(data, args.max_items, args.max_bytes, semantic_backend=backend)
+            report['dataset'] = DEVELOPMENT_MANIFEST if args.track == 'development' else MANIFEST
+            report['dataset_sha256'] = report['dataset']['sha256']
+            if args.track == 'development':
+                report['track'] = 'authored_semantic_development'
             exit_code = 0  # Measured quality is not a preselected pass threshold.
         encoded = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + '\n'
         if args.output:
@@ -41,7 +51,7 @@ def main(argv=None):
         else:
             print(encoded, end='')
         return exit_code
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
         print(f'Benchmark error: {exc}', file=sys.stderr)
         return 2
 

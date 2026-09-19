@@ -33,13 +33,20 @@ episodes and 1,527 scorable LoCoMo questions with frozen data hashes, exclusions
 and traces. Protocol checks pass; ordinary retrieval ties the reference BM25
 ranker at 42.76% mean evidence recall. This does not establish industry leadership.
 
+The [optional semantic follow-up](benchmarks/2026-09-18-semantic-results.md) uses
+the same data and budgets: hybrid recall reaches 51.90% overall and 26.04% on
+multi-evidence questions (previously 17.02%). Model/fusion settings were frozen
+before that run; all regressions are published. A separate bilingual development
+set was frozen before encoding, but is small and author-visible. These results
+do not turn the already inspected LoCoMo reference set into a blind test.
+
 Remaining evidence requirements are:
 
 1. Independently reproduce the public workload and collect genuinely unseen
    histories. The 120 published episodes cover both languages and the intended
    state transitions, but derive from 12 correlated templates. Their public
    dev/test split is author-visible, not an independent holdout.
-2. Extend the recorded recency/lexical comparisons with semantic and temporal
+2. Extend the recorded recency/lexical/semantic comparisons with temporal
    baselines under matching budgets. Validate multi-evidence retrieval, online
    updates, stale-fact exposure and audit completeness outside authored protocol
    cases. Measure storage growth and use conversation-aware uncertainty estimates;
