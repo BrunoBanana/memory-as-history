@@ -209,3 +209,15 @@ def test_corrupt_narrative_dependencies_fail_closed(store, field):
     store._conn.commit()
     assert store.recall()['narrative'] is None
     assert store.current_narrative()['source_issues'][0]['issue'] == 'invalid_' + field
+
+
+def test_scope_discovery_withholds_stale_text_but_legacy_inspection_retains_it(store):
+    memory = store.remember('Withdrawn private wording')
+    narrative = store.narrate('Withdrawn private wording', 'Withdrawn private wording', [memory.id],
+                              scope='profile', perspective='Withdrawn private wording',
+                              coverage='Withdrawn private wording')
+    store.forget(memory.id, 'withdrawn')
+    listed = store.list_narratives()
+    assert listed[0]['id'] == narrative['id'] and listed[0]['content'] is None
+    assert 'Withdrawn private wording' not in json.dumps(listed)
+    assert store.current_narrative(scope='profile')['content'] == 'Withdrawn private wording'

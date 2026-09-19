@@ -1,79 +1,16 @@
-"""SQLite-backed storage for Memory as History.
+"""SQLite-backed material, claim and narrative history.
 
-Three modules for v0.2:
+Material capture and priority are distinct from claim adoption. Existing
+consolidation, anchors, source-label tiers and accountable forgetting remain
+compatible. New claims retain evidence and adoption/revision events; narrative
+versions are scoped and can depend on claims or relationships. Archive search
+uses an independent material budget.
 
-- Consolidation (Assmann): memories start as `working` and must be explicitly
-  `promoted` to `consolidated` with a recorded, non-empty reason — a ceremony,
-  not a similarity score.
-- Anchors (Nora): a small set of pinned, identity-cornerstone memories that
-  are always surfaced first and never compete on recency/relevance. Each pin
-  requires a reason. Anchors are meant to stay few ("lieux de mémoire" are
-  necessarily scarce) — exceeding a soft limit returns a warning rather than
-  a hard block, so the caller can decide whether that's intentional.
-- Provenance tiers (Ricoeur): every memory carries a tier —
-  `archive` (raw, as originally captured), `testimony` (corroborated by an
-  independent, additional source), or `interpretation` (the agent's own
-  inference, which is not self-evidently true and must be periodically
-  re-examined). Archive memories can be upgraded to testimony by
-  corroboration; interpretation memories must be reviewed on a cadence.
-- Accountable forgetting (Ricoeur): forgetting is treated as a legitimate,
-  deliberate act — not silent deletion and not passive decay. `forget()`
-  requires a reason and leaves a tombstone (the content is retained, not
-  hard-deleted, but disappears from `recall()` and listings). An anchored
-  memory cannot be forgotten directly — it must be `unpin()`-ed first, since
-  identity cornerstones should not quietly disappear. Forgetting is
-  reversible via `restore()`, itself logged with its own reason.
-- Source criticism / memory-poisoning defense (Ricoeur: l'abus de mémoire —
-  the abuse of memory, and the historiographical discipline of not taking a
-  single testimony at face value): a memory touching identity, permissions,
-  or instructions can be flagged `security_sensitive` (at `remember()` time,
-  or later via `flag_sensitive()`). A security-sensitive memory cannot be
-  `pin()`-ed on the strength of a single source — `pin()` requires at least
-  one `corroborate()` from a source *distinct* from the memory's original
-  `source`. This is the concrete, minimal countermeasure the theory
-  motivates: prompt-injected content that claims to be an identity fact or
-  a standing instruction should not be able to promote itself straight into
-  the anchor set just by asserting itself once.
-- Narrative integration (Ricoeur: identité narrative — identity is not a
-  pile of discrete facts but a story that organizes them): a plain store
-  cannot itself compose a narrative — that requires judgment and language a
-  database doesn't have. What it CAN do is give the synthesis a first-class,
-  versioned, accountable existence: `narrate(content, reason, memory_ids?)`
-  lets a caller (typically an agent that just read `recall()` and composed
-  a summary) submit the current narrative. The previous current narrative,
-  if any, is not deleted — it is marked superseded, so the *story itself*
-  has a history: not just who the user currently is, but how that account
-  changed over time, and why. `recall()` surfaces the current narrative
-  alongside the discrete memory list when its dependencies are usable. Invalid
-  sources suppress the default text; explicit inspection preserves it, and
-  review_narrative() records revalidation without rewriting the account.
-- Canon / archive circulation (Assmann: Kanon/Archiv — distinct from Nora's
-  permanent anchors): a *task-scoped*, rotating "canon" — the small, active
-  set of memories relevant to whatever the current task/phase is.
-  `canonize(memory_id, scope, reason)` marks a memory active within a named
-  scope; when the task shifts, `end_scope(scope, reason)` (or
-  `rotate_canon()`) moves the scope's members out of the canon back into
-  ordinary long-term memory — not forgotten, not downgraded to working,
-  just no longer prioritized on `recall()`. Solves the context-bloat
-  problem that permanent anchors can't: "prioritize what's relevant right
-  now", without the everything-is-an-anchor trap.
-- Social framing / multi-perspective memory (Halbwachs: cadres sociaux —
-  memory is always framed by the social group/context in which it was
-  formed; there is no frame-free memory): memories can carry a `frame`
-  (the relational/social context the memory belongs to, e.g. "team-alpha",
-  "collab-with-B", "project-x"). Two memories about the same subject may
-  legitimately disagree across frames — instead of silently overwriting
-  the older version, `mark_conflict(a, b, reason)` declares the pair as
-  conflicting framed versions, both retained. `resolve_conflict(...)`
-  records how the conflict was settled (which version adopted, or merged,
-  or deferred) without deleting the losing version. `recall()` surfaces
-  open conflicts explicitly, and can be filtered by `frame`.
-
-Design principle: every state change that matters (promote, pin, corroborate,
-review, forget, restore, narrate, canonize, decanonize, end_scope,
-flag_sensitive, mark_conflict, resolve_conflict, set_frame) is recorded with
-a reason/note and a timestamp in a single audit log. Nothing is silently
-reclassified, and nothing is silently deleted.
+These are engineering adaptations inspired by historical and memory studies,
+not a literal model of the cited authors. Source labels and caller judgments do
+not authenticate independence, entailment or authority. The legacy three tiers
+are not Ricoeur's three phases of historical inquiry. See docs/knowledge-history.md
+and the reading report for contracts, sources and limitations.
 """
 
 from __future__ import annotations
@@ -714,6 +651,8 @@ class Store(KnowledgeMixin):
             "corroborating_sources": sorted(distinct_sources),
             "independent_corroboration_count": count,
             "corroboration_satisfied": count > 0,
+            "independence_verified": False,
+            "verification_basis": "caller_supplied_source_labels",
         }
         if result["tier"] == "testimony" and count == 0:
             result["warning"] = (
@@ -1248,11 +1187,19 @@ class Store(KnowledgeMixin):
 
     @_read_snapshot
     def list_narratives(self, limit: int = 20) -> list[dict]:
-        """Discover current scoped accounts, including explicit stale warnings."""
+        """Discover scoped accounts; withhold stale text in this discovery view."""
         check_limit(limit)
         rows = self._conn.execute('SELECT * FROM narratives WHERE superseded_at IS NULL '
                                   'ORDER BY scope,created_at DESC,rowid DESC LIMIT ?', (limit,)).fetchall()
-        return [self._narrative_to_dict(r) for r in rows]
+        result = []
+        for row in rows:
+            narrative = self._narrative_to_dict(row)
+            if narrative['review_status'] == 'stale':
+                narrative = {key: narrative[key] for key in (
+                    'id', 'scope', 'created_at', 'review_status', 'source_issues', 'review_required_at')}
+                narrative['content'] = None
+            result.append(narrative)
+        return result
 
     # -- canon / archive circulation module (Assmann: Kanon/Archiv) -------------
 
