@@ -51,8 +51,8 @@ Run `python -m pytest tests/ -q` and the example; review and commit.
 
 ## Task 4 — Documentation, packaging and integration
 
-Files: `pyproject.toml`, `CHANGELOG.md`, `README.md`, `README_EN.md`,
-`AGENT_GUIDE.md` if present, `docs/knowledge-history.md`, `docs/evaluation.md`,
+Files: `pyproject.toml`, `CHANGELOG.md`, `README.md`, `README.zh-CN.md`,
+`AGENT_GUIDE.md`, `docs/knowledge-history.md`, `docs/evaluation.md`,
 `docs/plans/task.md`, `.github/workflows/ci.yml` if needed.
 
 Correct simplified theoretical attribution, document exact contracts and limits,

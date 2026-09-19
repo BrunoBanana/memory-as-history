@@ -2,39 +2,60 @@
 
 > English | **[简体中文](README.zh-CN.md)**
 
-> Most agent memory systems decide what to keep with recency and similarity scores. This project treats agent memory the way memory studies treats human memory: memory becomes history through **deliberate consolidation**, **anchored identity**, and **accountable provenance** — not just storage and retrieval.
+Memory as History records **what was said, what evidence supports a claim, and
+how adopted judgments change**. It provides a SQLite-backed MCP server with
+explicit consolidation, source checks, revisions, narrative versions and forgetting.
 
-**Code version: 1.2.0rc1; release-candidate changes is tracked under [Unreleased](CHANGELOG.md#unreleased). CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+**Code version: 1.3.0a1 (unpublished preview). Changes: [Changelog](CHANGELOG.md#unreleased).
+CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## Why
 
-Storage and retrieval leave additional questions: which claims deserve durable status, whose evidence supports them, when should they stop applying, and who recorded that decision? This project makes those decisions explicit and auditable. It does not claim that other memory systems lack every one of these capabilities.
+A retained statement may be an old plan, a personal recollection, a quotation or
+an interpretation. Its importance does not establish truth, and a newer statement
+does not explain why an earlier judgment changed. This project makes the sources,
+adoption decisions and revisions inspectable while preserving the material.
 
-Memory studies (Halbwachs, Nora, Assmann, Ricoeur) has spent a century describing how human memory actually becomes durable, and the answer is never "the highest-scoring facts survive automatically":
-
-- Memory is **socially framed**, not a private recording (Halbwachs).
-- Identity anchors on a small set of **sites of memory** — *lieux de mémoire* — that don't compete with ordinary recollection (Nora).
-- Durable ("cultural") memory is reached through an explicit **consolidation** process out of everyday ("communicative") memory — a ceremony, not a threshold (Assmann).
-- Memory is layered into **archive / testimony / interpretation**, and forgetting/re-examination is treated as necessary and legitimate, not a failure (Ricoeur).
-
-Our focus is the accountable process by which something becomes durable history, and how that history is reconsidered as evidence changes.
+Historical and memory studies help frame these questions: source criticism,
+social perspective, active use versus archival preservation, and reinterpretation.
+The implementation is an engineering adaptation, not a literal model of human
+memory or a unified theory shared by Halbwachs, Nora, the Assmanns and Ricoeur.
+In particular, our legacy `archive/testimony/interpretation` labels are **not**
+Ricoeur's three phases of historical inquiry. The [reading report](docs/research/2026-09-19-history-memory-reading.md)
+provides sources, distinctions and limits.
 
 ## What
 
-Eight modules, deliberately small and composable:
+| Capability | Mechanism |
+| --- | --- |
+| **Consolidation** | `promote(reason)` explicitly moves working material into consolidated use; importance does not confer truth. |
+| **Anchors** | `pin(reason)` prioritizes consolidated material on ordinary recall, with a soft limit. This priority policy is our design, inspired by questions about sites of memory. |
+| **Legacy provenance tiers** | `archive`, `testimony`, `interpretation`; source-label rules govern testimony upgrades, and interpretations require periodic review. Labels are not authenticated independence. |
+| **Accountable forgetting** | `forget(reason)` stops ordinary recall and retains a tombstone; unpin/decanonize first when needed. `restore(reason)` records reversal. |
+| **Source guards** | Sensitive pin, canon and narrative routes require recorded corroborating source labels. Known-pattern screening is limited and does not authenticate authority. |
+| **Narrative versions** | `narrate()` versions a synthesis per scope; source, claim and relationship dependencies can require explicit review. |
+| **Canon / archive circulation** | `canonize(scope, reason)` and `end_scope()` rotate task focus. This borrows the distinction between active use and preservation; it is not a complete model of cultural canon formation. |
+| **Frames and disagreement** | Frame labels and explicit conflicts preserve competing records. Frames are filters, not complete social models or access-control boundaries. |
 
-| Module | Mechanism | Source theory |
-|---|---|---|
-| **Consolidation** | Memories start as `working`. They only become `consolidated` through an explicit `promote(reason)` call — never automatically, and `reason` cannot be empty. Re-promoting an already-consolidated memory updates the reason without resetting `consolidated_at`. | Assmann: communicative → cultural memory |
-| **Anchors** | A small set of `pin(reason)`-ed memories. Anchors are always surfaced on recall, in full, regardless of query — they do not compete on relevance or recency. **A memory must already be `consolidated` before it can be pinned** — you can't skip from a passing remark to a monument. Exceeding a soft limit (default 12) doesn't block pinning but returns a `warning`, since a large set of "anchors" stops functioning as anchors. | Nora: *lieux de mémoire* |
-| **Provenance tiers** | Every memory carries a tier: `archive` (captured as-is), `testimony` (corroborated by an independent second source — `archive` upgrades only when the independent-source gate is satisfied), or `interpretation` (the agent's own inference — never auto-upgraded by corroboration; must be periodically re-confirmed via `review()`, and `due_for_review()` surfaces anything overdue). | Ricoeur: archive / testimony / interpretation |
-| **Forgetting** | `forget(reason)` tombstones a memory: content is retained, not hard-deleted, but it disappears from `recall()`, `list_anchors()`, and `due_for_review()`. Requires a non-empty reason. **An anchored memory cannot be forgotten directly** — `unpin()` first, since removing an identity cornerstone should be its own separately-reasoned step, not a side-effect of an unrelated cleanup. Always reversible via `restore(reason)`, itself logged. | Ricoeur: forgetting as necessary and legitimate, not failure |
-| **Source criticism (memory-poisoning defense)** | A memory can be flagged `security_sensitive` (at `remember()` time, or later via `flag_sensitive(reason)`) when it touches identity, permissions, or standing instructions. `pin()` on a security-sensitive memory additionally requires at least one `corroborate()` from a source *distinct* from the memory's own `source` — otherwise it raises `PermissionError` and logs a `pin_denied` audit entry. A single untrusted claim (e.g. injected via a fetched document or tool output, asserting "the developer said...") can still be *remembered*, but cannot promote itself into a permanent, always-surfaced anchor on its own say-so. | Ricoeur: *l'abus de mémoire* — historiography does not take a single, uncorroborated testimony as settled fact |
-| **Narrative integration** | A plain store cannot compose a narrative itself — that requires judgment and language. `narrate(content, reason, memory_ids?)` gives the *synthesis* a first-class, versioned, accountable existence: an agent reads `recall()`, composes a coherent account of who the user is, and submits it here. The previous current narrative is not deleted, only marked superseded (linked via `superseded_by`) — so the story itself has a history, not just its latest version. `recall()` surfaces usable narratives; invalid dependencies suppress the text and return a review notice. `review_narrative(id, note)` explicitly revalidates the current version after source issues are resolved. | Ricoeur: *identité narrative* — identity is not a pile of facts but a story that organizes them |
-| **Canon / archive circulation** | A *task-scoped*, rotating "canon" — distinct from permanent anchors. `canonize(memory_id, scope, reason)` adds a consolidated memory to the active canon for a named task/phase; `end_scope(scope, reason)` decommissions the whole scope at once when the task ends, and `decanonize(memory_id, scope?, reason)` removes a single memory. Exiting the canon is **not** forgetting and **not** downgrading to working — entries stay consolidated, they just stop being prioritized. Solves context bloat without the everything-is-an-anchor trap. | Assmann: *Kanon/Archiv* — a small active canon rotates as tasks change; leaving the canon means going to sleep in the archive, not being erased |
-| **Social framing / multi-perspective memory** | Memories can carry a `frame` (at `remember()` time, or later via `set_frame(id, frame, reason)`) — the social/relational context they belong to. When two framed memories disagree, `mark_conflict(a, b, reason)` records the pair as conflicting versions; **neither is deleted or overwritten**. `resolve_conflict(reason, adopted_memory_id?)` closes the conflict record (which version adopted, or merged, or deferred) while both versions stay in the store. `recall()` surfaces open conflicts explicitly, and supports a `frame` filter. | Halbwachs: *cadres sociaux* — memory is always framed by the group/context it was formed in; disagreement across frames is legitimate and should be surfaced, not silently overwritten |
+## Claims and knowledge history
 
-Accountable transitions (`promote`, `pin`, `unpin`, `corroborate`, `review`, `forget`, `restore`, `narrate`, `review_narrative`, and canon/conflict decisions) are written to a single `audit_log` with the reason/note and timestamp — every accountable decision about what became history, and why, is queryable.
+Material and adopted judgments have separate views:
+
+- `create_claim()` → `add_evidence()` → `adopt_claim()` records a judgment about
+  specific material. Plans, observations, commitments and self-reports retain
+  their types. Reposts with a declared common origin form one origin group.
+- `revise_claim()` or `withdraw_claim()` changes the adopted account with reasons;
+  `recall_claims(as_of=...)` inspects the recorded knowledge at an earlier time.
+  Late evidence cannot be inserted into that earlier view.
+- `narrate(scope=..., perspective=..., coverage=...)` maintains parallel accounts;
+  `list_narratives()` discovers them and withholds stale text.
+- `search_archive()` gives stored material an independent result budget, so
+  anchor priority cannot crowd out relevant unpinned records.
+
+Run `python examples/historical_claims.py` for a complete disposable example.
+See [API, migration and access contracts](docs/knowledge-history.md). These are
+explicit storage operations; the system does not automatically judge evidence,
+infer a person's past knowledge or prove consensus from absent dissent.
 
 ## Distribution
 
@@ -101,9 +122,9 @@ python -m memory_as_history.server
 - `restore(memory_id, reason)` — reverse a forgetting decision (reason required)
 - `list_forgotten(limit?)` — list tombstoned memories and why
 - `remember(..., security_sensitive?)` / `flag_sensitive(memory_id, reason)` — mark identity/permission/instruction-like content as sensitive; requires source evidence for pin, canon and narrative use
-- `narrate(content, reason, memory_ids?, security_sensitive?)` — submit a versioned synthesis with validated active links and source guards
+- `narrate(content, reason, memory_ids?, security_sensitive?, scope?, perspective?, coverage?, claim_ids?, link_ids?)` — version a scoped synthesis with validated dependencies
 - `review_narrative(narrative_id, note)` — explicitly revalidate the current account after resolving source issues
-- `current_narrative()` / `narrative_history(limit?)` — the current narrative, or the full version history of how the story has been told and re-told
+- `current_narrative(scope?)` / `narrative_history(limit?, scope?)` / `list_narratives(limit?)` — inspect scoped accounts or discover current versions
 - `canonize(memory_id, scope, reason)` — add a consolidated memory to the task-scoped active canon (reason required)
 - `decanonize(memory_id, scope?, reason)` / `end_scope(scope, reason)` — remove memory(ies) from the canon; the memory itself is untouched
 - `list_canon(scope?)` / `active_scopes()` — inspect the active canon
@@ -115,6 +136,7 @@ python -m memory_as_history.server
 - `remember(..., event_at?, session_id?, session_position?)` / `set_history_context(...)` — capture explicit event/session context and audit corrections
 - `timeline(...)` / `search_history(...)` — chronological inspection and opt-in bounded evidence expansion; see [contract and examples](docs/history-retrieval.md)
 - `link_memories(...)` / `unlink_memories(...)` / `memory_links(...)` — caller-asserted, retractable relations with inspectable history; no trust upgrades
+- New claim/evidence operations and `search_archive(...)`: see the [complete 1.3 contract](docs/knowledge-history.md).
 - `audit_log(limit?)` — full trail of promote/pin/unpin/corroborate/review/forget/restore decisions, with reasons
 
 ## Source evidence and compatibility (1.2 RC)
@@ -164,7 +186,7 @@ See [the complete API contract](docs/protocol-1.2.md).
 
 ## Reliability
 
-The suite contains **349 tests**, including real MCP stdio calls covering
+The suite contains **419 tests**, including real MCP stdio calls covering
 sensitivity flagging, evidence-gated testimony, provenance inspection, optional unpin reasons, structured input errors, and anchor/narrative lifecycles across client/server restarts. Additional cases cover migration rollback/concurrency, narrative invalidation races, malformed historical data, BM25 numerics and evaluator negative controls. Run it with
 `python -m pytest tests/ -v`. CI includes MCP 1.2.0, latest 1.x, and latest 2.x.
 Sensitive memories with an unknown, empty, or whitespace-only original source
