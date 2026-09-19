@@ -165,3 +165,17 @@ Independent reproduction, a genuinely unseen evaluation set, temporal
 baselines, online history updates and repeated unguided client trials remain
 necessary before claiming a reference implementation. This benchmark makes
 those gaps measurable; its synthetic pass rate does not resolve them.
+
+
+## Chronology and linked evidence (2026-09-19)
+
+The [history challenge and external ablations](2026-09-19-history-results.md)
+separate supplied time bounds, explicit caller-asserted links and session
+adjacency. The 48-case bilingual challenge is author-visible with topic-separated
+splits; it is not a blind independent dataset. `history --split dev|test` runs
+without a model, or with the existing `--semantic` opt-in. `locomo --history`
+adds session-only variants without gold links or inferred event dates.
+
+External hybrid adjacency keeps complete multi-evidence coverage at 8.64% and
+reduces multi-evidence recall to 23.99%; it is not a confirmed upgrade over
+ordinary hybrid search. Full traces and limitations are retained.

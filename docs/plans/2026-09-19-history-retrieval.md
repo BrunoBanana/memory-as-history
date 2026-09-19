@@ -56,3 +56,26 @@ Update bilingual docs, protocol/schema contract, benchmark limits and changelog.
 405 multi-evidence questions; 370 incomplete; 326 span sessions. 1,372 missing evidence turns; 239 within one session-position of a selected turn, 445 within three; 20 have zero lexical query overlap. These are descriptive upper-bound opportunities, not achievable gains or verified root causes. All 69 regressions retained.
 
 Pre-scoring review: a seed can need both its previous version and its explanation. Expansion now makes additional round-robin passes over original seeds when slots remain; still one-hop, fixed three-fifths seed quota. A deterministic regression covers two linked prerequisites. Corrected the authored explains edge direction before any scoring; gold/text/splits unchanged. Event-context correction also invalidates dependent narratives atomically.
+
+
+## Source validation and measured outcome
+
+- Fixed runner 9223352. Three MCP environments (1.2.0, 1.30.0, 2.2.0) each pass
+  349 tests after final transport validation. 6/6 reliability; 120 episodes/990
+  assertions; existing usefulness/poisoning checks pass. Source actual-model MCP
+  acceptance passes again after strict integer transport validation.
+- Spec review checked metadata/time distinction, nullable migration, atomic
+  audits, directed links/retraction, global priority budgets, one-hop bounds and
+  fresh concurrency snapshots. Quality review added migration rollback,
+  competing session-position claims, cycle/duplicate-target and empty-time tests.
+  Transport review reproduced boolean coercion in three failing tests and fixed
+  it with StrictInt fields on the new interfaces; all three SDK versions pass.
+- Authored dev/evaluation: hybrid complete coverage 0% -> 66.67%, identical
+  aggregates across correlated templates. English 100%, Chinese 33.33% after
+  expansion. Explicit fixture structure is supplied, not inferred.
+- External session expansion: overall 51.8971% -> 52.0743%; multi-evidence
+  recall 26.0417% -> 23.9938%; complete multi-evidence stays 35/405. 94 wins /
+  1326 ties / 107 losses. All 7635 original baseline rows match prior traces.
+  No evaluation-driven parameter changes; ordinary search remains unchanged.
+- Independent annotation of pronoun/temporal root causes and a blind external
+  history holdout are not claimed. Packaging and PR/main integration follow.
