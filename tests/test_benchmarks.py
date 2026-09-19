@@ -295,3 +295,54 @@ def test_development_corpus_is_hash_frozen_and_cli_runs_without_model(tmp_path):
     report = tmp_path / 'development.json'
     assert module('__main__').main(['development', '--output', str(report)]) == 0
     assert json.loads(report.read_text())['scored_questions'] == 32
+
+
+def test_history_challenge_is_frozen_and_topic_separated():
+    corpus=module('history_retrieval').load_challenge()
+    cases=corpus['cases']
+    assert Counter(c['split'] for c in cases)=={'dev':24,'test':24}
+    topics={split:{c['id'].split('-')[0] for c in cases if c['split']==split} for split in ('dev','test')}
+    assert topics['dev'].isdisjoint(topics['test'])
+    assert all(set(c['gold']) <= {d['id'] for d in c['documents']} for c in cases)
+
+
+def test_history_challenge_preserves_denominator_when_one_system_fails(monkeypatch):
+    m=module('history_retrieval')
+    case=m.load_challenge()['cases'][0]
+    original=Store.search_history
+    def fail(self,*a,**kw):
+        if kw.get('expand')=='links': raise RuntimeError('injected ranking failure')
+        return original(self,*a,**kw)
+    monkeypatch.setattr(Store,'search_history',fail)
+    report=m.run_challenge([case])
+    assert report['completed'] is False
+    assert len(report['results'])==5
+    assert report['systems']['lexical_links']['queries']==1
+    assert report['systems']['lexical_links']['complete_evidence_rate']==0
+    assert report['systems']['lexical_links']['failures']==1
+
+
+def test_history_challenge_gold_only_changes_scoring_not_selections():
+    m=module('history_retrieval')
+    first=copy.deepcopy(m.load_challenge()['cases'][0]);second=copy.deepcopy(first)
+    second['gold']=['n11']
+    a,b=m.run_challenge([first]),m.run_challenge([second])
+    assert [r['selected_ids'] for r in a['results']]==[r['selected_ids'] for r in b['results']]
+    assert all(r['content_bytes']<=4096 and len(r['selected_ids'])<=5 for r in a['results'])
+
+
+def test_external_history_uses_session_positions_without_gold_links(monkeypatch):
+    m=module('retrieval')
+    captured=[]
+    original=Store.remember
+    def record(self,content,*a,**kw):
+        captured.append(kw)
+        return original(self,content,*a,**kw)
+    monkeypatch.setattr(Store,'remember',record)
+    def no_links(*a,**kw): raise AssertionError('external data must not get oracle links')
+    monkeypatch.setattr(Store,'link_memories',no_links)
+    report=m.run_retrieval(toy_data(),history=True)
+    assert all(kw['session_id']=='fixture:session_1' for kw in captured)
+    assert [kw['session_position'] for kw in captured]==[0,1]
+    assert all('event_at' not in kw for kw in captured)
+    assert set(report['systems'])=={'memory_as_history','reference_bm25','recency','history_lexical'}

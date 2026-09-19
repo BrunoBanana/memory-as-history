@@ -5,13 +5,13 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-1.2.0 release candidate (`1.2.0rc1`), not yet published. Additive narrative schema migration; existing text and history preserved.
+1.2.0 release candidate (`1.2.0rc1`), not yet published. Additive narrative/context schema and relationship migration; existing text and history preserved.
 
 ### Changed
 - MCP string arguments preserve literal text across supported SDK versions,
   including numeric/exponent-shaped legacy IDs and optional fields containing
   `"null"` or JSON-shaped text. Structured list arguments retain SDK parsing.
-  Nine real stdio regressions bring the full suite to 307 tests.
+  Nine real stdio regressions brought that stage to 307 tests.
 - Sensitive canon and narrative routes enforce independent corroboration. A
   sensitive synthesis requires supported evidence for every linked memory.
   Retroactive flags decommission unsupported canon memberships atomically.
@@ -28,12 +28,21 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
   Python/MCP return shapes are unchanged; failed auditing rolls back removal.
 
 ### Added
+- Explicit event/session metadata, audited context corrections and chronological
+  inspection. Unknown event times stay null; corrections invalidate dependent
+  narratives. Additive nullable columns, relationship table and unique indexes.
+- Retractable, directed caller-asserted relationships and optional one-hop
+  `search_history`, with fresh eligibility checks and inspectable selection paths.
+  Relationships never confer corroboration or historical authority.
+- Frozen 48-case bilingual history challenge, session-only external ablations,
+  full miss diagnosis and two-process MCP acceptance. 42 regressions bring the
+  suite to 349 tests; evaluation limitations and negative results are preserved.
 - Optional `search(query, mode="semantic"|"hybrid")` in Store and MCP, backed by
   a pinned local multilingual E5 encoder. The semantic extra/model download is
   explicit; ordinary recall and default dependencies remain model-free.
 - Encoding runs outside SQLite writer transactions, followed by fresh eligibility
   and priority checks. A bounded derived-vector cache cannot resurrect forgotten
-  rows or upgrade source authority. No schema migration is added.
+  rows or upgrade source authority. The semantic-search stage itself added no schema migration.
 - On unchanged LoCoMo evidence budgets, hybrid mean Recall@5 improves from 42.76%
   to 51.90%, and multi-evidence recall from 17.02% to 26.04%; all 69 regressed
   questions remain in the public trace. This is a public reference set, not a

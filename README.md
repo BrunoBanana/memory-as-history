@@ -112,6 +112,9 @@ python -m memory_as_history.server
 - `mark_conflict(a, b, reason)` / `resolve_conflict(conflict_id, reason, adopted_memory_id?)` / `list_conflicts(resolved?)` — declare and settle conflicting framed versions without deleting either
 - `recall(query?, limit?, frame?)` — anchors + canon first, then ordinary memories ranked by BM25 lexical relevance when a `query` is given; also returns `stale_interpretations`, usable `narrative` or `narrative_review`, and open `conflicts`
 - `search(query, limit?, frame?, mode?)` — optional local semantic/hybrid search with the same history priorities and fresh eligibility checks; see [setup](docs/semantic-search.md)
+- `remember(..., event_at?, session_id?, session_position?)` / `set_history_context(...)` — capture explicit event/session context and audit corrections
+- `timeline(...)` / `search_history(...)` — chronological inspection and opt-in bounded evidence expansion; see [contract and examples](docs/history-retrieval.md)
+- `link_memories(...)` / `unlink_memories(...)` / `memory_links(...)` — caller-asserted, retractable relations with inspectable history; no trust upgrades
 - `audit_log(limit?)` — full trail of promote/pin/unpin/corroborate/review/forget/restore decisions, with reasons
 
 ## Source evidence and compatibility (1.2 RC)
@@ -161,7 +164,7 @@ See [the complete API contract](docs/protocol-1.2.md).
 
 ## Reliability
 
-The suite contains **307 tests**, including real MCP stdio calls covering
+The suite contains **349 tests**, including real MCP stdio calls covering
 sensitivity flagging, evidence-gated testimony, provenance inspection, optional unpin reasons, structured input errors, and anchor/narrative lifecycles across client/server restarts. Additional cases cover migration rollback/concurrency, narrative invalidation races, malformed historical data, BM25 numerics and evaluator negative controls. Run it with
 `python -m pytest tests/ -v`. CI includes MCP 1.2.0, latest 1.x, and latest 2.x.
 Sensitive memories with an unknown, empty, or whitespace-only original source
@@ -271,7 +274,7 @@ Release packaging does not imply a published PyPI release or industry benchmark.
 
 ### Note on schema migrations
 
-Databases created by older versions are upgraded in place on first open (additive columns only, checked via `PRAGMA table_info` — never destructive). Schema creation and upgrades share one SQLite writer transaction. Tests cover pre-v0.5 data, the old narrative table, concurrent startups and interrupted migration rollback. See [1.2 protocol and migration contracts](docs/protocol-1.2.md).
+Databases created by older versions are upgraded in place on first open (additive columns, relationship table and indexes — never destructive). Schema creation and upgrades share one SQLite writer transaction. Tests cover pre-v0.5 data, the old narrative table, concurrent startups and interrupted migration rollback. See [1.2 protocol and migration contracts](docs/protocol-1.2.md).
 
 ## Related work
 
