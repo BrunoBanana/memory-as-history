@@ -263,8 +263,8 @@ def _require_text(value: str, field: str) -> str:
 
 # -- lexical relevance ranking (v1.0) -----------------------------------------
 #
-# Embedding-backed semantic recall is deliberately out of scope (no model
-# dependency, offline-friendly). But pure substring matching is too brittle:
+# Ordinary recall has no model dependency and stays offline-friendly. Optional
+# semantic search is separate (see semantic.py). Pure substring matching is too brittle:
 # "查一下上次那个方案" won't match "初步方案已定：采用分层设计". This is a
 # middle layer: an Okapi BM25-style lexical scorer over normalized token sets
 # (CJK bigrams + alphanumeric words, lowercase). It ranks rather than
@@ -444,6 +444,8 @@ class Store:
         anchor_soft_limit: int = DEFAULT_ANCHOR_SOFT_LIMIT,
         interpretation_review_days: int = DEFAULT_INTERPRETATION_REVIEW_DAYS,
         canon_soft_limit: int = DEFAULT_CANON_SOFT_LIMIT,
+        *,
+        semantic_backend=None,
     ):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -471,6 +473,7 @@ class Store:
         self.anchor_soft_limit = anchor_soft_limit
         self.interpretation_review_days = interpretation_review_days
         self.canon_soft_limit = canon_soft_limit
+        self._semantic_backend = semantic_backend
 
     def close(self) -> None:
         with self._lock:
@@ -1621,6 +1624,53 @@ class Store:
                 and conflict["forgotten_at_b"] is None
             ],
         }
+
+    def search(self, query: str, limit: int = 10, frame: str | None = None,
+               mode: str = 'hybrid') -> dict:
+        """Opt-in local semantic/hybrid search with the same history priorities.
+
+        Inference runs outside write transactions. Re-read protocol eligibility
+        afterward so concurrent forgetting, framing or priority changes apply.
+        Newly eligible/changed text follows ranked rows in fresh lexical order
+        and is counted as unranked; its embedding is available next search.
+        This is a derived view, never an evidence or priority upgrade.
+        """
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError('query is required and cannot be empty')
+        if type(limit) is not int or limit < 0:
+            raise ValueError('limit must be a nonnegative integer')
+        if mode not in ('semantic', 'hybrid'):
+            raise ValueError('mode must be semantic or hybrid')
+        from .semantic import LocalE5, rank_candidates
+        # Only initializing the lazy provider is synchronized; inference must
+        # never hold Store's lock or a SQLite writer transaction.
+        with self._lock:
+            if self._semantic_backend is None:
+                self._semantic_backend = LocalE5()
+            backend = self._semantic_backend
+        snapshot = self.recall(query, limit=2**63 - 1, frame=frame)
+        budget = max(limit - len(snapshot['anchors']) - len(snapshot['canon']), 0)
+        candidates = snapshot['memories'] if budget else []
+        ranked = rank_candidates(candidates, query, backend, mode)
+        current = self.recall(query, limit=2**63 - 1, frame=frame)
+        eligible = {row['id']: row for row in current['memories']}
+        selected = []
+        for row in ranked:
+            fresh = eligible.get(row['id'])
+            if fresh is not None and fresh['content'] == row['content']:
+                selected.append({**fresh, 'semantic_similarity': row['semantic_similarity'],
+                                 'search_score': row['search_score']})
+                del eligible[row['id']]
+        unranked = len(eligible)
+        selected.extend(eligible.values())
+        remaining = max(limit - len(current['anchors']), 0)
+        current['canon'] = current['canon'][:remaining]
+        current['memories'] = selected[:max(remaining - len(current['canon']), 0)]
+        current['retrieval'] = {'mode': mode, 'backend': backend.describe(),
+                                'reranked_candidates': len(ranked),
+                                'unranked_candidates': unranked,
+                                'inference_performed': bool(candidates)}
+        return current
 
     def _rank_by_query(self, rows: list[dict], query: str) -> list[dict]:
         """Rank ordinary memories by lexical BM25 relevance to `query`

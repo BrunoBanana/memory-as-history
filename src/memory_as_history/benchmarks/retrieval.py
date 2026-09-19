@@ -13,6 +13,7 @@ from memory_as_history.storage import Store, _tokenize
 from .common import environment
 
 MANIFEST = json.loads((Path(__file__).parent / 'data/locomo.manifest.json').read_text())
+DEVELOPMENT_MANIFEST = json.loads((Path(__file__).parent / 'data/semantic-dev-v1.manifest.json').read_text())
 SYSTEMS = ('memory_as_history', 'reference_bm25', 'recency')
 
 
@@ -23,6 +24,10 @@ def load_locomo(path, expected_sha256=MANIFEST['sha256']):
     data = json.loads(raw)
     prepare_locomo(data)  # Fail on invalid data before starting any indexing.
     return data
+
+
+def load_development():
+    return load_locomo(Path(__file__).parent / 'data/semantic-dev-v1.json', DEVELOPMENT_MANIFEST['sha256'])
 
 
 def prepare_locomo(data):
@@ -171,43 +176,52 @@ def _diagnostics(prepared, max_items, max_bytes):
             "per_question": rows}
 
 
-def run_retrieval(data, max_items=5, max_bytes=4096):
+def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None):
     apply_budget([], max_items, max_bytes)  # Validate even if nothing is eligible.
     prepared = prepare_locomo(data)
     results, exclusions, index_stats = [], Counter(), []
+    system_names = SYSTEMS + (('semantic', 'hybrid') if semantic_backend is not None else ())
     excluded_questions = []
     for conversation in prepared:
         docs = conversation['documents']
         with tempfile.TemporaryDirectory(prefix='history-external-') as root:
             path = Path(root) / 'memory.db'
-            store = Store(path)
+            store = Store(path, semantic_backend=semantic_backend)
             try:
                 started = time.perf_counter()
                 mapping = {store.remember(d['text'], source=f"dialogue:{d['id']}").id: d['id'] for d in docs}
                 product_index_ms = (time.perf_counter() - started) * 1000
                 # Reopen the persisted index before any question is supplied.
                 store.close()
-                store = Store(path)
+                store = Store(path, semantic_backend=semantic_backend)
                 started = time.perf_counter()
                 reference = ReferenceBM25(docs)
                 reference_index_ms = (time.perf_counter() - started) * 1000
                 lookup = {d['id']: d for d in docs}
+                started = time.perf_counter()
+                if semantic_backend is not None:
+                    semantic_backend.prepare_documents([doc['text'] for doc in docs])
+                semantic_preparation_ms = (time.perf_counter() - started) * 1000
                 index_stats.append({'conversation': conversation['id'], 'documents': len(docs),
                                     'database_bytes': path.stat().st_size,
                                     'product_index_ms': product_index_ms,
-                                    'reference_index_ms': reference_index_ms})
+                                    'reference_index_ms': reference_index_ms,
+                                    'semantic_preparation_ms': semantic_preparation_ms if semantic_backend is not None else None})
                 for query in conversation['queries']:
                     if query['excluded']:
                         exclusions[query['excluded']] += 1
                         excluded_questions.append({'question_id': query['id'], 'reason': query['excluded']})
                         continue
-                    for system in SYSTEMS:
+                    for system in system_names:
                         started = time.perf_counter()
                         if system == 'memory_as_history':
                             recall = store.recall(query=query['text'], limit=len(docs))
                             ranked = [lookup[mapping[row['id']]] for row in recall['memories']]
                         elif system == 'reference_bm25':
                             ranked = reference.rank(query['text'])
+                        elif system in ('semantic', 'hybrid'):
+                            recall = store.search(query=query['text'], limit=len(docs), mode=system)
+                            ranked = [lookup[mapping[row['id']]] for row in recall['memories']]
                         else:
                             ranked = list(reversed(docs))
                         selected = apply_budget(ranked, max_items, max_bytes)
@@ -221,13 +235,18 @@ def run_retrieval(data, max_items=5, max_bytes=4096):
             finally:
                 store.close()
     systems = {}
-    for system in SYSTEMS:
+    for system in system_names:
         rows = [r for r in results if r['system'] == system]
         latencies = sorted(r['query_ms'] for r in rows)
         systems[system] = {**_aggregate(rows),
                            'query_ms_p50': statistics.median(latencies) if rows else None,
                            'query_ms_p95': latencies[math.ceil(.95 * len(rows)) - 1] if rows else None,
                            'mean_content_bytes': statistics.mean(r['content_bytes'] for r in rows) if rows else None,
+                           'by_evidence_count': {
+                               name: {**_aggregate(group),
+                                      'complete_evidence_rate': statistics.mean(r['recall'] == 1 for r in group) if group else None}
+                               for name, group in (('single', [r for r in rows if len(r['gold_ids']) == 1]),
+                                                   ('multiple', [r for r in rows if len(r['gold_ids']) > 1]))},
                            'by_category': {str(c): _aggregate([r for r in rows if r['category'] == c]) for c in range(1, 5)},
                            'by_conversation': {c['id']: _aggregate([r for r in rows if r['conversation'] == c['id']]) for c in prepared}}
     product = {r['question_id']: r for r in results if r['system'] == 'memory_as_history'}
@@ -239,6 +258,14 @@ def run_retrieval(data, max_items=5, max_bytes=4096):
                 delta = product[row['question_id']]['recall'] - row['recall']
                 counts['win' if delta > 0 else 'loss' if delta < 0 else 'tie'] += 1
         paired[baseline] = {outcome: counts[outcome] for outcome in ('win', 'tie', 'loss')}
+    semantic_pairs = {}
+    for system in system_names[3:]:
+        counts = Counter()
+        for row in results:
+            if row['system'] == system:
+                delta = row['recall'] - product[row['question_id']]['recall']
+                counts['win' if delta > 0 else 'loss' if delta < 0 else 'tie'] += 1
+        semantic_pairs[system] = {key: counts[key] for key in ('win', 'tie', 'loss')}
     total = sum(len(c['queries']) for c in prepared)
     scored = len(product)
     if not scored:
@@ -249,8 +276,11 @@ def run_retrieval(data, max_items=5, max_bytes=4096):
             'budget': {'max_items': max_items, 'max_utf8_content_bytes': max_bytes},
             'diagnostics': _diagnostics(prepared, max_items, max_bytes),
             'systems': systems, 'paired_recall_outcomes': paired, 'index_stats': index_stats, 'results': results,
+            'semantic_backend': semantic_backend.describe() if semantic_backend is not None else None,
+            'semantic_paired_against_lexical': semantic_pairs,
             'limits': ['Evidence-turn retrieval only; not official LoCoMo QA accuracy or abstention',
-                       'Shared tokenization; independent BM25 equation; no semantic baseline',
+                       'Shared tokenization; independent BM25 equation; semantic modes are opt-in',
+                       'Semantic document preparation is separate; hybrid follows semantic and shares its bounded query cache',
                        'Questions within each conversation are correlated; no iid confidence interval',
                        'Product latency includes SQLite; reference rankers are in memory',
                        'Whole-item UTF-8 content budget excludes metadata and is not a model-token budget']}

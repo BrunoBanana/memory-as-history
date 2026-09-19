@@ -46,6 +46,7 @@ Tools:
   - resolve_conflict(conflict_id, reason, adopted_memory_id?)  record how a conflict settled
   - list_conflicts(resolved?)           conflicts (None=all, False=open, True=resolved)
   - recall(query?, limit?, frame?)      anchors + canon first, then consolidated/working memories, plus current narrative and open conflicts
+  - search(query, limit?, frame?, mode?) optional local semantic/hybrid ranking with the same history priorities
   - audit_log(limit?)                   full trail of every accountable decision
 
 Environment:
@@ -55,6 +56,7 @@ Environment:
 from __future__ import annotations
 
 import os
+from typing import get_args
 
 # mcp 1.x exposes FastMCP; mcp 2.x renamed it to MCPServer. Support both so
 # installs with either major version work (protocol surface is identical).
@@ -78,6 +80,9 @@ def _tool_error(e: Exception) -> dict:
     This matters in practice: without it, a failed tool call costs the agent
     an extra round-trip of guessing."""
     hints = {
+        "mode must be": "Choose mode='semantic' or mode='hybrid'.",
+        "limit must be": "Provide a nonnegative integer limit; anchors retain their existing priority exception.",
+        "semantic": "Install memory-as-history[semantic] and run python -m memory_as_history.semantic download once. Search uses the cached model locally; recall remains model-free.",
         "promote() first": "This memory is still working-tier. Call promote(memory_id, reason) before this operation.",
         "unpin() first": "This memory is pinned as an anchor. Call unpin(memory_id, reason) first — removing an anchor must be its own reasoned step.",
         "decanonize()": "This memory is in the active canon. Call decanonize(memory_id, scope, reason) or end_scope(scope, reason) first.",
@@ -467,11 +472,63 @@ def recall(
 
 
 @mcp.tool()
+def search(query: str, limit: int = 10, frame: str | None = None,
+           mode: str = 'hybrid') -> dict:
+    """Find paraphrased evidence with an optional local multilingual encoder.
+
+    mode='semantic' uses cosine similarity; 'hybrid' combines semantic and
+    lexical ranks. Preserves recall's anchor/canon priorities, global limit,
+    frame filter, forgetting and narrative-review rules. Ranking cannot promote
+    evidence. Requires the semantic extra and explicit model download beforehand;
+    search itself never downloads models or uses hosted inference.
+    """
+    try:
+        return store.search(query, limit, frame, mode)
+    except (ValueError, RuntimeError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
 def audit_log(limit: int = 50) -> list[dict]:
     """Return the full audit trail — every promote/pin/corroborate/review
     action, with its reason and timestamp. Every accountable decision about
     what became history, and why."""
     return store.audit_log(limit)
+
+
+def _preserve_literal_string_arguments() -> None:
+    """Keep the MCP SDK's JSON convenience parser from coercing strings.
+
+    Older SDKs parse every string as JSON, including numeric memory IDs and
+    content such as "null"; MCP 2.x still coerces optional strings. Adapt only
+    this server's tool metadata; structured arguments still use the SDK parser.
+    """
+    try:
+        from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
+    except ModuleNotFoundError:
+        from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
+
+    class LiteralStringMetadata(FuncMetadata):
+        def pre_parse_json(self, data: dict) -> dict:
+            literal = {
+                name: data[name]
+                for name, field in self.arg_model.model_fields.items()
+                if name in data and isinstance(data[name], str)
+                and (field.annotation is str or str in get_args(field.annotation))
+            }
+            parsed = super().pre_parse_json(
+                {name: value for name, value in data.items() if name not in literal}
+            )
+            return {**parsed, **literal}
+
+    for tool in mcp._tool_manager.list_tools():
+        metadata = tool.fn_metadata
+        tool.fn_metadata = LiteralStringMetadata(**{
+            name: getattr(metadata, name) for name in type(metadata).model_fields
+        })
+
+
+_preserve_literal_string_arguments()
 
 
 def main() -> None:

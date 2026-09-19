@@ -4,6 +4,16 @@ The storage API and MCP tools use the same rules. MCP guard failures return
 `{error, message, hint}`; a transport success alone does not mean the operation
 succeeded. Historical inspection endpoints deliberately expose retained text.
 
+## Optional semantic search
+
+`search(query, limit=10, frame=None, mode="hybrid")` adds local semantic ranking
+without changing recall's history rules or database schema. Encoding runs outside
+the writer transaction; a fresh recall revalidates eligibility before output.
+Scores cannot promote or corroborate sources. Changed/new candidates that were
+not encoded appear after surviving ranked candidates in fresh lexical order,
+with their count exposed in retrieval metadata. Missing models or invalid scores
+are explicit failures. See [setup, modes and concurrency details](semantic-search.md).
+
 ## Narrative dependencies and review
 
 `narrate(content, reason, memory_ids=None, security_sensitive=False)` creates a
@@ -98,6 +108,11 @@ to four decimals for output, after ranking. Anchors and eligible canon retain
 priority; frame filters apply only to ordinary memories.
 
 ## Migration and compatibility
+
+MCP arguments declared as strings (including optional strings) preserve their
+literal values. For example, source `"null"` is text, while JSON `null` means
+no source. Numeric or exponent-shaped legacy IDs remain valid string IDs.
+Structured list arguments retain the SDK's JSON-string decoding support.
 
 Opening a database adds the five narrative columns inside a serialized
 `BEGIN IMMEDIATE` schema transaction. Concurrent startups cannot race column

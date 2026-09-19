@@ -1,0 +1,1405 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-18",
+  "runner_commit": "15ff9a37a3bdf795282375f0d4f00d09f477aa66",
+  "artifacts": {
+    "protocol": {
+      "file": "2026-09-18-semantic-protocol.json.gz",
+      "json_sha256": "a95b4fea2b2e31eb166bb229ffbc874df5cfc4bc194bc4167feac9fefc019607",
+      "gzip_sha256": "8ef62bb4e979ae67fbd152c23c7f25cadbe53784509de0c4ade8fe4c3241b20d",
+      "json_bytes": 323970,
+      "gzip_bytes": 8122
+    },
+    "development": {
+      "file": "2026-09-18-semantic-development.json.gz",
+      "json_sha256": "e9022bab050a490e10f74bbdc1a55235c8d8ee6eec6b5738757daae0fd363479",
+      "gzip_sha256": "eab8191ecb47b61f63c8394d608856944289282363fc554b2f0cda145e5393b9",
+      "json_bytes": 88519,
+      "gzip_bytes": 6532
+    },
+    "locomo": {
+      "file": "2026-09-18-semantic-locomo.json.gz",
+      "json_sha256": "b47b55a8ab0734f2e3414d50e4528832de9b522bdaf1b6142a82edf5bbbd6935",
+      "gzip_sha256": "d0eef1a03f2a537a449f94d0c0048c789a40fe3d9e08318d0ed5b8ed9b62b034",
+      "json_bytes": 3649367,
+      "gzip_bytes": 216287
+    }
+  },
+  "tracks": {
+    "protocol": {
+      "schema_version": 1,
+      "track": "synthetic_protocol",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "2709f38f34824fb42e2a04b105871a3cd50f120c40d5b19af521c2f1745e1398",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "f5f3464b5f71ecddf53853a3a5371a9f5683c0dd4fa83f7bff15c6cfcc731b8f",
+          "common.py": "921a5554d455ecc0cdba4e02dc6693d14da388ddd572d053432a82c9d0af98d6",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "4f0e089a1a9fd6331bca960036a2ca392dcc2283f700eaac62475af6e37ee54c"
+        }
+      },
+      "corpus_sha256": "132824cb52459c31eba28f5c16c7166e594d20117659d7b8dde80cd32ec6fa96",
+      "selected_cases_sha256": "aa6f1a307437641db86169fd5588d453a2269e5d8b25b5fa370cf4191fb2d657",
+      "episodes": 120,
+      "passed": true,
+      "failed_episodes": 0,
+      "metrics": {
+        "history_preservation": {
+          "passed": 170,
+          "failed": 0,
+          "blocked": 0,
+          "total": 170,
+          "pass_rate": 1.0
+        },
+        "retention": {
+          "passed": 130,
+          "failed": 0,
+          "blocked": 0,
+          "total": 130,
+          "pass_rate": 1.0
+        },
+        "lifecycle": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "retrieval": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "audit_coverage": {
+          "passed": 320,
+          "failed": 0,
+          "blocked": 0,
+          "total": 320,
+          "pass_rate": 1.0
+        },
+        "stale_exposure": {
+          "passed": 110,
+          "failed": 0,
+          "blocked": 0,
+          "total": 110,
+          "pass_rate": 1.0
+        },
+        "narrative_review": {
+          "passed": 60,
+          "failed": 0,
+          "blocked": 0,
+          "total": 60,
+          "pass_rate": 1.0
+        },
+        "guard": {
+          "passed": 60,
+          "failed": 0,
+          "blocked": 0,
+          "total": 60,
+          "pass_rate": 1.0
+        },
+        "source_count": {
+          "passed": 20,
+          "failed": 0,
+          "blocked": 0,
+          "total": 20,
+          "pass_rate": 1.0
+        },
+        "unsupported_priority": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "frame_isolation": {
+          "passed": 10,
+          "failed": 0,
+          "blocked": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        },
+        "conflict_visibility": {
+          "passed": 20,
+          "failed": 0,
+          "blocked": 0,
+          "total": 20,
+          "pass_rate": 1.0
+        }
+      },
+      "groups": {
+        "family": {
+          "anchor_noise": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "canon_rotation": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "fact_update": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "framed_conflict": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "interpretation_review": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "known_source": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "lexical_restart": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "restore_review": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "retroactive_flag": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "sensitive_synthesis": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "unknown_source": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "version_history": {
+            "episodes": 10,
+            "passed": 10
+          }
+        },
+        "language": {
+          "en": {
+            "episodes": 60,
+            "passed": 60
+          },
+          "zh": {
+            "episodes": 60,
+            "passed": 60
+          }
+        },
+        "split": {
+          "dev": {
+            "episodes": 72,
+            "passed": 72
+          },
+          "test": {
+            "episodes": 48,
+            "passed": 48
+          }
+        }
+      },
+      "limits": [
+        "12 authored templates; variants/translations are correlated",
+        "Author-visible dev/test splits; not independent held-out histories",
+        "Explicit public API actions; not autonomous tool choice or source authentication"
+      ]
+    },
+    "development": {
+      "schema_version": 1,
+      "track": "authored_semantic_development",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "2709f38f34824fb42e2a04b105871a3cd50f120c40d5b19af521c2f1745e1398",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "f5f3464b5f71ecddf53853a3a5371a9f5683c0dd4fa83f7bff15c6cfcc731b8f",
+          "common.py": "921a5554d455ecc0cdba4e02dc6693d14da388ddd572d053432a82c9d0af98d6",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "4f0e089a1a9fd6331bca960036a2ca392dcc2283f700eaac62475af6e37ee54c"
+        }
+      },
+      "completed": true,
+      "total_questions": 32,
+      "scored_questions": 32,
+      "exclusions": {},
+      "budget": {
+        "max_items": 5,
+        "max_utf8_content_bytes": 4096
+      },
+      "diagnostics": {
+        "gold_exceeds_item_budget": 0,
+        "gold_exceeds_byte_budget": 0,
+        "mean_budget_recall_ceiling": 1.0,
+        "gold_without_query_token_overlap": 1
+      },
+      "systems": {
+        "memory_as_history": {
+          "queries": 32,
+          "recall": 1.0,
+          "hit": 1,
+          "mrr": 0.8098958333333334,
+          "query_ms_p50": 0.25458348682150245,
+          "query_ms_p95": 0.4940000071655959,
+          "mean_content_bytes": 324.4375,
+          "by_evidence_count": {
+            "single": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.7447916666666666,
+              "complete_evidence_rate": 1
+            },
+            "multiple": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.875,
+              "complete_evidence_rate": 1
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.875
+            },
+            "2": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "3": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "4": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.7447916666666666
+            }
+          },
+          "by_conversation": {
+            "semantic-dev-en": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.765625
+            },
+            "semantic-dev-zh": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.8541666666666666
+            }
+          }
+        },
+        "reference_bm25": {
+          "queries": 32,
+          "recall": 1.0,
+          "hit": 1,
+          "mrr": 0.8098958333333334,
+          "query_ms_p50": 0.042770509026013315,
+          "query_ms_p95": 0.06954101263545454,
+          "mean_content_bytes": 324.4375,
+          "by_evidence_count": {
+            "single": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.7447916666666666,
+              "complete_evidence_rate": 1
+            },
+            "multiple": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.875,
+              "complete_evidence_rate": 1
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.875
+            },
+            "2": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "3": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "4": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.7447916666666666
+            }
+          },
+          "by_conversation": {
+            "semantic-dev-en": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.765625
+            },
+            "semantic-dev-zh": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.8541666666666666
+            }
+          }
+        },
+        "recency": {
+          "queries": 32,
+          "recall": 0.125,
+          "hit": 0.125,
+          "mrr": 0.03645833333333333,
+          "query_ms_p50": 0.0016669800970703363,
+          "query_ms_p95": 0.002582994056865573,
+          "mean_content_bytes": 338.5,
+          "by_evidence_count": {
+            "single": {
+              "queries": 16,
+              "recall": 0.125,
+              "hit": 0.125,
+              "mrr": 0.03125,
+              "complete_evidence_rate": 0.125
+            },
+            "multiple": {
+              "queries": 16,
+              "recall": 0.125,
+              "hit": 0.125,
+              "mrr": 0.041666666666666664,
+              "complete_evidence_rate": 0.125
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 16,
+              "recall": 0.125,
+              "hit": 0.125,
+              "mrr": 0.041666666666666664
+            },
+            "2": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "3": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "4": {
+              "queries": 16,
+              "recall": 0.125,
+              "hit": 0.125,
+              "mrr": 0.03125
+            }
+          },
+          "by_conversation": {
+            "semantic-dev-en": {
+              "queries": 16,
+              "recall": 0.125,
+              "hit": 0.125,
+              "mrr": 0.03645833333333333
+            },
+            "semantic-dev-zh": {
+              "queries": 16,
+              "recall": 0.125,
+              "hit": 0.125,
+              "mrr": 0.03645833333333333
+            }
+          }
+        },
+        "semantic": {
+          "queries": 32,
+          "recall": 1.0,
+          "hit": 1,
+          "mrr": 1.0,
+          "query_ms_p50": 8.422270489973016,
+          "query_ms_p95": 9.136707987636328,
+          "mean_content_bytes": 323.34375,
+          "by_evidence_count": {
+            "single": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1
+            },
+            "multiple": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0
+            },
+            "2": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "3": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "4": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0
+            }
+          },
+          "by_conversation": {
+            "semantic-dev-en": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0
+            },
+            "semantic-dev-zh": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0
+            }
+          }
+        },
+        "hybrid": {
+          "queries": 32,
+          "recall": 1.0,
+          "hit": 1,
+          "mrr": 0.90625,
+          "query_ms_p50": 2.0312289852881804,
+          "query_ms_p95": 2.2928329999558628,
+          "mean_content_bytes": 323.53125,
+          "by_evidence_count": {
+            "single": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.90625,
+              "complete_evidence_rate": 1
+            },
+            "multiple": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.90625,
+              "complete_evidence_rate": 1
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.90625
+            },
+            "2": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "3": {
+              "queries": 0,
+              "recall": null,
+              "hit": null,
+              "mrr": null
+            },
+            "4": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.90625
+            }
+          },
+          "by_conversation": {
+            "semantic-dev-en": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.90625
+            },
+            "semantic-dev-zh": {
+              "queries": 16,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 0.90625
+            }
+          }
+        }
+      },
+      "paired_recall_outcomes": {
+        "reference_bm25": {
+          "win": 0,
+          "tie": 32,
+          "loss": 0
+        },
+        "recency": {
+          "win": 28,
+          "tie": 4,
+          "loss": 0
+        }
+      },
+      "index_stats": [
+        {
+          "conversation": "semantic-dev-en",
+          "documents": 32,
+          "database_bytes": 69632,
+          "product_index_ms": 7.104582997271791,
+          "reference_index_ms": 0.17166699399240315,
+          "semantic_preparation_ms": 4193.383334000828
+        },
+        {
+          "conversation": "semantic-dev-zh",
+          "documents": 32,
+          "database_bytes": 77824,
+          "product_index_ms": 8.128666988341138,
+          "reference_index_ms": 0.22875002468936145,
+          "semantic_preparation_ms": 49.52120900270529
+        }
+      ],
+      "semantic_backend": {
+        "model": "intfloat/multilingual-e5-small",
+        "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        "device": "cpu",
+        "max_sequence_tokens": 512,
+        "query_prefix": "query: ",
+        "document_prefix": "passage: ",
+        "normalized": true,
+        "local_files_only": true,
+        "document_cache_capacity": 10000,
+        "dependencies": {
+          "sentence-transformers": "5.7.0",
+          "transformers": "5.17.0",
+          "torch": "2.14.0",
+          "numpy": "2.5.3"
+        }
+      },
+      "semantic_paired_against_lexical": {
+        "semantic": {
+          "win": 0,
+          "tie": 32,
+          "loss": 0
+        },
+        "hybrid": {
+          "win": 0,
+          "tie": 32,
+          "loss": 0
+        }
+      },
+      "limits": [
+        "Evidence-turn retrieval only; not official LoCoMo QA accuracy or abstention",
+        "Shared tokenization; independent BM25 equation; semantic modes are opt-in",
+        "Semantic document preparation is separate; hybrid follows semantic and shares its bounded query cache",
+        "Questions within each conversation are correlated; no iid confidence interval",
+        "Product latency includes SQLite; reference rankers are in memory",
+        "Whole-item UTF-8 content budget excludes metadata and is not a model-token budget"
+      ],
+      "dataset": {
+        "name": "semantic-dev-v1",
+        "license": "MIT",
+        "sha256": "c3a5f50a8f28e725a9147ef1bfefc48b40d0dbd785729bb0d927a4dbc2d3108e",
+        "documents": 64,
+        "questions": 32,
+        "languages": [
+          "en",
+          "zh"
+        ],
+        "provenance": "Eight authored topic groups with paired translations. Author-visible development only; not a blind holdout. Frozen before model scoring.",
+        "generator_sha256": "3f174a950c8670d53f1777733a882e2bd3e717f93871c8f9fb37a852e7840b7b"
+      },
+      "dataset_sha256": "c3a5f50a8f28e725a9147ef1bfefc48b40d0dbd785729bb0d927a4dbc2d3108e"
+    },
+    "locomo": {
+      "schema_version": 1,
+      "track": "external_evidence_retrieval",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "2709f38f34824fb42e2a04b105871a3cd50f120c40d5b19af521c2f1745e1398",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "f5f3464b5f71ecddf53853a3a5371a9f5683c0dd4fa83f7bff15c6cfcc731b8f",
+          "common.py": "921a5554d455ecc0cdba4e02dc6693d14da388ddd572d053432a82c9d0af98d6",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "4f0e089a1a9fd6331bca960036a2ca392dcc2283f700eaac62475af6e37ee54c"
+        }
+      },
+      "completed": true,
+      "total_questions": 1986,
+      "scored_questions": 1527,
+      "exclusions": {
+        "no_evidence": 4,
+        "unresolved_evidence": 9,
+        "adversarial": 446
+      },
+      "budget": {
+        "max_items": 5,
+        "max_utf8_content_bytes": 4096
+      },
+      "diagnostics": {
+        "gold_exceeds_item_budget": 21,
+        "gold_exceeds_byte_budget": 0,
+        "mean_budget_recall_ceiling": 0.9950222044095784,
+        "gold_without_query_token_overlap": 20
+      },
+      "systems": {
+        "memory_as_history": {
+          "queries": 1527,
+          "recall": 0.42758640734776177,
+          "hit": 0.47609692206941717,
+          "mrr": 0.3336935166994106,
+          "query_ms_p50": 4.753792018163949,
+          "query_ms_p95": 5.361624993383884,
+          "mean_content_bytes": 682.0157170923379,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5204991087344029,
+              "hit": 0.5204991087344029,
+              "mrr": 0.3752822341057635,
+              "complete_evidence_rate": 0.5204991087344029
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.17018381239514138,
+              "hit": 0.3530864197530864,
+              "mrr": 0.21847736625514402,
+              "complete_evidence_rate": 0.03209876543209877
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.1392048698703375,
+              "hit": 0.3057553956834532,
+              "mrr": 0.17883693045563548
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.49453125,
+              "hit": 0.525,
+              "mrr": 0.37203125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.18699052654769774,
+              "hit": 0.2696629213483146,
+              "mrr": 0.15262172284644196
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.523015873015873,
+              "hit": 0.5357142857142857,
+              "mrr": 0.38952380952380955
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.3959731543624161,
+              "hit": 0.42953020134228187,
+              "mrr": 0.2746085011185682
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.4777777777777778,
+              "hit": 0.5061728395061729,
+              "mrr": 0.36872427983539097
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4525219298245614,
+              "hit": 0.506578947368421,
+              "mrr": 0.3406798245614035
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.45682056240431873,
+              "hit": 0.5076142131979695,
+              "mrr": 0.3523688663282572
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.4580979284369115,
+              "hit": 0.5141242937853108,
+              "mrr": 0.38926553672316383
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3732384823848238,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2727642276422764
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.38814317673378074,
+              "hit": 0.4161073825503356,
+              "mrr": 0.29384787472035795
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4582024432809773,
+              "hit": 0.5340314136125655,
+              "mrr": 0.3655322862129145
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.41572413873451936,
+              "hit": 0.47058823529411764,
+              "mrr": 0.3293028322440087
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.3903225806451613,
+              "hit": 0.4258064516129032,
+              "mrr": 0.32989247311827957
+            }
+          }
+        },
+        "reference_bm25": {
+          "queries": 1527,
+          "recall": 0.42758640734776177,
+          "hit": 0.47609692206941717,
+          "mrr": 0.3336935166994106,
+          "query_ms_p50": 0.6451249937526882,
+          "query_ms_p95": 0.9035840048454702,
+          "mean_content_bytes": 682.0157170923379,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5204991087344029,
+              "hit": 0.5204991087344029,
+              "mrr": 0.3752822341057635,
+              "complete_evidence_rate": 0.5204991087344029
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.17018381239514138,
+              "hit": 0.3530864197530864,
+              "mrr": 0.21847736625514402,
+              "complete_evidence_rate": 0.03209876543209877
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.1392048698703375,
+              "hit": 0.3057553956834532,
+              "mrr": 0.17883693045563548
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.49453125,
+              "hit": 0.525,
+              "mrr": 0.37203125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.18699052654769774,
+              "hit": 0.2696629213483146,
+              "mrr": 0.15262172284644196
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.523015873015873,
+              "hit": 0.5357142857142857,
+              "mrr": 0.38952380952380955
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.3959731543624161,
+              "hit": 0.42953020134228187,
+              "mrr": 0.2746085011185682
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.4777777777777778,
+              "hit": 0.5061728395061729,
+              "mrr": 0.36872427983539097
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4525219298245614,
+              "hit": 0.506578947368421,
+              "mrr": 0.3406798245614035
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.45682056240431873,
+              "hit": 0.5076142131979695,
+              "mrr": 0.3523688663282572
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.4580979284369115,
+              "hit": 0.5141242937853108,
+              "mrr": 0.38926553672316383
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3732384823848238,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2727642276422764
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.38814317673378074,
+              "hit": 0.4161073825503356,
+              "mrr": 0.29384787472035795
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4582024432809773,
+              "hit": 0.5340314136125655,
+              "mrr": 0.3655322862129145
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.41572413873451936,
+              "hit": 0.47058823529411764,
+              "mrr": 0.3293028322440087
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.3903225806451613,
+              "hit": 0.4258064516129032,
+              "mrr": 0.32989247311827957
+            }
+          }
+        },
+        "recency": {
+          "queries": 1527,
+          "recall": 0.0018009168303863784,
+          "hit": 0.0026195153896529143,
+          "mrr": 0.00114603798297315,
+          "query_ms_p50": 0.0036249984987080097,
+          "query_ms_p95": 0.004458008334040642,
+          "mean_content_bytes": 561.7164374590701,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.0017825311942959,
+              "hit": 0.0017825311942959,
+              "mrr": 0.000445632798573975,
+              "complete_evidence_rate": 0.0017825311942959
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.001851851851851852,
+              "hit": 0.0049382716049382715,
+              "mrr": 0.0030864197530864196,
+              "complete_evidence_rate": 0
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.0017985611510791368,
+              "hit": 0.0035971223021582736,
+              "mrr": 0.0035971223021582736
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.0028089887640449437,
+              "hit": 0.011235955056179775,
+              "mrr": 0.0028089887640449437
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.002380952380952381,
+              "hit": 0.002380952380952381,
+              "mrr": 0.0005952380952380953
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.001644736842105263,
+              "hit": 0.006578947368421052,
+              "mrr": 0.001644736842105263
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.005649717514124294,
+              "hit": 0.005649717514124294,
+              "mrr": 0.0014124293785310734
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.0040650406504065045,
+              "hit": 0.008130081300813009,
+              "mrr": 0.008130081300813009
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.006711409395973154,
+              "hit": 0.006711409395973154,
+              "mrr": 0.0016778523489932886
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            }
+          }
+        },
+        "semantic": {
+          "queries": 1527,
+          "recall": 0.48238998497472896,
+          "hit": 0.5428945645055665,
+          "mrr": 0.3930691988648767,
+          "query_ms_p50": 26.206833019386977,
+          "query_ms_p95": 27.54825001466088,
+          "mean_content_bytes": 807.2698100851343,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5659536541889483,
+              "hit": 0.5659536541889483,
+              "mrr": 0.41653297682709445,
+              "complete_evidence_rate": 0.5659536541889483
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.2508876717442249,
+              "hit": 0.47901234567901235,
+              "mrr": 0.3280658436213992,
+              "complete_evidence_rate": 0.08148148148148149
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.23879142755515342,
+              "hit": 0.460431654676259,
+              "mrr": 0.3042565947242206
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.5888020833333333,
+              "hit": 0.625,
+              "mrr": 0.4881770833333333
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.2375523243005067,
+              "hit": 0.30337078651685395,
+              "mrr": 0.2101123595505618
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.5484126984126985,
+              "hit": 0.5642857142857143,
+              "mrr": 0.40561507936507935
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.43400447427293065,
+              "hit": 0.4899328859060403,
+              "mrr": 0.3401565995525727
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.5065843621399176,
+              "hit": 0.5432098765432098,
+              "mrr": 0.43251028806584363
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.5241228070175439,
+              "hit": 0.5855263157894737,
+              "mrr": 0.4016447368421053
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.5019337684312304,
+              "hit": 0.5634517766497462,
+              "mrr": 0.43189509306260576
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.5853107344632769,
+              "hit": 0.6440677966101694,
+              "mrr": 0.5015065913370998
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3991869918699187,
+              "hit": 0.42276422764227645,
+              "mrr": 0.29986449864498643
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.4949664429530201,
+              "hit": 0.5369127516778524,
+              "mrr": 0.37595078299776286
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4787085514834206,
+              "hit": 0.5654450261780105,
+              "mrr": 0.3793193717277487
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.42524109809668,
+              "hit": 0.5228758169934641,
+              "mrr": 0.3812636165577342
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.4478494623655914,
+              "hit": 0.5032258064516129,
+              "mrr": 0.36075268817204303
+            }
+          }
+        },
+        "hybrid": {
+          "queries": 1527,
+          "recall": 0.5189710165459374,
+          "hit": 0.5782580222658809,
+          "mrr": 0.42337917485265225,
+          "query_ms_p50": 19.793041981756687,
+          "query_ms_p95": 20.92008400359191,
+          "mean_content_bytes": 770.6620825147347,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.6122994652406417,
+              "hit": 0.6122994652406417,
+              "mrr": 0.4620915032679739,
+              "complete_evidence_rate": 0.6122994652406417
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.260416647569497,
+              "hit": 0.4839506172839506,
+              "mrr": 0.31613168724279833,
+              "complete_evidence_rate": 0.08641975308641975
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.24248172207278607,
+              "hit": 0.4676258992805755,
+              "mrr": 0.2843525179856115
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.6205729166666667,
+              "hit": 0.65625,
+              "mrr": 0.5190104166666667
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.2487882793566865,
+              "hit": 0.3146067415730337,
+              "mrr": 0.22659176029962547
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.6003968253968254,
+              "hit": 0.6130952380952381,
+              "mrr": 0.45380952380952383
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.4720357941834452,
+              "hit": 0.5167785234899329,
+              "mrr": 0.36331096196868007
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.5230452674897119,
+              "hit": 0.5432098765432098,
+              "mrr": 0.411522633744856
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.5539473684210526,
+              "hit": 0.618421052631579,
+              "mrr": 0.46480263157894736
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.5214567722181935,
+              "hit": 0.5685279187817259,
+              "mrr": 0.41928934010152286
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.5962335216572505,
+              "hit": 0.6666666666666666,
+              "mrr": 0.5066854990583805
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.4845528455284553,
+              "hit": 0.5365853658536586,
+              "mrr": 0.3474254742547426
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.517337807606264,
+              "hit": 0.5637583892617449,
+              "mrr": 0.40503355704697985
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.5328097731239092,
+              "hit": 0.612565445026178,
+              "mrr": 0.46221640488656196
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.4930833865272037,
+              "hit": 0.5816993464052288,
+              "mrr": 0.41840958605664486
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.4736559139784946,
+              "hit": 0.5290322580645161,
+              "mrr": 0.3917204301075269
+            }
+          }
+        }
+      },
+      "paired_recall_outcomes": {
+        "reference_bm25": {
+          "win": 0,
+          "tie": 1527,
+          "loss": 0
+        },
+        "recency": {
+          "win": 727,
+          "tie": 796,
+          "loss": 4
+        }
+      },
+      "index_stats": [
+        {
+          "conversation": "conv-26",
+          "documents": 419,
+          "database_bytes": 274432,
+          "product_index_ms": 116.97762500261888,
+          "reference_index_ms": 5.0942090165335685,
+          "semantic_preparation_ms": 4236.887124978239
+        },
+        {
+          "conversation": "conv-30",
+          "documents": 369,
+          "database_bytes": 225280,
+          "product_index_ms": 105.04904101253487,
+          "reference_index_ms": 3.901457996107638,
+          "semantic_preparation_ms": 977.1891660057008
+        },
+        {
+          "conversation": "conv-41",
+          "documents": 663,
+          "database_bytes": 380928,
+          "product_index_ms": 199.86937500652857,
+          "reference_index_ms": 7.5670829974114895,
+          "semantic_preparation_ms": 1794.3176660046447
+        },
+        {
+          "conversation": "conv-42",
+          "documents": 629,
+          "database_bytes": 331776,
+          "product_index_ms": 183.47533399355598,
+          "reference_index_ms": 6.461416982347146,
+          "semantic_preparation_ms": 1512.1985420119017
+        },
+        {
+          "conversation": "conv-43",
+          "documents": 680,
+          "database_bytes": 376832,
+          "product_index_ms": 195.17345901113003,
+          "reference_index_ms": 7.46783401700668,
+          "semantic_preparation_ms": 1692.2342909965664
+        },
+        {
+          "conversation": "conv-44",
+          "documents": 675,
+          "database_bytes": 368640,
+          "product_index_ms": 191.2213749892544,
+          "reference_index_ms": 7.180749991675839,
+          "semantic_preparation_ms": 1655.0485420157202
+        },
+        {
+          "conversation": "conv-47",
+          "documents": 689,
+          "database_bytes": 356352,
+          "product_index_ms": 212.65816598315723,
+          "reference_index_ms": 6.834750005509704,
+          "semantic_preparation_ms": 1628.4202079987153
+        },
+        {
+          "conversation": "conv-48",
+          "documents": 681,
+          "database_bytes": 348160,
+          "product_index_ms": 201.80529201752506,
+          "reference_index_ms": 6.54387500253506,
+          "semantic_preparation_ms": 1556.1058330058586
+        },
+        {
+          "conversation": "conv-49",
+          "documents": 509,
+          "database_bytes": 290816,
+          "product_index_ms": 141.63516700500622,
+          "reference_index_ms": 5.691875005140901,
+          "semantic_preparation_ms": 1270.1604159956332
+        },
+        {
+          "conversation": "conv-50",
+          "documents": 568,
+          "database_bytes": 344064,
+          "product_index_ms": 159.8582919978071,
+          "reference_index_ms": 6.814291991759092,
+          "semantic_preparation_ms": 1548.6175410042051
+        }
+      ],
+      "semantic_backend": {
+        "model": "intfloat/multilingual-e5-small",
+        "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        "device": "cpu",
+        "max_sequence_tokens": 512,
+        "query_prefix": "query: ",
+        "document_prefix": "passage: ",
+        "normalized": true,
+        "local_files_only": true,
+        "document_cache_capacity": 10000,
+        "dependencies": {
+          "sentence-transformers": "5.7.0",
+          "transformers": "5.17.0",
+          "torch": "2.14.0",
+          "numpy": "2.5.3"
+        }
+      },
+      "semantic_paired_against_lexical": {
+        "semantic": {
+          "win": 304,
+          "tie": 1031,
+          "loss": 192
+        },
+        "hybrid": {
+          "win": 245,
+          "tie": 1213,
+          "loss": 69
+        }
+      },
+      "limits": [
+        "Evidence-turn retrieval only; not official LoCoMo QA accuracy or abstention",
+        "Shared tokenization; independent BM25 equation; semantic modes are opt-in",
+        "Semantic document preparation is separate; hybrid follows semantic and shares its bounded query cache",
+        "Questions within each conversation are correlated; no iid confidence interval",
+        "Product latency includes SQLite; reference rankers are in memory",
+        "Whole-item UTF-8 content budget excludes metadata and is not a model-token budget"
+      ],
+      "dataset": {
+        "name": "LoCoMo locomo10",
+        "repository": "https://github.com/snap-research/locomo",
+        "revision": "3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376",
+        "url": "https://raw.githubusercontent.com/snap-research/locomo/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/data/locomo10.json",
+        "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "license": "CC-BY-NC-4.0",
+        "license_url": "https://github.com/snap-research/locomo/blob/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/LICENSE.txt",
+        "attribution": "Maharana, Lee, Tulyakov, Bansal, Barbieri and Fang. Evaluating Very Long-Term Conversational Memory of LLM Agents. ACL 2024.",
+        "redistribution": "Dataset is downloaded separately, not included in this MIT-licensed package. Reports contain IDs and measurements, not conversation text or answers."
+      },
+      "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4"
+    }
+  }
+}
