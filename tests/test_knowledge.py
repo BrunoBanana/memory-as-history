@@ -320,3 +320,12 @@ def test_changed_self_description_retires_old_judgment_without_rewriting_speech(
     assert len(current) == 1 and current[0]['id'] == new['id'] and current[0]['kind'] == 'self_report'
     assert store.get(old_material.id).content == old_material.content
     assert store.inspect_claim(old['id'])['status'] == 'superseded'
+
+
+def test_legacy_source_count_explicitly_disclaims_verified_independence(store):
+    memory = store.remember('A source assertion', source='source-one')
+    store.corroborate(memory.id, 'source-two')
+    provenance = store.provenance(memory.id)
+    assert provenance['corroboration_satisfied']
+    assert provenance['independence_verified'] is False
+    assert provenance['verification_basis'] == 'caller_supplied_source_labels'
