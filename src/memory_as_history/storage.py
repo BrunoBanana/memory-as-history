@@ -78,7 +78,6 @@ reclassified, and nothing is silently deleted.
 
 from __future__ import annotations
 
-import functools
 import json
 import math
 import re
@@ -90,64 +89,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .history import check_limit, context_values, time_range, within_time
+from .transactions import _locked, _transactional, _AuditedDenial
+from .knowledge import KnowledgeMixin, KNOWLEDGE_SCHEMA, material_values
 
-
-def _locked(method):
-    """Serialize all access to a Store's sqlite connection. sqlite3
-    connections (even with check_same_thread=False) are not safe for
-    concurrent use from multiple threads — a single Store instance may be
-    shared across an MCP server's concurrent tool-call handlers, so every
-    public method takes this instance-level lock before touching self._conn."""
-
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        with self._lock:
-            return method(self, *args, **kwargs)
-
-    return wrapper
-
-
-class _AuditedDenial(PermissionError):
-    """Internal signal: the guard wrote only a deliberate denial audit."""
-
-
-def _transactional(method):
-    """Own one transaction per outer state-changing call.
-
-    Reserve SQLite's writer before reading preconditions, so other Store
-    connections/processes cannot change the state between a guard and its
-    write. Nested calls (recall -> due_for_review) share the outer boundary.
-    """
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        with self._lock:
-            if self._transaction_active:
-                return method(self, *args, **kwargs)
-
-            self._conn.execute("BEGIN IMMEDIATE")
-            self._transaction_active = True
-            denial = None
-            try:
-                try:
-                    result = method(self, *args, **kwargs)
-                except _AuditedDenial as exc:
-                    # Guards raise this only before any business mutation.
-                    # Ordinary exceptions, including failed audit inserts,
-                    # must never take this commit path.
-                    denial = exc
-                    result = None
-                self._conn.commit()
-            except BaseException:
-                self._conn.rollback()
-                raise
-            finally:
-                self._transaction_active = False
-
-            if denial is not None:
-                raise PermissionError(str(denial)) from None
-            return result
-
-    return wrapper
 
 DEFAULT_DB_PATH = Path.home() / ".memory-as-history" / "memory.db"
 DEFAULT_ANCHOR_SOFT_LIMIT = 12
@@ -254,6 +198,9 @@ CREATE TABLE IF NOT EXISTS conflicts (
 # created before v0.5 would have crashed on first use — caught while adding
 # `frame` for v0.8.)
 MIGRATIONS = [
+    ("memories", "material_type", "TEXT NOT NULL DEFAULT 'unspecified'"),
+    ("memories", "origin_id", "TEXT"),
+    ("memories", "capture_context", "TEXT"),
     ("memories", "event_at", "TEXT"),
     ("memories", "session_id", "TEXT"),
     ("memories", "session_position", "INTEGER"),
@@ -435,6 +382,10 @@ class Memory:
     session_id: str | None = None
     session_position: int | None = None
 
+    material_type: str = "unspecified"
+    origin_id: str | None = None
+    capture_context: str | None = None
+
     @property
     def is_forgotten(self) -> bool:
         return self.forgotten_at is not None
@@ -462,9 +413,12 @@ class Memory:
             "event_at": self.event_at,
             "session_id": self.session_id,
             "session_position": self.session_position,
+            "material_type": self.material_type,
+            "origin_id": self.origin_id,
+            "capture_context": self.capture_context,
         }
 
-class Store:
+class Store(KnowledgeMixin):
     def __init__(
         self,
         db_path: Path | str = DEFAULT_DB_PATH,
@@ -488,7 +442,7 @@ class Store:
         try:
             # executescript commits any previous transaction: put BEGIN inside
             # the script so schema creation AND additive upgrades share a lock.
-            self._conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
+            self._conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + KNOWLEDGE_SCHEMA)
             self._migrate()
             self._conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS memory_session_position "
                                "ON memories(session_id, session_position) "
@@ -543,6 +497,9 @@ class Store:
         event_at: str | None = None,
         session_id: str | None = None,
         session_position: int | None = None,
+        material_type: str = "unspecified",
+        origin_id: str | None = None,
+        capture_context: str | None = None,
     ) -> Memory:
         """Store a new working memory. Working memories are ordinary
         recollections — they can still be recalled, but they have not gone
@@ -576,6 +533,7 @@ class Store:
         near-zero false-positive cost (flagged memories remain stored and
         recallable; only pin() requires corroboration)."""
         content = _require_text(content, "content")
+        material = material_values(material_type, origin_id, capture_context)
         context = context_values(event_at, session_id, session_position)
         self._check_session_position(context)
         if tier not in TIERS:
@@ -597,8 +555,8 @@ class Store:
         self._conn.execute(
             "INSERT INTO memories "
             "(id, content, source, status, tier, created_at, last_reviewed_at, "
-            "review_status, security_sensitive, frame, content_tokens, event_at, session_id, session_position) "
-            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "review_status, security_sensitive, frame, content_tokens, event_at, session_id, session_position, material_type, origin_id, capture_context) "
+            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 mid,
                 content,
@@ -613,6 +571,7 @@ class Store:
                 context["event_at"],
                 context["session_id"],
                 context["session_position"],
+                *material.values(),
             ),
         )
         if auto_reason:
@@ -1103,6 +1062,7 @@ class Store:
 
     def _invalidate_narratives(self, memory_id: str, reason: str,
                               only_if_source_unusable: bool = False) -> None:
+        self._invalidate_claims_for_memory(memory_id, reason, only_if_source_unusable)
         for row in self._conn.execute(
             "SELECT * FROM narratives WHERE review_required_at IS NULL"
         ).fetchall():
@@ -1634,7 +1594,8 @@ class Store:
             "SELECT id, content, source, status, tier, created_at, "
             "consolidated_at, consolidation_reason, last_reviewed_at, "
             "review_status, forgotten_at, forgotten_reason, "
-            "security_sensitive, frame, event_at, session_id, session_position FROM memories WHERE id=?",
+            "security_sensitive, frame, event_at, session_id, session_position, "
+            "material_type, origin_id, capture_context FROM memories WHERE id=?",
             (memory_id,),
         ).fetchone()
         if row is None:
