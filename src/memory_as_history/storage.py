@@ -89,8 +89,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .history import check_limit, context_values, time_range, within_time
-from .transactions import _locked, _transactional, _AuditedDenial
-from .knowledge import KnowledgeMixin, KNOWLEDGE_SCHEMA, material_values
+from .transactions import _locked, _transactional, _AuditedDenial, _read_snapshot
+from .knowledge import KnowledgeMixin, KNOWLEDGE_SCHEMA, material_values, optional_text, text
 
 
 DEFAULT_DB_PATH = Path.home() / ".memory-as-history" / "memory.db"
@@ -198,6 +198,11 @@ CREATE TABLE IF NOT EXISTS conflicts (
 # created before v0.5 would have crashed on first use — caught while adding
 # `frame` for v0.8.)
 MIGRATIONS = [
+    ("narratives", "scope", "TEXT NOT NULL DEFAULT 'global'"),
+    ("narratives", "perspective", "TEXT"),
+    ("narratives", "coverage", "TEXT"),
+    ("narratives", "claim_ids", "TEXT"),
+    ("narratives", "link_ids", "TEXT"),
     ("memories", "material_type", "TEXT NOT NULL DEFAULT 'unspecified'"),
     ("memories", "origin_id", "TEXT"),
     ("memories", "capture_context", "TEXT"),
@@ -1027,6 +1032,39 @@ class Store(KnowledgeMixin):
 
     # -- narrative integration module (Ricoeur: identité narrative) -------------
 
+    def _narrative_dependencies(self, claim_ids, link_ids):
+        memory_ids, issues, sensitive = [], [], False
+        for cid in claim_ids:
+            try:
+                claim = self._claim_view(cid)
+            except KeyError:
+                issues.append({'memory_id': None, 'claim_id': cid, 'issue': 'missing_claim'})
+                continue
+            sensitive = sensitive or claim.get('security_sensitive', False)
+            if not claim['eligible_for_recall']:
+                issues.append({'memory_id': None, 'claim_id': cid, 'issue': 'unusable_claim'})
+            memory_ids.extend(e['memory_id'] for e in claim.get('evidence', []) if e['active'])
+        for lid in link_ids:
+            link = self._conn.execute('SELECT * FROM memory_links WHERE id=?', (lid,)).fetchone()
+            if link is None or link['retired_at'] is not None:
+                issues.append({'memory_id': None, 'link_id': lid, 'issue': 'unusable_relationship'})
+            if link is not None:
+                memory_ids.extend((link['from_id'], link['to_id']))
+        return list(dict.fromkeys(memory_ids)), issues, sensitive
+
+    def _invalidate_narrative_dependency(self, field, dependency_id, reason):
+        if field not in ('claim_ids', 'link_ids'):
+            raise ValueError('invalid narrative dependency field')
+        for row in self._conn.execute('SELECT * FROM narratives WHERE review_required_at IS NULL').fetchall():
+            try:
+                ids = self._normalize_memory_ids(json.loads(row[field]) if row[field] else None)
+            except (ValueError, TypeError):
+                continue  # Malformed legacy dependencies are already unusable on read.
+            if dependency_id in ids:
+                self._conn.execute('UPDATE narratives SET review_required_at=?,review_reason=? WHERE id=?',
+                                   (_now(), reason, row['id']))
+                self._log(row['id'], 'narrative_invalidated', f'{field}={dependency_id}: {reason}')
+
     @staticmethod
     def _normalize_memory_ids(memory_ids: list[str] | None) -> list[str]:
         if memory_ids is None:
@@ -1083,6 +1121,8 @@ class Store(KnowledgeMixin):
     def narrate(
         self, content: str, reason: str, memory_ids: list[str] | None = None,
         security_sensitive: bool = False,
+        *, scope: str = 'global', perspective: str | None = None, coverage: str | None = None,
+        claim_ids: list[str] | None = None, link_ids: list[str] | None = None,
     ) -> dict:
         """Version a synthesis with active, traceable dependencies.
 
@@ -1092,8 +1132,17 @@ class Store(KnowledgeMixin):
         """
         content = _require_text(content, "content")
         reason = _require_text(reason, "reason")
+        text(scope, 'scope')
+        optional_text(perspective, 'perspective')
+        optional_text(coverage, 'coverage')
         memory_ids = self._normalize_memory_ids(memory_ids)
-        sensitive = bool(security_sensitive or _looks_injected(content))
+        claim_ids = self._normalize_memory_ids(claim_ids)
+        link_ids = self._normalize_memory_ids(link_ids)
+        dependent_ids, dependency_issues, claim_sensitive = self._narrative_dependencies(claim_ids, link_ids)
+        memory_ids = list(dict.fromkeys(memory_ids + dependent_ids))
+        if dependency_issues:
+            raise ValueError(f'narrative has unresolved source issues: {dependency_issues}')
+        sensitive = bool(security_sensitive or claim_sensitive or _looks_injected(content))
         issues = self._narrative_sources(memory_ids, sensitive)
         if any(issue["issue"] in ("missing", "forgotten", "stale_interpretation") for issue in issues):
             raise ValueError(f"narrative has unresolved source issues: {issues}")
@@ -1103,11 +1152,12 @@ class Store(KnowledgeMixin):
             self._log(nid, "narrate_denied", f"{denial}: {issues}")
             raise _AuditedDenial(denial)
         now = _now()
-        prev = self._current_narrative_row()
+        prev = self._current_narrative_row(scope)
         self._conn.execute(
-            "INSERT INTO narratives (id, content, reason, memory_ids, created_at, security_sensitive) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (nid, content, reason, json.dumps(memory_ids), now, int(sensitive)),
+            "INSERT INTO narratives (id, content, reason, memory_ids, created_at, security_sensitive, "
+            "scope, perspective, coverage, claim_ids, link_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (nid, content, reason, json.dumps(memory_ids), now, int(sensitive), scope, perspective,
+             coverage, json.dumps(claim_ids), json.dumps(link_ids)),
         )
         if prev is not None:
             self._conn.execute(
@@ -1119,10 +1169,10 @@ class Store(KnowledgeMixin):
             "SELECT * FROM narratives WHERE id=?", (nid,)
         ).fetchone())
 
-    def _current_narrative_row(self) -> sqlite3.Row | None:
+    def _current_narrative_row(self, scope: str = 'global') -> sqlite3.Row | None:
         return self._conn.execute(
-            "SELECT * FROM narratives WHERE superseded_at IS NULL "
-            "ORDER BY created_at DESC LIMIT 1"
+            "SELECT * FROM narratives WHERE superseded_at IS NULL AND scope=? "
+            "ORDER BY created_at DESC, rowid DESC LIMIT 1", (scope,)
         ).fetchone()
 
     def _narrative_to_dict(self, row: sqlite3.Row | None) -> dict | None:
@@ -1136,8 +1186,16 @@ class Store(KnowledgeMixin):
         except (ValueError, TypeError):
             d["memory_ids"] = []
             issues.append({"memory_id": None, "issue": "invalid_memory_ids"})
-        d["security_sensitive"] = bool(d["security_sensitive"] or _looks_injected(d["content"]))
-        d["source_issues"] = issues + self._narrative_sources(d["memory_ids"], d["security_sensitive"])
+        for field in ('claim_ids', 'link_ids'):
+            try:
+                d[field] = self._normalize_memory_ids(json.loads(d[field]) if d[field] else None)
+            except (ValueError, TypeError):
+                d[field] = []
+                issues.append({'memory_id': None, 'issue': 'invalid_' + field})
+        dependent_ids, dependency_issues, claim_sensitive = self._narrative_dependencies(d['claim_ids'], d['link_ids'])
+        effective_ids = list(dict.fromkeys(d['memory_ids'] + dependent_ids))
+        d["security_sensitive"] = bool(d["security_sensitive"] or claim_sensitive or _looks_injected(d["content"]))
+        d["source_issues"] = issues + dependency_issues + self._narrative_sources(effective_ids, d["security_sensitive"])
         d["review_status"] = "stale" if d["review_required_at"] or d["source_issues"] else "current"
         d["provenance_status"] = "linked" if d["memory_ids"] else "unlinked"
         if not d["memory_ids"]:
@@ -1169,20 +1227,31 @@ class Store(KnowledgeMixin):
             "SELECT * FROM narratives WHERE id=?", (narrative_id,),
         ).fetchone())
 
-    @_locked
-    def current_narrative(self) -> dict | None:
-        """Return the current narrative synthesis, or None if `narrate()`
-        has never been called."""
-        return self._narrative_to_dict(self._current_narrative_row())
+    @_read_snapshot
+    def current_narrative(self, scope: str = 'global') -> dict | None:
+        """Explicitly inspect the current version in one scope, including stale text."""
+        text(scope, 'scope')
+        row = self._current_narrative_row() if scope == 'global' else self._current_narrative_row(scope)
+        return self._narrative_to_dict(row)
 
-    @_locked
-    def narrative_history(self, limit: int = 20) -> list[dict]:
-        """Return past narrative versions, most recent first, including the
-        current one — the history of how the story of the user has been
-        told and re-told, not just its latest version."""
-        rows = self._conn.execute(
-            "SELECT * FROM narratives ORDER BY created_at DESC LIMIT ?", (limit,)
-        ).fetchall()
+    @_read_snapshot
+    def narrative_history(self, limit: int = 20, scope: str | None = None) -> list[dict]:
+        """Inspect versions, optionally within one scope; source checks are current."""
+        check_limit(limit)
+        optional_text(scope, 'scope')
+        sql, params = 'SELECT * FROM narratives', []
+        if scope is not None:
+            sql += ' WHERE scope=?'
+            params.append(scope)
+        rows = self._conn.execute(sql + ' ORDER BY created_at DESC,rowid DESC LIMIT ?', (*params, limit)).fetchall()
+        return [self._narrative_to_dict(r) for r in rows]
+
+    @_read_snapshot
+    def list_narratives(self, limit: int = 20) -> list[dict]:
+        """Discover current scoped accounts, including explicit stale warnings."""
+        check_limit(limit)
+        rows = self._conn.execute('SELECT * FROM narratives WHERE superseded_at IS NULL '
+                                  'ORDER BY scope,created_at DESC,rowid DESC LIMIT ?', (limit,)).fetchall()
         return [self._narrative_to_dict(r) for r in rows]
 
     # -- canon / archive circulation module (Assmann: Kanon/Archiv) -------------
@@ -1557,6 +1626,7 @@ class Store(KnowledgeMixin):
             self._conn.execute('UPDATE memory_links SET retired_at=?, retirement_reason=? WHERE id=?',
                                (_now(), reason, link_id))
             self._log(link['from_id'], 'unlink_memories', f'link={link_id}: {reason}')
+            self._invalidate_narrative_dependency('link_ids', link_id, 'relationship retired: ' + reason)
         return dict(self._conn.execute('SELECT * FROM memory_links WHERE id=?', (link_id,)).fetchone())
 
     @_locked
@@ -1587,6 +1657,40 @@ class Store(KnowledgeMixin):
                 'since': since, 'until': until}
 
     # -- retrieval ----------------------------------------------------------
+
+    @_read_snapshot
+    def search_archive(self, query: str, limit: int = 10, frame: str | None = None,
+                       session_id: str | None = None, since: str | None = None,
+                       until: str | None = None) -> dict:
+        """Investigate active material with a strict budget, without priority slots.
+
+        Filters apply to every candidate, including anchors. This is a present
+        archive view, not a replay of past memory/frame/forgetting state. No model
+        is needed. Coverage describes stored candidates, never unrecorded voices.
+        """
+        text(query, 'query')
+        check_limit(limit)
+        optional_text(frame, 'frame')
+        optional_text(session_id, 'session_id')
+        since, until = time_range(since, until)
+        sql, params = 'SELECT * FROM memories WHERE forgotten_at IS NULL', []
+        for column, value in (('frame', frame), ('session_id', session_id)):
+            if value is not None:
+                sql += f' AND {column}=?'
+                params.append(value)
+        rows = [dict(r) for r in self._conn.execute(sql + ' ORDER BY created_at DESC,id', params)]
+        unknown = sum(r['event_at'] is None for r in rows)
+        eligible = [r for r in rows if within_time(r, since, until)]
+        selected = self._rank_by_query(eligible, query)[:limit]
+        return {'memories': selected, 'retrieval': {
+            'mode': 'lexical', 'priority_policy': 'no_reserved_slots',
+            'scope': {'frame': frame, 'session_id': session_id, 'since': since, 'until': until},
+            'eligible_count': len(eligible), 'returned_count': len(selected),
+            'truncated': len(eligible) > limit, 'unknown_event_times': unknown,
+            'collection_completeness': 'unknown',
+            'warning': 'Search covers stored, currently accessible material only. '
+                       'Missing results do not establish absence, agreement or disagreement.',
+        }}
 
     @_locked
     def get(self, memory_id: str) -> Memory | None:
