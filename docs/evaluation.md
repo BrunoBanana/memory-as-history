@@ -59,3 +59,13 @@ Remaining evidence requirements are:
 
 These remaining criteria are not results already achieved by this RC. The
 external evidence track does not measure official LoCoMo QA or abstention.
+
+
+## Explicit history structure
+
+The [2026-09-19 report](benchmarks/2026-09-19-history-results.md) measures time
+filters, caller-asserted links and one-hop session neighbors separately. Its
+challenge corpus and test split are authored and correlated. External adjacency
+does not improve complete multi-evidence coverage and has 107 regressions against
+hybrid. Real two-process MCP checks establish protocol behavior, not autonomous
+source interpretation, causal reasoning, generated-answer quality or abstention.

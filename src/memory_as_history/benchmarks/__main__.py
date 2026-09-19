@@ -16,12 +16,15 @@ def main(argv=None):
     external = commands.add_parser('locomo')
     external.add_argument('--data', type=Path, required=True)
     development = commands.add_parser('development')
-    for command in (external, development):
+    history = commands.add_parser('history')
+    history.add_argument('--split', choices=('all', 'dev', 'test'), default='all')
+    external.add_argument('--history', action='store_true', help='include session-neighbor expansion; never gold links')
+    for command in (external, development, history):
         command.add_argument('--max-items', type=int, default=5)
         command.add_argument('--max-bytes', type=int, default=4096)
         command.add_argument('--semantic', action='store_true', help='include the optional cached local encoder and fusion')
         command.add_argument('--device', default='cpu', choices=('cpu', 'mps', 'cuda'))
-    for command in (protocol, external, development):
+    for command in (protocol, external, development, history):
         command.add_argument('--output', type=Path, help='write JSON report (otherwise stdout)')
     args = parser.parse_args(argv)
     try:
@@ -31,13 +34,24 @@ def main(argv=None):
                 cases = [c for c in cases if c['split'] == args.split]
             report = run_protocol(cases)
             exit_code = 0 if report['passed'] else 1
+        elif args.track == 'history':
+            from .history_retrieval import load_challenge, run_challenge
+            cases = load_challenge()['cases']
+            if args.split != 'all':
+                cases = [c for c in cases if c['split'] == args.split]
+            backend = None
+            if args.semantic:
+                from memory_as_history.semantic import LocalE5
+                backend = LocalE5(device=args.device)
+            report = run_challenge(cases, backend, args.max_items, args.max_bytes)
+            exit_code = 0 if report['completed'] else 1
         else:
             data = load_development() if args.track == 'development' else load_locomo(args.data)
             backend = None
             if args.semantic:
                 from memory_as_history.semantic import LocalE5
                 backend = LocalE5(device=args.device)
-            report = run_retrieval(data, args.max_items, args.max_bytes, semantic_backend=backend)
+            report = run_retrieval(data, args.max_items, args.max_bytes, semantic_backend=backend, history=getattr(args, 'history', False))
             report['dataset'] = DEVELOPMENT_MANIFEST if args.track == 'development' else MANIFEST
             report['dataset_sha256'] = report['dataset']['sha256']
             if args.track == 'development':

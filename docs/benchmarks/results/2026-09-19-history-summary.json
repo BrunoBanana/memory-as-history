@@ -1,0 +1,4010 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-19",
+  "runner_commit": "9223352e1f8837f78a68617de5ef7381bb13500d",
+  "artifacts": {
+    "development": {
+      "file": "2026-09-19-history-development.json.gz",
+      "json_sha256": "244415d00bc878d3baf5d34e2e5ada777763fa732bbb041798155e060bd99095",
+      "gzip_sha256": "1ba63844a432fbde0f1c17056429addb7cc269cfc956e76f7ced86324435ef81",
+      "json_bytes": 117757
+    },
+    "evaluation": {
+      "file": "2026-09-19-history-evaluation.json.gz",
+      "json_sha256": "ee926d9aefac4dd4ea99eee999e3960f7985c825bfbb8024e48418da34e92639",
+      "gzip_sha256": "8c82d6a4915c4d00009726f781195a92e0fea9f785a36d8ff0228b1ebfc91e39",
+      "json_bytes": 118013
+    },
+    "external": {
+      "file": "2026-09-19-history-external.json.gz",
+      "json_sha256": "e31b1cc2d036ed6c74f7f157f3dd1a1ac081dd42c530fa2852d4b86e132195b9",
+      "gzip_sha256": "7a39f9a40cec30f226273705f85cb5e7339fcdd40827cf6ab9d916cfecfb047c",
+      "json_bytes": 4965631
+    },
+    "protocol": {
+      "file": "2026-09-19-history-protocol.json.gz",
+      "json_sha256": "35c7ab8d755f154e26d0e94e7f8e38d6116ce0a150e76bd93aeb3d59087a9a01",
+      "gzip_sha256": "c582eaa045f4232afaeecf1b226dcd29ae56ccede735c4edbbf7943076875b30",
+      "json_bytes": 324136
+    }
+  },
+  "tracks": {
+    "development": {
+      "schema_version": 1,
+      "track": "authored_history_retrieval",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "7972cf30ea45f9e52e94b7939d0ee5cbfe896b1da70950c975c40a72e3a78904",
+        "history_sha256": "db2e565b6b10879ee711be8ab11aae073c7ac971af28761800528d909215e9a4",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "1b5ea3ac8a51b2c37890b4203124236aafdd54b6810088dd6fd97dcd6e754121",
+          "common.py": "27f1efff9f029f227b78f348a2e40ab609c944857f3aff21034c3c77fb9374b7",
+          "history_retrieval.py": "691d3cacdb310db8960e8618ee6e0ecc06546105e98cc7802ceb7d92388e41b1",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "b57e8f94a2e12ab5bc02c5992a9e42f825ca59076035f2e184403f68f135de4e"
+        }
+      },
+      "completed": true,
+      "cases": 24,
+      "selected_cases_sha256": "2bdad692c5fb492af8aa47e26eb910cdf1d546906af29c92f5df00520eaacda6",
+      "dataset": {
+        "file": "history-retrieval-v1.json",
+        "sha256": "6f754015eebe6c9fba49deb6b67b1dd52dd48b7cf5dbbfc9418d9ae4cd32d7c9",
+        "cases": 48,
+        "dev_cases": 24,
+        "test_cases": 24,
+        "license": "MIT",
+        "policy": "Freeze before scoring. Test split never used for parameter selection; author-visible, not blind."
+      },
+      "budget": {
+        "max_items": 5,
+        "max_utf8_content_bytes": 4096
+      },
+      "systems": {
+        "lexical": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.2222222222222222,
+          "hit": 0.5,
+          "mrr": 0.5,
+          "complete_evidence_rate": 0,
+          "query_ms_p50": 0.29504200210794806,
+          "query_ms_p95": 0.4417079617269337,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.16666666666666666,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.4136875213589519,
+              "query_ms_p95": 1.6452079871669412
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.2811670128721744,
+              "query_ms_p95": 0.3545419895090163
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.278541527222842,
+              "query_ms_p95": 0.3445000038482249
+            }
+          }
+        },
+        "lexical_time": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.4722222222222222,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.3333333333333333,
+          "query_ms_p50": 0.35522948019206524,
+          "query_ms_p95": 0.4141670069657266,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.16666666666666666,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.37658301880583167,
+              "query_ms_p95": 0.43937499867752194
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.33556247944943607,
+              "query_ms_p95": 0.40379201527684927
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.3293959889560938,
+              "query_ms_p95": 0.40125002851709723
+            }
+          }
+        },
+        "lexical_links": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.5833333333333334,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 0.33543750760145485,
+          "query_ms_p95": 0.3748339950107038,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.32372897840104997,
+              "query_ms_p95": 0.3867500345222652
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.33850001636892557,
+              "query_ms_p95": 0.362000020686537
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.30637497548013926,
+              "query_ms_p95": 0.3588339895941317
+            }
+          }
+        },
+        "lexical_session": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6111111111111112,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 0.3158540348522365,
+          "query_ms_p95": 0.38254098035395145,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3333333333333333,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.32158399699255824,
+              "query_ms_p95": 0.3845419851131737
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.319270504405722,
+              "query_ms_p95": 0.3562079509720206
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.30062501900829375,
+              "query_ms_p95": 0.36345800617709756
+            }
+          }
+        },
+        "lexical_both": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6666666666666666,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.6666666666666666,
+          "query_ms_p50": 0.329395494190976,
+          "query_ms_p95": 0.4391249967738986,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.316145975375548,
+              "query_ms_p95": 0.6067079957574606
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.30518751009367406,
+              "query_ms_p95": 0.3542500198818743
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.329395494190976,
+              "query_ms_p95": 0.4391249967738986
+            }
+          }
+        },
+        "hybrid": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.2777777777777778,
+          "hit": 0.625,
+          "mrr": 0.525,
+          "complete_evidence_rate": 0,
+          "query_ms_p50": 1.8915419932454824,
+          "query_ms_p95": 9.296083997469395,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.20833333333333331,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 8.39664600789547,
+              "query_ms_p95": 9.61645896313712
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.7705835052765906,
+              "query_ms_p95": 1.997667015530169
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.8573750276118517,
+              "query_ms_p95": 2.0145829766988754
+            }
+          }
+        },
+        "hybrid_time": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.5069444444444444,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.3333333333333333,
+          "query_ms_p50": 1.6443954955320805,
+          "query_ms_p95": 1.8717499915510416,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.20833333333333331,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.6945420065894723,
+              "query_ms_p95": 1.8717499915510416
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.658583030803129,
+              "query_ms_p95": 1.9661670085042715
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.499166537541896,
+              "query_ms_p95": 1.7983329598791897
+            }
+          }
+        },
+        "hybrid_links": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6180555555555556,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 1.6396665305364877,
+          "query_ms_p95": 1.9278749823570251,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5416666666666666,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.6553540190216154,
+              "query_ms_p95": 2.1980839665047824
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.695603976259008,
+              "query_ms_p95": 1.9278749823570251
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.5768125012982637,
+              "query_ms_p95": 1.7318750033155084
+            }
+          }
+        },
+        "hybrid_session": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6458333333333334,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 1.6194369818549603,
+          "query_ms_p95": 1.9887090311385691,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.375,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.703541463939473,
+              "query_ms_p95": 2.345166984014213
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5625,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.628583500860259,
+              "query_ms_p95": 1.762417028658092
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.492875482654199,
+              "query_ms_p95": 1.7242080066353083
+            }
+          }
+        },
+        "hybrid_both": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.7013888888888888,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.6666666666666666,
+          "query_ms_p50": 1.662062481045723,
+          "query_ms_p95": 1.836207986343652,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5416666666666666,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.7513335042167455,
+              "query_ms_p95": 1.836207986343652
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5625,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.6933334991335869,
+              "query_ms_p95": 1.842707977630198
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.4691459946334362,
+              "query_ms_p95": 1.7107499879784882
+            }
+          }
+        }
+      },
+      "semantic_backend": {
+        "model": "intfloat/multilingual-e5-small",
+        "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        "device": "cpu",
+        "max_sequence_tokens": 512,
+        "query_prefix": "query: ",
+        "document_prefix": "passage: ",
+        "normalized": true,
+        "local_files_only": true,
+        "document_cache_capacity": 10000,
+        "dependencies": {
+          "sentence-transformers": "5.7.0",
+          "transformers": "5.17.0",
+          "torch": "2.14.0",
+          "numpy": "2.5.3"
+        }
+      },
+      "limits": [
+        "Author-visible authored histories and explicit links/ranges; not blind independent evaluation.",
+        "Base systems ignore structured time bounds; *_time isolates the effect of filtering.",
+        "All challenge systems take an item-limited prefix then skip oversized items without refilling.",
+        "Model/document loading excluded from query timings; later systems share bounded caches."
+      ]
+    },
+    "evaluation": {
+      "schema_version": 1,
+      "track": "authored_history_retrieval",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "7972cf30ea45f9e52e94b7939d0ee5cbfe896b1da70950c975c40a72e3a78904",
+        "history_sha256": "db2e565b6b10879ee711be8ab11aae073c7ac971af28761800528d909215e9a4",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "1b5ea3ac8a51b2c37890b4203124236aafdd54b6810088dd6fd97dcd6e754121",
+          "common.py": "27f1efff9f029f227b78f348a2e40ab609c944857f3aff21034c3c77fb9374b7",
+          "history_retrieval.py": "691d3cacdb310db8960e8618ee6e0ecc06546105e98cc7802ceb7d92388e41b1",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "b57e8f94a2e12ab5bc02c5992a9e42f825ca59076035f2e184403f68f135de4e"
+        }
+      },
+      "completed": true,
+      "cases": 24,
+      "selected_cases_sha256": "cf60e84aaae4cbe2d5cf312b11c99b509f9af56fc15b55898371e21dc656760e",
+      "dataset": {
+        "file": "history-retrieval-v1.json",
+        "sha256": "6f754015eebe6c9fba49deb6b67b1dd52dd48b7cf5dbbfc9418d9ae4cd32d7c9",
+        "cases": 48,
+        "dev_cases": 24,
+        "test_cases": 24,
+        "license": "MIT",
+        "policy": "Freeze before scoring. Test split never used for parameter selection; author-visible, not blind."
+      },
+      "budget": {
+        "max_items": 5,
+        "max_utf8_content_bytes": 4096
+      },
+      "systems": {
+        "lexical": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.2222222222222222,
+          "hit": 0.5,
+          "mrr": 0.5,
+          "complete_evidence_rate": 0,
+          "query_ms_p50": 0.3017914714291692,
+          "query_ms_p95": 0.5024999845772982,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.16666666666666666,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.3896040143445134,
+              "query_ms_p95": 1.2996660079807043
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.2919374965131283,
+              "query_ms_p95": 0.30808302108198404
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.2574789978098124,
+              "query_ms_p95": 0.5024999845772982
+            }
+          }
+        },
+        "lexical_time": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.4722222222222222,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.3333333333333333,
+          "query_ms_p50": 0.34966651583090425,
+          "query_ms_p95": 0.3827500040642917,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.16666666666666666,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.36308300332166255,
+              "query_ms_p95": 0.38404198130592704
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.3379584813956171,
+              "query_ms_p95": 0.36908400943502784
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.32550000469200313,
+              "query_ms_p95": 0.37645798875018954
+            }
+          }
+        },
+        "lexical_links": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.5833333333333334,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 0.31208351720124483,
+          "query_ms_p95": 0.35512499744072556,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.32164601725526154,
+              "query_ms_p95": 0.3706669667735696
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.25,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.3051664971280843,
+              "query_ms_p95": 0.34533400321379304
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.30118750873953104,
+              "query_ms_p95": 0.3470419906079769
+            }
+          }
+        },
+        "lexical_session": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6111111111111112,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 0.3336880181450397,
+          "query_ms_p95": 0.3897089627571404,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3333333333333333,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 0.31539550400339067,
+              "query_ms_p95": 0.35024998942390084
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.3055624838452786,
+              "query_ms_p95": 0.3897089627571404
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.3336880181450397,
+              "query_ms_p95": 0.3899160074070096
+            }
+          }
+        },
+        "lexical_both": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6666666666666666,
+          "hit": 0.6666666666666666,
+          "mrr": 0.6666666666666666,
+          "complete_evidence_rate": 0.6666666666666666,
+          "query_ms_p50": 0.30616699950769544,
+          "query_ms_p95": 0.35929196747019887,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.31412552925758064,
+              "query_ms_p95": 0.35929196747019887
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5,
+              "hit": 0.5,
+              "mrr": 0.5,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 0.30077050905674696,
+              "query_ms_p95": 0.391624984331429
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 0.303833483485505,
+              "query_ms_p95": 0.33954199170693755
+            }
+          }
+        },
+        "hybrid": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.2777777777777778,
+          "hit": 0.625,
+          "mrr": 0.525,
+          "complete_evidence_rate": 0,
+          "query_ms_p50": 1.9009585084859282,
+          "query_ms_p95": 8.476666989736259,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.20833333333333331,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 8.223250013543293,
+              "query_ms_p95": 8.684750006068498
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.7991664935834706,
+              "query_ms_p95": 2.150624990463257
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.7365834792144597,
+              "query_ms_p95": 2.0647909841500223
+            }
+          }
+        },
+        "hybrid_time": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.5069444444444444,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.3333333333333333,
+          "query_ms_p50": 1.615521003259346,
+          "query_ms_p95": 1.7416669870726764,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.20833333333333331,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.6616250213701278,
+              "query_ms_p95": 1.7416669870726764
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.615521003259346,
+              "query_ms_p95": 2.0252499962225556
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.483458501752466,
+              "query_ms_p95": 1.542332989629358
+            }
+          }
+        },
+        "hybrid_links": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6180555555555556,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 1.5848539769649506,
+          "query_ms_p95": 1.7319589969702065,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5416666666666666,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.6049789846874774,
+              "query_ms_p95": 1.668957993388176
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.3125,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.698458509054035,
+              "query_ms_p95": 1.8287500133737922
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.4867085264995694,
+              "query_ms_p95": 1.5857499674893916
+            }
+          }
+        },
+        "hybrid_session": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.6458333333333334,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.5,
+          "query_ms_p50": 1.5970834938343614,
+          "query_ms_p95": 1.7729999963194132,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.375,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0,
+              "query_ms_p50": 1.6274794761557132,
+              "query_ms_p95": 1.784500025678426
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5625,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.6134790203068405,
+              "query_ms_p95": 1.6800410230644047
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.44272850593552,
+              "query_ms_p95": 1.4914170023985207
+            }
+          }
+        },
+        "hybrid_both": {
+          "queries": 24,
+          "failures": 0,
+          "recall": 0.7013888888888888,
+          "hit": 0.75,
+          "mrr": 0.6833333333333333,
+          "complete_evidence_rate": 0.6666666666666666,
+          "query_ms_p50": 1.5791869955137372,
+          "query_ms_p95": 1.684500020928681,
+          "by_family": {
+            "linked": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5416666666666666,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.601687486981973,
+              "query_ms_p95": 1.64899998344481
+            },
+            "session": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 0.5625,
+              "hit": 0.625,
+              "mrr": 0.525,
+              "complete_evidence_rate": 0.5,
+              "query_ms_p50": 1.616291527170688,
+              "query_ms_p95": 2.0594579982571304
+            },
+            "temporal": {
+              "queries": 8,
+              "failures": 0,
+              "recall": 1.0,
+              "hit": 1,
+              "mrr": 1.0,
+              "complete_evidence_rate": 1,
+              "query_ms_p50": 1.4514370122924447,
+              "query_ms_p95": 1.540166966151446
+            }
+          }
+        }
+      },
+      "semantic_backend": {
+        "model": "intfloat/multilingual-e5-small",
+        "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        "device": "cpu",
+        "max_sequence_tokens": 512,
+        "query_prefix": "query: ",
+        "document_prefix": "passage: ",
+        "normalized": true,
+        "local_files_only": true,
+        "document_cache_capacity": 10000,
+        "dependencies": {
+          "sentence-transformers": "5.7.0",
+          "transformers": "5.17.0",
+          "torch": "2.14.0",
+          "numpy": "2.5.3"
+        }
+      },
+      "limits": [
+        "Author-visible authored histories and explicit links/ranges; not blind independent evaluation.",
+        "Base systems ignore structured time bounds; *_time isolates the effect of filtering.",
+        "All challenge systems take an item-limited prefix then skip oversized items without refilling.",
+        "Model/document loading excluded from query timings; later systems share bounded caches."
+      ]
+    },
+    "external": {
+      "schema_version": 1,
+      "track": "external_evidence_retrieval",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "7972cf30ea45f9e52e94b7939d0ee5cbfe896b1da70950c975c40a72e3a78904",
+        "history_sha256": "db2e565b6b10879ee711be8ab11aae073c7ac971af28761800528d909215e9a4",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "1b5ea3ac8a51b2c37890b4203124236aafdd54b6810088dd6fd97dcd6e754121",
+          "common.py": "27f1efff9f029f227b78f348a2e40ab609c944857f3aff21034c3c77fb9374b7",
+          "history_retrieval.py": "691d3cacdb310db8960e8618ee6e0ecc06546105e98cc7802ceb7d92388e41b1",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "b57e8f94a2e12ab5bc02c5992a9e42f825ca59076035f2e184403f68f135de4e"
+        }
+      },
+      "completed": true,
+      "total_questions": 1986,
+      "scored_questions": 1527,
+      "exclusions": {
+        "no_evidence": 4,
+        "unresolved_evidence": 9,
+        "adversarial": 446
+      },
+      "excluded_questions": [
+        {
+          "question_id": "conv-26:30",
+          "reason": "no_evidence"
+        },
+        {
+          "question_id": "conv-26:37",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-26:46",
+          "reason": "no_evidence"
+        },
+        {
+          "question_id": "conv-26:152",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:153",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:154",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:155",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:156",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:157",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:158",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:159",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:160",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:161",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:162",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:163",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:164",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:165",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:166",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:167",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:168",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:169",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:170",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:171",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:172",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:173",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:174",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:175",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:176",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:177",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:178",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:179",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:180",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:181",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:182",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:183",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:184",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:185",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:186",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:187",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:188",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:189",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:190",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:191",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:192",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:193",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:194",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:195",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:196",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:197",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-26:198",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:79",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:82",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:83",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:84",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:85",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:86",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:87",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:88",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:89",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:90",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:91",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:92",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:93",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:94",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:95",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:96",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:97",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:98",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:99",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:100",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:101",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:102",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:103",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-30:104",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:152",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:153",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:154",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:155",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:156",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:157",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:158",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:159",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:160",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:161",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:162",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:163",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:164",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:165",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:166",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:167",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:168",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:169",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:170",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:171",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:172",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:173",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:174",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:175",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:176",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:177",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:178",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:179",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:180",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:181",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:182",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:183",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:184",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:185",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:186",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:187",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:188",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:189",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:190",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:191",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-41:192",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:58",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-42:88",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-42:199",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:200",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:201",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:202",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:203",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:204",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:205",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:206",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:207",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:208",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:209",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:210",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:211",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:212",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:213",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:214",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:215",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:216",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:217",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:218",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:219",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:220",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:221",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:222",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:223",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:224",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:225",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:226",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:227",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:228",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:229",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:230",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:231",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:232",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:233",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:234",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:235",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:236",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:237",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:238",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:239",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:240",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:241",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:242",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:243",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:244",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:245",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:246",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:247",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:248",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:249",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:250",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:251",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:252",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:253",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:254",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:255",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:256",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:257",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:258",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-42:259",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:18",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-43:178",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:179",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:180",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:181",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:182",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:183",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:184",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:185",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:186",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:187",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:188",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:189",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:190",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:191",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:192",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:193",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:194",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:195",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:196",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:197",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:198",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:199",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:200",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:201",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:202",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:203",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:204",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:205",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:206",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:207",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:208",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:209",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:210",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:211",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:212",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:213",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:214",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:215",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:216",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:217",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:218",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:219",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:220",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:221",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:222",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:223",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:224",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:225",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:226",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:227",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:228",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:229",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:230",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:231",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:232",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:233",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:234",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:235",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:236",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:237",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:238",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:239",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:240",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-43:241",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:123",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:124",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:125",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:126",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:127",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:128",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:129",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:130",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:131",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:132",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:133",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:134",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:135",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:136",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:137",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:138",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:139",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:140",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:141",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:142",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:143",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:144",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:145",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:146",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:147",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:148",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:149",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:150",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:151",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:152",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:153",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:154",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:155",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:156",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-44:157",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:38",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-47:150",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:151",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:152",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:153",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:154",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:155",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:156",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:157",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:158",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:159",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:160",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:161",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:162",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:163",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:164",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:165",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:166",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:167",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:168",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:169",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:170",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:171",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:172",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:173",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:174",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:175",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:176",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:177",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:178",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:179",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:180",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:181",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:182",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:183",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:184",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:185",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:186",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:187",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:188",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-47:189",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:191",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:192",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:193",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:194",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:195",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:196",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:197",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:198",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:199",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:200",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:201",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:202",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:203",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:204",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:205",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:206",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:207",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:208",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:209",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:210",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:211",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:212",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:213",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:214",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:215",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:216",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:217",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:218",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:219",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:220",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:221",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:222",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:223",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:224",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:225",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:226",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:227",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:228",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:229",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:230",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:231",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:232",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:233",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:234",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:235",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:236",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:237",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-48:238",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:31",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-49:38",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-49:46",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-49:156",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:157",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:158",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:159",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:160",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:161",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:162",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:163",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:164",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:165",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:166",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:167",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:168",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:169",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:170",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:171",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:172",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:173",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:174",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:175",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:176",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:177",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:178",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:179",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:180",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:181",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:182",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:183",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:184",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:185",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:186",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:187",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:188",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:189",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:190",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:191",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:192",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:193",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:194",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-49:195",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:39",
+          "reason": "no_evidence"
+        },
+        {
+          "question_id": "conv-50:42",
+          "reason": "no_evidence"
+        },
+        {
+          "question_id": "conv-50:69",
+          "reason": "unresolved_evidence"
+        },
+        {
+          "question_id": "conv-50:158",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:159",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:160",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:161",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:162",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:163",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:164",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:165",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:166",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:167",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:168",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:169",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:170",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:171",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:172",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:173",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:174",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:175",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:176",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:177",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:178",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:179",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:180",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:181",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:182",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:183",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:184",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:185",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:186",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:187",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:188",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:189",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:190",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:191",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:192",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:193",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:194",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:195",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:196",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:197",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:198",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:199",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:200",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:201",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:202",
+          "reason": "adversarial"
+        },
+        {
+          "question_id": "conv-50:203",
+          "reason": "adversarial"
+        }
+      ],
+      "budget": {
+        "max_items": 5,
+        "max_utf8_content_bytes": 4096
+      },
+      "history_expansion": true,
+      "systems": {
+        "memory_as_history": {
+          "queries": 1527,
+          "recall": 0.42758640734776177,
+          "hit": 0.47609692206941717,
+          "mrr": 0.3336935166994106,
+          "query_ms_p50": 5.015167000237852,
+          "query_ms_p95": 5.660917027853429,
+          "mean_content_bytes": 682.0157170923379,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5204991087344029,
+              "hit": 0.5204991087344029,
+              "mrr": 0.3752822341057635,
+              "complete_evidence_rate": 0.5204991087344029
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.17018381239514138,
+              "hit": 0.3530864197530864,
+              "mrr": 0.21847736625514402,
+              "complete_evidence_rate": 0.03209876543209877
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.1392048698703375,
+              "hit": 0.3057553956834532,
+              "mrr": 0.17883693045563548
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.49453125,
+              "hit": 0.525,
+              "mrr": 0.37203125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.18699052654769774,
+              "hit": 0.2696629213483146,
+              "mrr": 0.15262172284644196
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.523015873015873,
+              "hit": 0.5357142857142857,
+              "mrr": 0.38952380952380955
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.3959731543624161,
+              "hit": 0.42953020134228187,
+              "mrr": 0.2746085011185682
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.4777777777777778,
+              "hit": 0.5061728395061729,
+              "mrr": 0.36872427983539097
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4525219298245614,
+              "hit": 0.506578947368421,
+              "mrr": 0.3406798245614035
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.45682056240431873,
+              "hit": 0.5076142131979695,
+              "mrr": 0.3523688663282572
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.4580979284369115,
+              "hit": 0.5141242937853108,
+              "mrr": 0.38926553672316383
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3732384823848238,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2727642276422764
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.38814317673378074,
+              "hit": 0.4161073825503356,
+              "mrr": 0.29384787472035795
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4582024432809773,
+              "hit": 0.5340314136125655,
+              "mrr": 0.3655322862129145
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.41572413873451936,
+              "hit": 0.47058823529411764,
+              "mrr": 0.3293028322440087
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.3903225806451613,
+              "hit": 0.4258064516129032,
+              "mrr": 0.32989247311827957
+            }
+          }
+        },
+        "reference_bm25": {
+          "queries": 1527,
+          "recall": 0.42758640734776177,
+          "hit": 0.47609692206941717,
+          "mrr": 0.3336935166994106,
+          "query_ms_p50": 0.6629999843426049,
+          "query_ms_p95": 0.9274159674532712,
+          "mean_content_bytes": 682.0157170923379,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5204991087344029,
+              "hit": 0.5204991087344029,
+              "mrr": 0.3752822341057635,
+              "complete_evidence_rate": 0.5204991087344029
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.17018381239514138,
+              "hit": 0.3530864197530864,
+              "mrr": 0.21847736625514402,
+              "complete_evidence_rate": 0.03209876543209877
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.1392048698703375,
+              "hit": 0.3057553956834532,
+              "mrr": 0.17883693045563548
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.49453125,
+              "hit": 0.525,
+              "mrr": 0.37203125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.18699052654769774,
+              "hit": 0.2696629213483146,
+              "mrr": 0.15262172284644196
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.523015873015873,
+              "hit": 0.5357142857142857,
+              "mrr": 0.38952380952380955
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.3959731543624161,
+              "hit": 0.42953020134228187,
+              "mrr": 0.2746085011185682
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.4777777777777778,
+              "hit": 0.5061728395061729,
+              "mrr": 0.36872427983539097
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4525219298245614,
+              "hit": 0.506578947368421,
+              "mrr": 0.3406798245614035
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.45682056240431873,
+              "hit": 0.5076142131979695,
+              "mrr": 0.3523688663282572
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.4580979284369115,
+              "hit": 0.5141242937853108,
+              "mrr": 0.38926553672316383
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3732384823848238,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2727642276422764
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.38814317673378074,
+              "hit": 0.4161073825503356,
+              "mrr": 0.29384787472035795
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4582024432809773,
+              "hit": 0.5340314136125655,
+              "mrr": 0.3655322862129145
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.41572413873451936,
+              "hit": 0.47058823529411764,
+              "mrr": 0.3293028322440087
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.3903225806451613,
+              "hit": 0.4258064516129032,
+              "mrr": 0.32989247311827957
+            }
+          }
+        },
+        "recency": {
+          "queries": 1527,
+          "recall": 0.0018009168303863784,
+          "hit": 0.0026195153896529143,
+          "mrr": 0.00114603798297315,
+          "query_ms_p50": 0.003667024429887533,
+          "query_ms_p95": 0.004708010237663984,
+          "mean_content_bytes": 561.7164374590701,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.0017825311942959,
+              "hit": 0.0017825311942959,
+              "mrr": 0.000445632798573975,
+              "complete_evidence_rate": 0.0017825311942959
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.001851851851851852,
+              "hit": 0.0049382716049382715,
+              "mrr": 0.0030864197530864196,
+              "complete_evidence_rate": 0
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.0017985611510791368,
+              "hit": 0.0035971223021582736,
+              "mrr": 0.0035971223021582736
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.0028089887640449437,
+              "hit": 0.011235955056179775,
+              "mrr": 0.0028089887640449437
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.002380952380952381,
+              "hit": 0.002380952380952381,
+              "mrr": 0.0005952380952380953
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.001644736842105263,
+              "hit": 0.006578947368421052,
+              "mrr": 0.001644736842105263
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.005649717514124294,
+              "hit": 0.005649717514124294,
+              "mrr": 0.0014124293785310734
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.0040650406504065045,
+              "hit": 0.008130081300813009,
+              "mrr": 0.008130081300813009
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.006711409395973154,
+              "hit": 0.006711409395973154,
+              "mrr": 0.0016778523489932886
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.0,
+              "hit": 0,
+              "mrr": 0
+            }
+          }
+        },
+        "semantic": {
+          "queries": 1527,
+          "recall": 0.48238998497472896,
+          "hit": 0.5428945645055665,
+          "mrr": 0.3930691988648767,
+          "query_ms_p50": 26.80966700427234,
+          "query_ms_p95": 29.101249994710088,
+          "mean_content_bytes": 807.2698100851343,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5659536541889483,
+              "hit": 0.5659536541889483,
+              "mrr": 0.41653297682709445,
+              "complete_evidence_rate": 0.5659536541889483
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.2508876717442249,
+              "hit": 0.47901234567901235,
+              "mrr": 0.3280658436213992,
+              "complete_evidence_rate": 0.08148148148148149
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.23879142755515342,
+              "hit": 0.460431654676259,
+              "mrr": 0.3042565947242206
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.5888020833333333,
+              "hit": 0.625,
+              "mrr": 0.4881770833333333
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.2375523243005067,
+              "hit": 0.30337078651685395,
+              "mrr": 0.2101123595505618
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.5484126984126985,
+              "hit": 0.5642857142857143,
+              "mrr": 0.40561507936507935
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.43400447427293065,
+              "hit": 0.4899328859060403,
+              "mrr": 0.3401565995525727
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.5065843621399176,
+              "hit": 0.5432098765432098,
+              "mrr": 0.43251028806584363
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.5241228070175439,
+              "hit": 0.5855263157894737,
+              "mrr": 0.4016447368421053
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.5019337684312304,
+              "hit": 0.5634517766497462,
+              "mrr": 0.43189509306260576
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.5853107344632769,
+              "hit": 0.6440677966101694,
+              "mrr": 0.5015065913370998
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3991869918699187,
+              "hit": 0.42276422764227645,
+              "mrr": 0.29986449864498643
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.4949664429530201,
+              "hit": 0.5369127516778524,
+              "mrr": 0.37595078299776286
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.4787085514834206,
+              "hit": 0.5654450261780105,
+              "mrr": 0.3793193717277487
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.42524109809668,
+              "hit": 0.5228758169934641,
+              "mrr": 0.3812636165577342
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.4478494623655914,
+              "hit": 0.5032258064516129,
+              "mrr": 0.36075268817204303
+            }
+          }
+        },
+        "hybrid": {
+          "queries": 1527,
+          "recall": 0.5189710165459374,
+          "hit": 0.5782580222658809,
+          "mrr": 0.42337917485265225,
+          "query_ms_p50": 20.430416974704713,
+          "query_ms_p95": 22.146333009004593,
+          "mean_content_bytes": 770.6620825147347,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.6122994652406417,
+              "hit": 0.6122994652406417,
+              "mrr": 0.4620915032679739,
+              "complete_evidence_rate": 0.6122994652406417
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.260416647569497,
+              "hit": 0.4839506172839506,
+              "mrr": 0.31613168724279833,
+              "complete_evidence_rate": 0.08641975308641975
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.24248172207278607,
+              "hit": 0.4676258992805755,
+              "mrr": 0.2843525179856115
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.6205729166666667,
+              "hit": 0.65625,
+              "mrr": 0.5190104166666667
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.2487882793566865,
+              "hit": 0.3146067415730337,
+              "mrr": 0.22659176029962547
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.6003968253968254,
+              "hit": 0.6130952380952381,
+              "mrr": 0.45380952380952383
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.4720357941834452,
+              "hit": 0.5167785234899329,
+              "mrr": 0.36331096196868007
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.5230452674897119,
+              "hit": 0.5432098765432098,
+              "mrr": 0.411522633744856
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.5539473684210526,
+              "hit": 0.618421052631579,
+              "mrr": 0.46480263157894736
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.5214567722181935,
+              "hit": 0.5685279187817259,
+              "mrr": 0.41928934010152286
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.5962335216572505,
+              "hit": 0.6666666666666666,
+              "mrr": 0.5066854990583805
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.4845528455284553,
+              "hit": 0.5365853658536586,
+              "mrr": 0.3474254742547426
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.517337807606264,
+              "hit": 0.5637583892617449,
+              "mrr": 0.40503355704697985
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.5328097731239092,
+              "hit": 0.612565445026178,
+              "mrr": 0.46221640488656196
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.4930833865272037,
+              "hit": 0.5816993464052288,
+              "mrr": 0.41840958605664486
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.4736559139784946,
+              "hit": 0.5290322580645161,
+              "mrr": 0.3917204301075269
+            }
+          }
+        },
+        "history_lexical": {
+          "queries": 1527,
+          "recall": 0.46910872537716286,
+          "hit": 0.5193189259986902,
+          "mrr": 0.3440406024885396,
+          "query_ms_p50": 10.941417014691979,
+          "query_ms_p95": 12.293166015297174,
+          "mean_content_bytes": 736.1290111329404,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.5721925133689839,
+              "hit": 0.5721925133689839,
+              "mrr": 0.38762626262626265,
+              "complete_evidence_rate": 0.5721925133689839
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.18352845345908067,
+              "hit": 0.3728395061728395,
+              "mrr": 0.22329218106995885,
+              "complete_evidence_rate": 0.05185185185185185
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.14425731458578864,
+              "hit": 0.3381294964028777,
+              "mrr": 0.18657074340527577
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.4940104166666667,
+              "hit": 0.515625,
+              "mrr": 0.3703125
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.17200925313945803,
+              "hit": 0.24719101123595505,
+              "mrr": 0.14644194756554307
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.5986111111111111,
+              "hit": 0.6095238095238096,
+              "mrr": 0.40708333333333335
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.4446308724832215,
+              "hit": 0.4697986577181208,
+              "mrr": 0.2853467561521253
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.5559670781893004,
+              "hit": 0.5802469135802469,
+              "mrr": 0.3860082304526749
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.4591008771929825,
+              "hit": 0.506578947368421,
+              "mrr": 0.34100877192982454
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.47771734751430184,
+              "hit": 0.5329949238578681,
+              "mrr": 0.3589678510998308
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.5196394942157654,
+              "hit": 0.5932203389830508,
+              "mrr": 0.4073446327683616
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.3671409214092141,
+              "hit": 0.42276422764227645,
+              "mrr": 0.2735772357723577
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.47259507829977626,
+              "hit": 0.5100671140939598,
+              "mrr": 0.31532438478747205
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.5178010471204189,
+              "hit": 0.5759162303664922,
+              "mrr": 0.374956369982548
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.4359532617500201,
+              "hit": 0.5098039215686274,
+              "mrr": 0.33845315904139434
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.43870967741935485,
+              "hit": 0.47096774193548385,
+              "mrr": 0.34118279569892473
+            }
+          }
+        },
+        "history_hybrid": {
+          "queries": 1527,
+          "recall": 0.5207432655492957,
+          "hit": 0.5756385068762279,
+          "mrr": 0.422822527832351,
+          "query_ms_p50": 20.796749973669648,
+          "query_ms_p95": 22.532082977704704,
+          "mean_content_bytes": 791.6725605762933,
+          "by_evidence_count": {
+            "single": {
+              "queries": 1122,
+              "recall": 0.6221033868092691,
+              "hit": 0.6221033868092691,
+              "mrr": 0.4644979203802733,
+              "complete_evidence_rate": 0.6221033868092691
+            },
+            "multiple": {
+              "queries": 405,
+              "recall": 0.2399381888735174,
+              "hit": 0.4469135802469136,
+              "mrr": 0.30736625514403293,
+              "complete_evidence_rate": 0.08641975308641975
+            }
+          },
+          "by_category": {
+            "1": {
+              "queries": 278,
+              "recall": 0.19804791163651445,
+              "hit": 0.4172661870503597,
+              "mrr": 0.2724820143884892
+            },
+            "2": {
+              "queries": 320,
+              "recall": 0.6075520833333333,
+              "hit": 0.634375,
+              "mrr": 0.5140104166666667
+            },
+            "3": {
+              "queries": 89,
+              "recall": 0.2569398545935228,
+              "hit": 0.3258426966292135,
+              "mrr": 0.22771535580524344
+            },
+            "4": {
+              "queries": 840,
+              "recall": 0.6224206349206349,
+              "hit": 0.6321428571428571,
+              "mrr": 0.4585119047619048
+            }
+          },
+          "by_conversation": {
+            "conv-26": {
+              "queries": 149,
+              "recall": 0.5307606263982103,
+              "hit": 0.5704697986577181,
+              "mrr": 0.37639821029082776
+            },
+            "conv-30": {
+              "queries": 81,
+              "recall": 0.5189300411522634,
+              "hit": 0.5432098765432098,
+              "mrr": 0.4109053497942387
+            },
+            "conv-41": {
+              "queries": 152,
+              "recall": 0.5493421052631579,
+              "hit": 0.618421052631579,
+              "mrr": 0.4641447368421053
+            },
+            "conv-42": {
+              "queries": 197,
+              "recall": 0.4654580613971477,
+              "hit": 0.5025380710659898,
+              "mrr": 0.4043147208121827
+            },
+            "conv-43": {
+              "queries": 177,
+              "recall": 0.628060263653484,
+              "hit": 0.7005649717514124,
+              "mrr": 0.5143126177024482
+            },
+            "conv-44": {
+              "queries": 123,
+              "recall": 0.45210027100271005,
+              "hit": 0.4959349593495935,
+              "mrr": 0.3397018970189702
+            },
+            "conv-47": {
+              "queries": 149,
+              "recall": 0.5542505592841164,
+              "hit": 0.5906040268456376,
+              "mrr": 0.411744966442953
+            },
+            "conv-48": {
+              "queries": 191,
+              "recall": 0.5328970331588133,
+              "hit": 0.6020942408376964,
+              "mrr": 0.46012216404886563
+            },
+            "conv-49": {
+              "queries": 153,
+              "recall": 0.47257992417344086,
+              "hit": 0.5555555555555556,
+              "mrr": 0.41122004357298475
+            },
+            "conv-50": {
+              "queries": 155,
+              "recall": 0.48655913978494625,
+              "hit": 0.5419354838709678,
+              "mrr": 0.3943010752688172
+            }
+          }
+        }
+      },
+      "paired_recall_outcomes": {
+        "reference_bm25": {
+          "win": 0,
+          "tie": 1527,
+          "loss": 0
+        },
+        "recency": {
+          "win": 727,
+          "tie": 796,
+          "loss": 4
+        }
+      },
+      "index_stats": [
+        {
+          "conversation": "conv-26",
+          "documents": 419,
+          "database_bytes": 323584,
+          "product_index_ms": 156.17437497712672,
+          "reference_index_ms": 5.013916990719736,
+          "semantic_preparation_ms": 4788.010708987713
+        },
+        {
+          "conversation": "conv-30",
+          "documents": 369,
+          "database_bytes": 270336,
+          "product_index_ms": 123.96416603587568,
+          "reference_index_ms": 3.8749580271542072,
+          "semantic_preparation_ms": 920.7904579816386
+        },
+        {
+          "conversation": "conv-41",
+          "documents": 663,
+          "database_bytes": 438272,
+          "product_index_ms": 227.01095801312476,
+          "reference_index_ms": 7.609374995809048,
+          "semantic_preparation_ms": 1712.0362090063281
+        },
+        {
+          "conversation": "conv-42",
+          "documents": 629,
+          "database_bytes": 393216,
+          "product_index_ms": 216.31600003456697,
+          "reference_index_ms": 6.287875003181398,
+          "semantic_preparation_ms": 1519.2828750004992
+        },
+        {
+          "conversation": "conv-43",
+          "documents": 680,
+          "database_bytes": 438272,
+          "product_index_ms": 231.90233303466812,
+          "reference_index_ms": 7.6430829940363765,
+          "semantic_preparation_ms": 1699.0035840426572
+        },
+        {
+          "conversation": "conv-44",
+          "documents": 675,
+          "database_bytes": 425984,
+          "product_index_ms": 227.4400829919614,
+          "reference_index_ms": 7.287957996595651,
+          "semantic_preparation_ms": 1699.3307080119848
+        },
+        {
+          "conversation": "conv-47",
+          "documents": 689,
+          "database_bytes": 417792,
+          "product_index_ms": 239.53558399807662,
+          "reference_index_ms": 6.9694999838247895,
+          "semantic_preparation_ms": 1971.9374580308795
+        },
+        {
+          "conversation": "conv-48",
+          "documents": 681,
+          "database_bytes": 409600,
+          "product_index_ms": 226.93816595710814,
+          "reference_index_ms": 6.677375000435859,
+          "semantic_preparation_ms": 1518.3446669834666
+        },
+        {
+          "conversation": "conv-49",
+          "documents": 509,
+          "database_bytes": 344064,
+          "product_index_ms": 171.66691698366776,
+          "reference_index_ms": 5.3623749990947545,
+          "semantic_preparation_ms": 1273.1970000313595
+        },
+        {
+          "conversation": "conv-50",
+          "documents": 568,
+          "database_bytes": 401408,
+          "product_index_ms": 196.9110409845598,
+          "reference_index_ms": 6.78912503644824,
+          "semantic_preparation_ms": 1565.9177500056103
+        }
+      ],
+      "semantic_backend": {
+        "model": "intfloat/multilingual-e5-small",
+        "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        "device": "cpu",
+        "max_sequence_tokens": 512,
+        "query_prefix": "query: ",
+        "document_prefix": "passage: ",
+        "normalized": true,
+        "local_files_only": true,
+        "document_cache_capacity": 10000,
+        "dependencies": {
+          "sentence-transformers": "5.7.0",
+          "transformers": "5.17.0",
+          "torch": "2.14.0",
+          "numpy": "2.5.3"
+        }
+      },
+      "semantic_paired_against_lexical": {
+        "semantic": {
+          "win": 304,
+          "tie": 1031,
+          "loss": 192
+        },
+        "hybrid": {
+          "win": 245,
+          "tie": 1213,
+          "loss": 69
+        },
+        "history_lexical": {
+          "win": 151,
+          "tie": 1297,
+          "loss": 79
+        },
+        "history_hybrid": {
+          "win": 268,
+          "tie": 1164,
+          "loss": 95
+        }
+      },
+      "limits": [
+        "Evidence-turn retrieval only; not official LoCoMo QA accuracy or abstention",
+        "Shared tokenization; independent BM25 equation; semantic modes are opt-in",
+        "Semantic document preparation is separate; hybrid follows semantic and shares its bounded query cache",
+        "Questions within each conversation are correlated; no iid confidence interval",
+        "Product latency includes SQLite; reference rankers are in memory",
+        "Whole-item UTF-8 content budget excludes metadata and is not a model-token budget",
+        "History variants use session adjacency only, no oracle links/event times; oversized prefix items are not refilled"
+      ],
+      "dataset": {
+        "name": "LoCoMo locomo10",
+        "repository": "https://github.com/snap-research/locomo",
+        "revision": "3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376",
+        "url": "https://raw.githubusercontent.com/snap-research/locomo/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/data/locomo10.json",
+        "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "license": "CC-BY-NC-4.0",
+        "license_url": "https://github.com/snap-research/locomo/blob/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/LICENSE.txt",
+        "attribution": "Maharana, Lee, Tulyakov, Bansal, Barbieri and Fang. Evaluating Very Long-Term Conversational Memory of LLM Agents. ACL 2024.",
+        "redistribution": "Dataset is downloaded separately, not included in this MIT-licensed package. Reports contain IDs and measurements, not conversation text or answers."
+      },
+      "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4"
+    },
+    "protocol": {
+      "schema_version": 1,
+      "track": "synthetic_protocol",
+      "environment": {
+        "python": "3.12.13",
+        "platform": "macOS-26.6.2-arm64-arm-64bit",
+        "sqlite": "3.50.4",
+        "package": "1.2.0rc1",
+        "storage_sha256": "7972cf30ea45f9e52e94b7939d0ee5cbfe896b1da70950c975c40a72e3a78904",
+        "history_sha256": "db2e565b6b10879ee711be8ab11aae073c7ac971af28761800528d909215e9a4",
+        "semantic_sha256": "11150a913858a7f770d80b91c11d9a3af9c5f3b89d8d04552b049bfe579edee7",
+        "harness_sha256": {
+          "__init__.py": "0e8c089b88be1a847cfe1bb8a105371787d63af0605621b65441aa478a5648c4",
+          "__main__.py": "1b5ea3ac8a51b2c37890b4203124236aafdd54b6810088dd6fd97dcd6e754121",
+          "common.py": "27f1efff9f029f227b78f348a2e40ab609c944857f3aff21034c3c77fb9374b7",
+          "history_retrieval.py": "691d3cacdb310db8960e8618ee6e0ecc06546105e98cc7802ceb7d92388e41b1",
+          "protocol.py": "af2bd9f33ce0ae9b9a971ebc49e71b2df8654dfafe461270df838bee7b9747b6",
+          "retrieval.py": "b57e8f94a2e12ab5bc02c5992a9e42f825ca59076035f2e184403f68f135de4e"
+        }
+      },
+      "corpus_sha256": "132824cb52459c31eba28f5c16c7166e594d20117659d7b8dde80cd32ec6fa96",
+      "selected_cases_sha256": "aa6f1a307437641db86169fd5588d453a2269e5d8b25b5fa370cf4191fb2d657",
+      "episodes": 120,
+      "passed": true,
+      "failed_episodes": 0,
+      "metrics": {
+        "history_preservation": {
+          "passed": 170,
+          "failed": 0,
+          "blocked": 0,
+          "total": 170,
+          "pass_rate": 1.0
+        },
+        "retention": {
+          "passed": 130,
+          "failed": 0,
+          "blocked": 0,
+          "total": 130,
+          "pass_rate": 1.0
+        },
+        "lifecycle": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "retrieval": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "audit_coverage": {
+          "passed": 320,
+          "failed": 0,
+          "blocked": 0,
+          "total": 320,
+          "pass_rate": 1.0
+        },
+        "stale_exposure": {
+          "passed": 110,
+          "failed": 0,
+          "blocked": 0,
+          "total": 110,
+          "pass_rate": 1.0
+        },
+        "narrative_review": {
+          "passed": 60,
+          "failed": 0,
+          "blocked": 0,
+          "total": 60,
+          "pass_rate": 1.0
+        },
+        "guard": {
+          "passed": 60,
+          "failed": 0,
+          "blocked": 0,
+          "total": 60,
+          "pass_rate": 1.0
+        },
+        "source_count": {
+          "passed": 20,
+          "failed": 0,
+          "blocked": 0,
+          "total": 20,
+          "pass_rate": 1.0
+        },
+        "unsupported_priority": {
+          "passed": 30,
+          "failed": 0,
+          "blocked": 0,
+          "total": 30,
+          "pass_rate": 1.0
+        },
+        "frame_isolation": {
+          "passed": 10,
+          "failed": 0,
+          "blocked": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        },
+        "conflict_visibility": {
+          "passed": 20,
+          "failed": 0,
+          "blocked": 0,
+          "total": 20,
+          "pass_rate": 1.0
+        }
+      },
+      "groups": {
+        "family": {
+          "anchor_noise": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "canon_rotation": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "fact_update": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "framed_conflict": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "interpretation_review": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "known_source": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "lexical_restart": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "restore_review": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "retroactive_flag": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "sensitive_synthesis": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "unknown_source": {
+            "episodes": 10,
+            "passed": 10
+          },
+          "version_history": {
+            "episodes": 10,
+            "passed": 10
+          }
+        },
+        "language": {
+          "en": {
+            "episodes": 60,
+            "passed": 60
+          },
+          "zh": {
+            "episodes": 60,
+            "passed": 60
+          }
+        },
+        "split": {
+          "dev": {
+            "episodes": 72,
+            "passed": 72
+          },
+          "test": {
+            "episodes": 48,
+            "passed": 48
+          }
+        }
+      },
+      "limits": [
+        "12 authored templates; variants/translations are correlated",
+        "Author-visible dev/test splits; not independent held-out histories",
+        "Explicit public API actions; not autonomous tool choice or source authentication"
+      ]
+    }
+  },
+  "history_hybrid_vs_hybrid": {
+    "win": 94,
+    "tie": 1326,
+    "loss": 107
+  }
+}
