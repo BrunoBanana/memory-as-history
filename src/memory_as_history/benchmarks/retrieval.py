@@ -30,7 +30,7 @@ def load_development():
     return load_locomo(Path(__file__).parent / 'data/semantic-dev-v1.json', DEVELOPMENT_MANIFEST['sha256'])
 
 
-def prepare_locomo(data):
+def prepare_locomo(data, history=False):
     if not isinstance(data, list) or not data:
         raise ValueError('nonempty conversation list required')
     prepared, seen = [], set()
@@ -46,7 +46,7 @@ def prepare_locomo(data):
         for _, key in sessions:
             if not isinstance(conversation[key], list):
                 raise ValueError('session must be a list of turns')
-            for turn in conversation[key]:
+            for position, turn in enumerate(conversation[key]):
                 mid = turn.get('dia_id')
                 if not isinstance(mid, str) or not mid or mid in ids:
                     raise ValueError('unique dialogue IDs required within each conversation')
@@ -57,7 +57,10 @@ def prepare_locomo(data):
                 caption = turn.get('blip_caption')
                 if isinstance(caption, str) and caption:
                     text += '\nImage caption: ' + caption
-                documents.append({'id': mid, 'text': text})
+                doc = {'id': mid, 'text': text}
+                if history:
+                    doc.update(session_id=f'{cid}:{key}', session_position=position)
+                documents.append(doc)
                 ids.add(mid)
         if not documents or not isinstance(item.get('qa'), list) or not item['qa']:
             raise ValueError('conversation needs turns and questions')
@@ -176,11 +179,13 @@ def _diagnostics(prepared, max_items, max_bytes):
             "per_question": rows}
 
 
-def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None):
+def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None, history=False):
     apply_budget([], max_items, max_bytes)  # Validate even if nothing is eligible.
-    prepared = prepare_locomo(data)
+    prepared = prepare_locomo(data, history=history)
     results, exclusions, index_stats = [], Counter(), []
     system_names = SYSTEMS + (('semantic', 'hybrid') if semantic_backend is not None else ())
+    if history:
+        system_names += ('history_lexical',) + (('history_hybrid',) if semantic_backend is not None else ())
     excluded_questions = []
     for conversation in prepared:
         docs = conversation['documents']
@@ -189,7 +194,8 @@ def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None):
             store = Store(path, semantic_backend=semantic_backend)
             try:
                 started = time.perf_counter()
-                mapping = {store.remember(d['text'], source=f"dialogue:{d['id']}").id: d['id'] for d in docs}
+                mapping = {store.remember(d['text'], source=f"dialogue:{d['id']}",
+                           **({'session_id': d['session_id'], 'session_position': d['session_position']} if history else {})).id: d['id'] for d in docs}
                 product_index_ms = (time.perf_counter() - started) * 1000
                 # Reopen the persisted index before any question is supplied.
                 store.close()
@@ -219,6 +225,9 @@ def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None):
                             ranked = [lookup[mapping[row['id']]] for row in recall['memories']]
                         elif system == 'reference_bm25':
                             ranked = reference.rank(query['text'])
+                        elif system in ('history_lexical', 'history_hybrid'):
+                            recall = store.search_history(query['text'], limit=max_items, mode=system.removeprefix('history_'), expand='session')
+                            ranked = [lookup[mapping[row['id']]] for row in recall['memories']]
                         elif system in ('semantic', 'hybrid'):
                             recall = store.search(query=query['text'], limit=len(docs), mode=system)
                             ranked = [lookup[mapping[row['id']]] for row in recall['memories']]
@@ -274,6 +283,7 @@ def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None):
             'completed': True, 'total_questions': total, 'scored_questions': scored,
             'exclusions': dict(exclusions), 'excluded_questions': excluded_questions,
             'budget': {'max_items': max_items, 'max_utf8_content_bytes': max_bytes},
+            'history_expansion': history,
             'diagnostics': _diagnostics(prepared, max_items, max_bytes),
             'systems': systems, 'paired_recall_outcomes': paired, 'index_stats': index_stats, 'results': results,
             'semantic_backend': semantic_backend.describe() if semantic_backend is not None else None,
@@ -283,4 +293,5 @@ def run_retrieval(data, max_items=5, max_bytes=4096, semantic_backend=None):
                        'Semantic document preparation is separate; hybrid follows semantic and shares its bounded query cache',
                        'Questions within each conversation are correlated; no iid confidence interval',
                        'Product latency includes SQLite; reference rankers are in memory',
-                       'Whole-item UTF-8 content budget excludes metadata and is not a model-token budget']}
+                       'Whole-item UTF-8 content budget excludes metadata and is not a model-token budget',
+                       'History variants use session adjacency only, no oracle links/event times; oversized prefix items are not refilled']}
