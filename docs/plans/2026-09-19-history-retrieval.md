@@ -79,3 +79,8 @@ Pre-scoring review: a seed can need both its previous version and its explanatio
   No evaluation-driven parameter changes; ordinary search remains unchanged.
 - Independent annotation of pronoun/temporal root causes and a blind external
   history holdout are not claimed. Packaging and PR/main integration follow.
+
+Installed-wheel validation: fresh environment outside checkout passes 349/349,
+actual-model MCP acceptance and all 240 evaluation-split selections/quality rows
+match source. Archive checks confirm code bytes and no model/external dataset.
+The full external installed-wheel replay is running before merge.
