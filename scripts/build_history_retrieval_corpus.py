@@ -42,7 +42,7 @@ def build():
                          f'{topic}的截止日期发生了什么变更，原因是什么？')
                 gold = ['e0', 'e1', 'e2'] if family == 'linked' else ['e0', 'e1']
                 links = ([{'from_id': 'e0', 'to_id': 'e2', 'relation': 'updates', 'reason': 'new notice explicitly revises R1'},
-                          {'from_id': 'e0', 'to_id': 'e1', 'relation': 'explains', 'reason': 'notice references checklist'}]
+                          {'from_id': 'e1', 'to_id': 'e0', 'relation': 'explains', 'reason': 'checklist explains the changed notice'}]
                          if family == 'linked' else [])
                 options = {'since': '2025-03-01T00:00:00Z', 'until': '2025-03-31T23:59:59Z'} if family == 'temporal' else {}
                 cases.append({'id': cid, 'split': split, 'language': lang, 'family': family,

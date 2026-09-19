@@ -80,6 +80,10 @@ def _tool_error(e: Exception) -> dict:
     This matters in practice: without it, a failed tool call costs the agent
     an extra round-trip of guessing."""
     hints = {
+        "timestamp": "Use a full ISO timestamp with timezone, such as 2025-03-01T00:00:00Z; omit unknown event times.",
+        "session_position": "Use a unique nonnegative position within a caller-scoped session_id.",
+        "expand must": "Choose none, links, session or both; expansion is one hop within the shared budget.",
+        "since must": "Provide an inclusive time range with since at or before until.",
         "mode must be": "Choose mode='semantic' or mode='hybrid'.",
         "limit must be": "Provide a nonnegative integer limit; anchors retain their existing priority exception.",
         "semantic": "Install memory-as-history[semantic] and run python -m memory_as_history.semantic download once. Search uses the cached model locally; recall remains model-free.",
@@ -108,6 +112,9 @@ def remember(
     tier: str = "archive",
     security_sensitive: bool = False,
     frame: str | None = None,
+    event_at: str | None = None,
+    session_id: str | None = None,
+    session_position: int | None = None,
 ) -> dict:
     """Store a new working memory. Working memories are ordinary recollections
     that have not yet gone through consolidation — they can still be recalled,
@@ -132,7 +139,8 @@ def remember(
     "project-x". Framed memories can disagree across frames without one
     silently overwriting the other: see `mark_conflict()`."""
     try:
-        return store.remember(content, source, tier, security_sensitive, frame).to_dict()
+        return store.remember(content, source, tier, security_sensitive, frame,
+                              event_at=event_at, session_id=session_id, session_position=session_position).to_dict()
     except (ValueError, PermissionError, KeyError) as e:
         return _tool_error(e)
 
@@ -494,6 +502,86 @@ def audit_log(limit: int = 50) -> list[dict]:
     action, with its reason and timestamp. Every accountable decision about
     what became history, and why."""
     return store.audit_log(limit)
+
+
+@mcp.tool()
+def set_history_context(memory_id: str, reason: str, event_at: str | None = None,
+                        session_id: str | None = None, session_position: int | None = None) -> dict:
+    """Replace ALL event/session context with an audited reason. Omitted fields clear.
+
+    event_at is a caller-supplied timezone-aware occurrence timestamp, not capture
+    time. Never invent an unknown event time. session_id identifies one scoped
+    session; session_position is its unique zero-based turn position.
+    """
+    try:
+        return store.set_history_context(memory_id, reason, event_at=event_at,
+                                         session_id=session_id, session_position=session_position).to_dict()
+    except (ValueError, KeyError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def link_memories(from_id: str, to_id: str, relation: str, reason: str) -> dict:
+    """Record a directed caller assertion: related, updates or explains.
+
+    Both records must be active. A link helps retrieve context; it never proves
+    causality, corroborates a source, overwrites earlier facts or grants priority.
+    """
+    try:
+        return store.link_memories(from_id, to_id, relation, reason)
+    except (ValueError, KeyError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def unlink_memories(link_id: str, reason: str) -> dict:
+    """Retract a mistaken relationship with an audit; retain its history."""
+    try:
+        return store.unlink_memories(link_id, reason)
+    except (ValueError, KeyError) as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def memory_links(memory_id: str, include_retired: bool = False) -> list[dict]:
+    """Inspect asserted relationships in either direction. Historical inspection
+    can include forgotten endpoints; search_history only traverses active,
+    frame/time-eligible ordinary memories.
+    """
+    return store.memory_links(memory_id, include_retired)
+
+
+@mcp.tool()
+def timeline(frame: str | None = None, session_id: str | None = None,
+             since: str | None = None, until: str | None = None, limit: int = 50) -> dict:
+    """Inspect active records ordered by explicit event time, unknown times last.
+
+    since/until are inclusive timezone-aware timestamps; bounded views exclude
+    unknown event times. Strict item limit, including anchors/canon. Dates in
+    prose are not automatically interpreted and capture time is not event time.
+    """
+    try:
+        return store.timeline(frame, session_id, since, until, limit)
+    except ValueError as exc:
+        return _tool_error(exc)
+
+
+@mcp.tool()
+def search_history(query: str, limit: int = 10, frame: str | None = None,
+                   mode: str = 'hybrid', since: str | None = None,
+                   until: str | None = None, expand: str = 'both') -> dict:
+    """Retrieve related evidence within a shared budget, with inspectable paths.
+
+    mode is lexical (no model), semantic or hybrid (explicit local model setup).
+    expand is none, links, session or both. Uses bounded one-hop relations or
+    +/-1 positions in the same caller-scoped session; preserves anchor/canon
+    priorities. Inclusive event-time bounds filter ordinary records only; no
+    inferred dates/links, trust upgrades or automatic latest-fact resolution.
+    """
+    try:
+        return store.search_history(query, limit, frame, mode, since, until, expand)
+    except (ValueError, RuntimeError) as exc:
+        return _tool_error(exc)
 
 
 def _preserve_literal_string_arguments() -> None:

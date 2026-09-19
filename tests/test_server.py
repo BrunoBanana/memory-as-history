@@ -158,3 +158,25 @@ async def test_json_encoded_list_keeps_legacy_structured_argument_support(sessio
     narrative = await call(session, 'narrate', {'content': 'fixture narrative', 'reason': 'synthesis',
                                               'memory_ids': json.dumps([memory['id']])})
     assert narrative['memory_ids'] == [memory['id']]
+
+
+@pytest.mark.anyio
+async def test_history_tools_chronology_and_retractable_links_over_stdio(session):
+    listed = await session.list_tools()
+    assert {'search_history','timeline','set_history_context','link_memories','unlink_memories','memory_links'} <= {t.name for t in listed.tools}
+    earlier = await call(session, 'remember', {'content':'original date', 'event_at':'2024-01-01T08:00:00+08:00', 'session_id':'null', 'session_position':0})
+    later = await call(session, 'remember', {'content':'deadline changed', 'event_at':'2024-02-01T00:00:00Z', 'session_id':'null', 'session_position':1})
+    assert earlier['event_at'] == '2024-01-01T00:00:00+00:00' and earlier['session_id']=='null'
+    edge = await call(session,'link_memories',{'from_id':later['id'],'to_id':earlier['id'],'relation':'updates','reason':'revised notice'})
+    rows = await call(session,'timeline',{'session_id':'null'})
+    assert [r['id'] for r in rows['memories']] == [earlier['id'],later['id']]
+    result = await call(session,'search_history',{'query':'deadline','mode':'lexical','limit':5})
+    assert len(result['memories'])==2
+    await call(session,'unlink_memories',{'link_id':edge['id'],'reason':'mistaken association'})
+    links=await call(session,'memory_links',{'memory_id':later['id'],'include_retired':True})
+    if isinstance(links,dict): links=links.get('result', [links])
+    assert links[0]['retired_at']
+    changed=await call(session,'set_history_context',{'memory_id':later['id'],'reason':'clear uncertain date'})
+    assert changed['event_at'] is None and changed['session_id'] is None
+    error=await call(session,'search_history',{'query':'deadline','since':'2024-01-01','mode':'lexical'})
+    assert error['error']=='ValueError' and error['hint']

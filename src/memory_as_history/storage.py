@@ -89,6 +89,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .history import check_limit, context_values, time_range, within_time
+
 
 def _locked(method):
     """Serialize all access to a Store's sqlite connection. sqlite3
@@ -170,8 +172,24 @@ CREATE TABLE IF NOT EXISTS memories (
     forgotten_reason TEXT,
     security_sensitive INTEGER NOT NULL DEFAULT 0,
     frame TEXT,                     -- social/relational frame the memory belongs to (Halbwachs)
+    event_at TEXT,                  -- explicit occurrence time; NULL means unknown
+    session_id TEXT,
+    session_position INTEGER,
     content_tokens TEXT             -- cached normalized token set for lexical ranking (v1.0)
 );
+
+CREATE TABLE IF NOT EXISTS memory_links (
+    id TEXT PRIMARY KEY,
+    from_id TEXT NOT NULL REFERENCES memories(id),
+    to_id TEXT NOT NULL REFERENCES memories(id),
+    relation TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    retired_at TEXT,
+    retirement_reason TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS active_memory_links
+    ON memory_links(from_id, to_id, relation) WHERE retired_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS anchors (
     memory_id TEXT PRIMARY KEY REFERENCES memories(id),
@@ -236,6 +254,9 @@ CREATE TABLE IF NOT EXISTS conflicts (
 # created before v0.5 would have crashed on first use — caught while adding
 # `frame` for v0.8.)
 MIGRATIONS = [
+    ("memories", "event_at", "TEXT"),
+    ("memories", "session_id", "TEXT"),
+    ("memories", "session_position", "INTEGER"),
     ("memories", "security_sensitive", "INTEGER NOT NULL DEFAULT 0"),
     ("memories", "frame", "TEXT"),
     ("memories", "content_tokens", "TEXT"),
@@ -410,6 +431,9 @@ class Memory:
     forgotten_reason: str | None
     security_sensitive: int = 0
     frame: str | None = None
+    event_at: str | None = None
+    session_id: str | None = None
+    session_position: int | None = None
 
     @property
     def is_forgotten(self) -> bool:
@@ -435,6 +459,9 @@ class Memory:
             "forgotten_reason": self.forgotten_reason,
             "security_sensitive": self.is_security_sensitive,
             "frame": self.frame,
+            "event_at": self.event_at,
+            "session_id": self.session_id,
+            "session_position": self.session_position,
         }
 
 class Store:
@@ -463,6 +490,9 @@ class Store:
             # the script so schema creation AND additive upgrades share a lock.
             self._conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
             self._migrate()
+            self._conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS memory_session_position "
+                               "ON memories(session_id, session_position) "
+                               "WHERE session_id IS NOT NULL AND session_position IS NOT NULL")
             self._conn.commit()
         except BaseException:
             self._conn.rollback()
@@ -509,6 +539,10 @@ class Store:
         tier: str = "archive",
         security_sensitive: bool = False,
         frame: str | None = None,
+        *,
+        event_at: str | None = None,
+        session_id: str | None = None,
+        session_position: int | None = None,
     ) -> Memory:
         """Store a new working memory. Working memories are ordinary
         recollections — they can still be recalled, but they have not gone
@@ -542,6 +576,8 @@ class Store:
         near-zero false-positive cost (flagged memories remain stored and
         recallable; only pin() requires corroboration)."""
         content = _require_text(content, "content")
+        context = context_values(event_at, session_id, session_position)
+        self._check_session_position(context)
         if tier not in TIERS:
             raise ValueError(f"tier must be one of {TIERS}, got {tier!r}")
         if tier == "testimony":
@@ -561,8 +597,8 @@ class Store:
         self._conn.execute(
             "INSERT INTO memories "
             "(id, content, source, status, tier, created_at, last_reviewed_at, "
-            "review_status, security_sensitive, frame, content_tokens) "
-            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?, ?)",
+            "review_status, security_sensitive, frame, content_tokens, event_at, session_id, session_position) "
+            "VALUES (?, ?, ?, 'working', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 mid,
                 content,
@@ -574,6 +610,9 @@ class Store:
                 int(security_sensitive),
                 frame,
                 json.dumps(_tokenize(content)),
+                context["event_at"],
+                context["session_id"],
+                context["session_position"],
             ),
         )
         if auto_reason:
@@ -1497,6 +1536,96 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # -- explicit chronology and accountable evidence relations --------------
+
+    def _check_session_position(self, context: dict, memory_id: str = '') -> None:
+        if context['session_position'] is not None and self._conn.execute(
+            "SELECT id FROM memories WHERE session_id=? AND session_position=? AND id<>?",
+            (context['session_id'], context['session_position'], memory_id),
+        ).fetchone():
+            raise ValueError('session_position already belongs to a memory in this session')
+
+    @_transactional
+    def set_history_context(self, memory_id: str, reason: str, *, event_at: str | None = None,
+                            session_id: str | None = None, session_position: int | None = None) -> Memory:
+        """Replace all optional context with audited values; omitted fields clear."""
+        reason = _require_text(reason, 'reason')
+        context = context_values(event_at, session_id, session_position)
+        memory = self.get(memory_id)
+        if memory is None:
+            raise KeyError(f'no such memory: {memory_id}')
+        self._check_session_position(context, memory_id)
+        before = {key: getattr(memory, key) for key in context}
+        self._conn.execute('UPDATE memories SET event_at=?, session_id=?, session_position=? WHERE id=?',
+                           (*context.values(), memory_id))
+        self._log(memory_id, 'set_history_context', json.dumps(
+            {'before': before, 'after': context, 'reason': reason}, ensure_ascii=False))
+        if before != context:
+            self._invalidate_narratives(memory_id, 'history context changed: ' + reason)
+        return self.get(memory_id)
+
+    @_transactional
+    def link_memories(self, from_id: str, to_id: str, relation: str, reason: str) -> dict:
+        """Record a caller-asserted relationship, never corroboration or causality proof."""
+        reason = _require_text(reason, 'reason')
+        if from_id == to_id or relation not in ('related', 'updates', 'explains'):
+            raise ValueError('distinct memories and relation related/updates/explains required')
+        for mid in (from_id, to_id):
+            memory = self.get(mid)
+            if memory is None:
+                raise KeyError(f'no such memory: {mid}')
+            if memory.is_forgotten:
+                raise ValueError('cannot link a forgotten memory')
+        existing = self._conn.execute(
+            'SELECT * FROM memory_links WHERE from_id=? AND to_id=? AND relation=? AND retired_at IS NULL',
+            (from_id, to_id, relation)).fetchone()
+        if existing:
+            return dict(existing)
+        lid = _new_id()
+        self._conn.execute('INSERT INTO memory_links(id,from_id,to_id,relation,reason,created_at) VALUES (?,?,?,?,?,?)',
+                           (lid, from_id, to_id, relation, reason, _now()))
+        self._log(from_id, 'link_memories', f'link={lid} to={to_id} relation={relation}: {reason}')
+        return dict(self._conn.execute('SELECT * FROM memory_links WHERE id=?', (lid,)).fetchone())
+
+    @_transactional
+    def unlink_memories(self, link_id: str, reason: str) -> dict:
+        reason = _require_text(reason, 'reason')
+        link = self._conn.execute('SELECT * FROM memory_links WHERE id=?', (link_id,)).fetchone()
+        if link is None:
+            raise KeyError(f'no such memory link: {link_id}')
+        if link['retired_at'] is None:
+            self._conn.execute('UPDATE memory_links SET retired_at=?, retirement_reason=? WHERE id=?',
+                               (_now(), reason, link_id))
+            self._log(link['from_id'], 'unlink_memories', f'link={link_id}: {reason}')
+        return dict(self._conn.execute('SELECT * FROM memory_links WHERE id=?', (link_id,)).fetchone())
+
+    @_locked
+    def memory_links(self, memory_id: str, include_retired: bool = False) -> list[dict]:
+        """Explicit historical inspection; may include links to forgotten records."""
+        sql = 'SELECT * FROM memory_links WHERE (from_id=? OR to_id=?)'
+        if not include_retired:
+            sql += ' AND retired_at IS NULL'
+        return [dict(r) for r in self._conn.execute(sql + ' ORDER BY created_at,id', (memory_id, memory_id))]
+
+    @_transactional
+    def timeline(self, frame: str | None = None, session_id: str | None = None,
+                 since: str | None = None, until: str | None = None, limit: int = 50) -> dict:
+        """Chronological active records; unknown event times sort last, never inferred."""
+        check_limit(limit)
+        since, until = time_range(since, until)
+        sql, params = 'SELECT * FROM memories WHERE forgotten_at IS NULL', []
+        for column, value in (('frame', frame), ('session_id', session_id)):
+            if value is not None:
+                sql += f' AND {column}=?'
+                params.append(value)
+        rows = [dict(r) for r in self._conn.execute(sql, params)]
+        unknown = sum(r['event_at'] is None for r in rows)
+        eligible = [r for r in rows if within_time(r, since, until)]
+        eligible.sort(key=lambda r: (r['event_at'] is None, r['event_at'] or '', r['created_at'], r['id']))
+        return {'memories': eligible[:limit], 'unknown_event_times': unknown,
+                'eligible_count': len(eligible), 'time_basis': 'explicit_event_time',
+                'since': since, 'until': until}
+
     # -- retrieval ----------------------------------------------------------
 
     @_locked
@@ -1505,7 +1634,7 @@ class Store:
             "SELECT id, content, source, status, tier, created_at, "
             "consolidated_at, consolidation_reason, last_reviewed_at, "
             "review_status, forgotten_at, forgotten_reason, "
-            "security_sensitive, frame FROM memories WHERE id=?",
+            "security_sensitive, frame, event_at, session_id, session_position FROM memories WHERE id=?",
             (memory_id,),
         ).fetchone()
         if row is None:
@@ -1670,6 +1799,67 @@ class Store:
                                 'reranked_candidates': len(ranked),
                                 'unranked_candidates': unranked,
                                 'inference_performed': bool(candidates)}
+        return current
+
+    @_transactional
+    def _history_snapshot(self, query, frame, since, until):
+        current = self.recall(query, limit=2**63 - 1, frame=frame)
+        original = current['memories']
+        current['memories'] = [r for r in original if within_time(r, since, until)]
+        links = [dict(r) for r in self._conn.execute('SELECT * FROM memory_links WHERE retired_at IS NULL ORDER BY created_at,id')]
+        return current, links, len(original) - len(current['memories'])
+
+    def search_history(self, query: str, limit: int = 10, frame: str | None = None,
+                       mode: str = 'hybrid', since: str | None = None,
+                       until: str | None = None, expand: str = 'both') -> dict:
+        """Optional event-time filtering and bounded one-hop evidence expansion.
+
+        Anchor/canon precedence remains global. Time bounds and expansion apply
+        only to ordinary candidates. Links express caller assertions, not trust.
+        Encoder work runs outside SQLite transactions; paths use fresh context.
+        """
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError('query is required and cannot be empty')
+        check_limit(limit)
+        if mode not in ('lexical', 'semantic', 'hybrid'):
+            raise ValueError('history mode must be lexical, semantic or hybrid')
+        if expand not in ('none', 'links', 'session', 'both'):
+            raise ValueError('expand must be none, links, session or both')
+        since, until = time_range(since, until)
+        from .history import expand_ranked
+        snapshot, _, _ = self._history_snapshot(query, frame, since, until)
+        budget = max(limit - len(snapshot['anchors']) - len(snapshot['canon']), 0)
+        candidates = snapshot['memories'] if budget else []
+        backend = None
+        ranked = candidates
+        if mode != 'lexical':
+            from .semantic import LocalE5, rank_candidates
+            with self._lock:
+                if self._semantic_backend is None:
+                    self._semantic_backend = LocalE5()
+                backend = self._semantic_backend
+            ranked = rank_candidates(candidates, query, backend, mode)
+        current, links, excluded = self._history_snapshot(query, frame, since, until)
+        fresh = {r['id']: r for r in current['memories']}
+        ordered = []
+        for row in ranked:
+            now = fresh.get(row['id'])
+            if now is not None and now['content'] == row['content']:
+                ordered.append({**now, **{key: row[key] for key in ('semantic_similarity', 'search_score') if key in row}})
+                del fresh[row['id']]
+        unranked = len(fresh)
+        ordered.extend(fresh.values())
+        remaining = max(limit - len(current['anchors']), 0)
+        current['canon'] = current['canon'][:remaining]
+        budget = max(remaining - len(current['canon']), 0)
+        current['memories'], paths = expand_ranked(ordered, links, budget, expand)
+        current['retrieval'] = {'mode': 'history', 'base_mode': mode, 'expand': expand,
+                                'since': since, 'until': until,
+                                'time_excluded_candidates': excluded,
+                                'reranked_candidates': len(ranked), 'unranked_candidates': unranked,
+                                'inference_performed': backend is not None and bool(candidates),
+                                'backend': backend.describe() if backend is not None else None,
+                                'evidence_paths': paths}
         return current
 
     def _rank_by_query(self, rows: list[dict], query: str) -> list[dict]:

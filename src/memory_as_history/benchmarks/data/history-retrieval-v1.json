@@ -136,10 +136,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Falcon release: what changed about the deadline and what was the reason?",
@@ -558,10 +558,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "猎鹰版本的截止日期发生了什么变更，原因是什么？",
@@ -980,10 +980,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Harbor shipment: what changed about the deadline and what was the reason?",
@@ -1402,10 +1402,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "港湾发货的截止日期发生了什么变更，原因是什么？",
@@ -1824,10 +1824,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Cedar exhibition: what changed about the deadline and what was the reason?",
@@ -2246,10 +2246,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "雪松展览的截止日期发生了什么变更，原因是什么？",
@@ -2668,10 +2668,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Lumen workshop: what changed about the deadline and what was the reason?",
@@ -3090,10 +3090,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "流明工作坊的截止日期发生了什么变更，原因是什么？",
@@ -3512,10 +3512,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Orbit rehearsal: what changed about the deadline and what was the reason?",
@@ -3934,10 +3934,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "轨道彩排的截止日期发生了什么变更，原因是什么？",
@@ -4356,10 +4356,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Willow inspection: what changed about the deadline and what was the reason?",
@@ -4778,10 +4778,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "柳树检查的截止日期发生了什么变更，原因是什么？",
@@ -5200,10 +5200,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Coral catalog: what changed about the deadline and what was the reason?",
@@ -5622,10 +5622,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "珊瑚目录的截止日期发生了什么变更，原因是什么？",
@@ -6044,10 +6044,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "Summit registration: what changed about the deadline and what was the reason?",
@@ -6466,10 +6466,10 @@
           "reason": "new notice explicitly revises R1"
         },
         {
-          "from_id": "e0",
-          "to_id": "e1",
+          "from_id": "e1",
+          "to_id": "e0",
           "relation": "explains",
-          "reason": "notice references checklist"
+          "reason": "checklist explains the changed notice"
         }
       ],
       "query": "山峰报名的截止日期发生了什么变更，原因是什么？",
