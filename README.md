@@ -102,18 +102,9 @@ judgment is involved; flagged material then cannot become a permanent anchor
 without independently-sourced corroboration. Agent judgment remains the
 second layer, for shapes the patterns miss.
 
-### What we are not claiming
+### The questions this view supplies
 
-The framing is a source of engineering questions, not a proof of correctness.
-This is **not** a model of human memory, and not a unified theory extracted
-from authors who disagree with each other. The legacy
-`archive / testimony / interpretation` labels are **our protocol's tiers** —
-they are *not* Ricoeur's three phases of historical inquiry. Frame labels are
-filters, not a social model and not access control. Pattern screening detects
-shapes; it does not authenticate authority. And the protocol only guarantees
-things about calls that are actually made.
-
-What the historical view does provide is a supply of questions that storage
+What the historical view provides is a supply of questions that storage
 metaphors never raise: *Who is the witness? Is this the same witness twice?
 What claim does this support? What would falsify it? Did we know this then,
 or do we only know it now? Who is not in the record, and why?*
@@ -122,7 +113,7 @@ Those questions turned out to be implementable. That is the bet of this
 project.
 
 → Longer version: **[Why history, and not just memory](docs/why-history.md)**.
-Sources, distinctions and limits: [reading report](docs/research/2026-09-19-history-memory-reading.md).
+Sources and distinctions: [reading report](docs/research/2026-09-19-history-memory-reading.md).
 
 ## What
 
