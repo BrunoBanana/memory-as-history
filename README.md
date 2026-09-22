@@ -11,6 +11,28 @@ CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci
 
 ## Why
 
+An assistant that has worked with you for months tells you something about
+your own project. You ask where that came from. It cannot say — not because
+it is evasive, but because what it retained was a sentence with a high enough
+score to survive. Nothing recorded who said it, what it was evidence for,
+whether anything contradicted it, or why it is still being repeated.
+
+Every memory design that treats retention as a ranking problem ends up here.
+Importance weights, recency decay and embedding similarity all answer *"what
+should I keep?"* and none of them answer *"on what grounds do I believe this,
+and what would change my mind?"* The second question is not a storage
+question — it is the question historians built a discipline around, working
+with sources that are fragmentary, partisan, copied from one another, and
+impossible to re-query.
+
+So this project borrows their method rather than a better scoring function:
+separate a document's origin from its truth (Bloch), notice that three copies
+of one announcement are one witness and not three, keep the superseded
+account when a judgment changes, and treat silence as produced rather than
+accidental (Trouillot). **Memory** is the present's selective relationship to
+the past; **history** is an accountable account of it. Agents have the first
+and need the second. → **[Why history, and not just memory](docs/why-history.md)**
+
 A retained statement may be an old plan, a personal recollection, a quotation or
 an interpretation. Its importance does not establish truth, and a newer statement
 does not explain why an earlier judgment changed. This project makes the sources,
