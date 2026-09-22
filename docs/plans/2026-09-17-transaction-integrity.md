@@ -88,8 +88,8 @@ Local verification on macOS / Python 3.12.13:
 | Packaging | wheel and sdist built; clean installed wheel passed all 156 tests from outside the checkout |
 | Diff / CI configuration | Whitespace check and YAML parsing passed |
 
-Review delivery: [PR #2](https://github.com/BrunoBanana/memory-as-history/pull/2)
-is based on [PR #1](https://github.com/BrunoBanana/memory-as-history/pull/1).
+Review delivery: PR #2 (historical; PR refs were removed in the 2026-09-22 repository recreation, see CHANGELOG)
+is based on PR #1.
 PR #1's nine checks passed at `7dd0bce`. PR #2's current-head CI checks are
 the authoritative remote validation record. Both stages were subsequently merged into main (PR #1: `558558d`;
 PR #2: `bc5ae62`). Source-tier semantics and unpin auditing are tracked in

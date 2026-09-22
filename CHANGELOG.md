@@ -5,6 +5,16 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Repository note (2026-09-22)
+
+The GitHub repository was recreated from a clean history on 2026-09-22 to
+remove leaked committer identity data that GitHub's permanent pull-request
+refs retained after history rewriting. Pull requests #1–#10 no longer exist
+in this repository; their content is merged into `main` and their planning
+records live in `docs/plans/`. Stars, watchers and fork graph were reset
+(all were zero). Package versions, source code and test suites are
+unchanged.
+
 ### 1.3.0a1 — knowledge-history preview (not published)
 
 - Separate immutable claims from captured material, with claim-specific support,

@@ -70,6 +70,6 @@ normal user configuration and the real memory database were left untouched.
 See [the acceptance guide and evidence](../acceptance/cross-session.md).
 
 All 179 tests pass on MCP 1.2.0, 1.30.0 and 2.2.0. Wheel/sdist build successfully;
-a clean wheel installed outside the checkout also passes 179/179. Review delivery: [PR #4](https://github.com/BrunoBanana/memory-as-history/pull/4).
+a clean wheel installed outside the checkout also passes 179/179. Review delivery: PR #4 (historical; PR refs were removed in the 2026-09-22 repository recreation, see CHANGELOG).
 Its current-head CI checks are the authoritative remote validation record. This batch leaves the runtime
 at `1.2.0.dev0` and does not publish a release.
