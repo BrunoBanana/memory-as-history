@@ -21,7 +21,7 @@ async def call(client,name,args):
 
 async def verify(root, semantic):
     params=StdioServerParameters(command=sys.executable,args=['-m','memory_as_history.server'],
-        env={'MEMORY_AS_HISTORY_DB':str(root/'history.db'),'HF_HUB_OFFLINE':'1','HF_HUB_DISABLE_TELEMETRY':'1'})
+        env={'MEMORY_AS_HISTORY_DB':str(root/'history.db'),'MEMORY_AS_HISTORY_TOOLS':'full','HF_HUB_OFFLINE':'1','HF_HUB_DISABLE_TELEMETRY':'1'})
     mode='hybrid' if semantic else 'lexical'
     checks=[]
     with anyio.fail_after(120):

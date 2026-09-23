@@ -6,7 +6,7 @@ Memory as History records **what was said, what evidence supports a claim, and
 how adopted judgments change**. It provides a SQLite-backed MCP server with
 explicit consolidation, source checks, revisions, narrative versions and forgetting.
 
-**Code version: 1.3.0a1 (unpublished preview). Changes: [Changelog](CHANGELOG.md#unreleased).
+**Version: 1.3.0. Changes: [Changelog](CHANGELOG.md).
 CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## Why history, and not just memory
@@ -181,6 +181,7 @@ Add to your client's MCP config (`.mcp.json` in the project you'll use it from, 
 
 Notes:
 - `MEMORY_AS_HISTORY_DB` env var sets the database path (default `~/.memory-as-history/memory.db`, created automatically).
+- `MEMORY_AS_HISTORY_TOOLS` selects the tool surface: `core` (default, 15 tools ≈ 3.5k tokens) carries the protocol loop — capture, consolidate, anchor, corroborate, forget, narrate, recall, audit; `full` (46 tools) adds claims, knowledge history, timelines, canon rotation, frames and conflicts. Both profiles share one storage layer and one database — switching is an env var and a restart, never a migration.
 - Give the server's tools permission in your client on first use (e.g. Claude Code will prompt; non-interactive runs need the permission mode configured) — standard for any third-party MCP server.
 - `AGENT_GUIDE.md` in this repo is a ready-to-paste system-prompt addendum telling an agent when to use each tool (including Chinese trigger phrases). Agents won't reliably invoke `promote`/`pin` from tool descriptions alone — the guide measurably helps.
 
@@ -191,6 +192,10 @@ python -m memory_as_history.server
 ```
 
 ### Tools exposed
+
+Set `MEMORY_AS_HISTORY_TOOLS=full` to expose all 46; the default `core` profile ships the first block below.
+
+**Core (default profile)**
 
 - `remember(content, source?, tier?)` — store a memory (`tier`: `archive` default or `interpretation`; establish `testimony` through corroboration)
 - `promote(memory_id, reason)` — consolidate a working memory (reason required)
@@ -206,8 +211,17 @@ python -m memory_as_history.server
 - `list_forgotten(limit?)` — list tombstoned memories and why
 - `remember(..., security_sensitive?)` / `flag_sensitive(memory_id, reason)` — mark identity/permission/instruction-like content as sensitive; requires source evidence for pin, canon and narrative use
 - `narrate(content, reason, memory_ids?, security_sensitive?, scope?, perspective?, coverage?, claim_ids?, link_ids?)` — version a scoped synthesis with validated dependencies
+- `current_narrative(scope?)` — the current scoped account, or null if none submitted
+- `due_for_consolidation(days?, limit?)` — the session-end consolidation queue
+- `audit_log(limit?)` — full trail of promote/pin/unpin/corroborate/review/forget/restore decisions, with reasons
+
+**Full profile additionally exposes**
+
+- `review(memory_id, note)` — re-confirm an `interpretation`-tier memory, resets its review clock
+- `due_for_review(days?)` — list `interpretation` memories overdue for re-examination (default: 30 days)
+- `list_forgotten(limit?)` — list tombstoned memories and why
 - `review_narrative(narrative_id, note)` — explicitly revalidate the current account after resolving source issues
-- `current_narrative(scope?)` / `narrative_history(limit?, scope?)` / `list_narratives(limit?)` — inspect scoped accounts or discover current versions
+- `narrative_history(limit?, scope?)` / `list_narratives(limit?)` — past narrative versions and account discovery
 - `canonize(memory_id, scope, reason)` — add a consolidated memory to the task-scoped active canon (reason required)
 - `decanonize(memory_id, scope?, reason)` / `end_scope(scope, reason)` — remove memory(ies) from the canon; the memory itself is untouched
 - `list_canon(scope?)` / `active_scopes()` — inspect the active canon
@@ -220,7 +234,6 @@ python -m memory_as_history.server
 - `timeline(...)` / `search_history(...)` — chronological inspection and opt-in bounded evidence expansion; see [contract and examples](docs/history-retrieval.md)
 - `link_memories(...)` / `unlink_memories(...)` / `memory_links(...)` — caller-asserted, retractable relations with inspectable history; no trust upgrades
 - New claim/evidence operations and `search_archive(...)`: see the [complete 1.3 contract](docs/knowledge-history.md).
-- `audit_log(limit?)` — full trail of promote/pin/unpin/corroborate/review/forget/restore decisions, with reasons
 
 ## Source evidence and compatibility (1.2 RC)
 

@@ -16,11 +16,11 @@ def anyio_backend():
 
 
 @asynccontextmanager
-async def connect(db_path):
+async def connect(db_path, tools="full"):
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "memory_as_history.server"],
-        env={"MEMORY_AS_HISTORY_DB": str(db_path)},
+        env={"MEMORY_AS_HISTORY_DB": str(db_path), "MEMORY_AS_HISTORY_TOOLS": tools},
     )
     with anyio.fail_after(30):
         async with stdio_client(params) as (reader, writer):

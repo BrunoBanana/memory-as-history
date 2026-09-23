@@ -1,6 +1,6 @@
 # Claims, evidence and knowledge history (1.3 preview)
 
-The unpublished `1.3.0a1` preview separates **stored material**, **a claim about
+The `1.3.0` knowledge-history layer separates **stored material**, **a claim about
 that material**, **a recorded decision to adopt it**, and **a narrative using it**.
 SQLite stores these relationships; it does not judge truth, compose explanations,
 authenticate sources or infer what an individual knew. The

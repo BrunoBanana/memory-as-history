@@ -5,7 +5,7 @@
 Memory as History 保存**说过什么、主张依据什么，以及被采用的认识如何改变**。
 项目提供基于 SQLite 的 MCP 服务，让巩固、来源判断、修订、叙事版本与遗忘都有明确记录。
 
-**代码版本：1.3.0a1（未发布预览版）；变更见 [Changelog](CHANGELOG.md#unreleased)。
+**版本：1.3.0；变更见 [Changelog](CHANGELOG.md)
 CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
 
 ## 为什么是历史，而不只是记忆
@@ -103,6 +103,7 @@ python -m pytest tests/ -v   # 可选的自检
 
 说明：
 - 环境变量 `MEMORY_AS_HISTORY_DB` 指定数据库路径（默认 `~/.memory-as-history/memory.db`，自动创建）
+- 环境变量 `MEMORY_AS_HISTORY_TOOLS` 选择工具面：`core`（默认，15 个工具 ≈ 3.5k tokens）承载协议主循环——捕获、巩固、锚定、佐证、遗忘、叙事、召回、审计；`full`（46 个工具）在此基础上加入主张、认识历史、时间线、canon 轮换、框架与冲突。两个档位共享同一个存储层和同一个数据库——切换档位只是改环境变量加重启，不涉及任何数据迁移
 - 首次使用需在客户端给该 server 的工具授权（如 Claude Code 会弹提示）——所有第三方 MCP server 的通用流程
 - 仓库里的 `AGENT_GUIDE.md` 是可直接粘贴到系统提示词的**工具使用指引**（含中文触发词映射，如"重要/别丢/一直记住" → promote+pin）。实测表明：只靠工具描述，Agent 不会可靠地自主调用 `promote`/`pin`，加上指引后明显改善
 
@@ -111,6 +112,38 @@ python -m pytest tests/ -v   # 可选的自检
 ```bash
 python -m memory_as_history.server
 ```
+
+## 工具清单
+
+设置 `MEMORY_AS_HISTORY_TOOLS=full` 暴露全部 46 个；默认 `core` 档位只包含下面第一组。
+
+**Core（默认档位）**
+
+- `remember(content, source?, tier?)` — 存入记忆（`tier`：默认 `archive` 或 `interpretation`；`testimony` 必须经佐证建立）
+- `promote(memory_id, reason)` — 巩固一条 working 记忆（理由必填）
+- `pin(memory_id, reason)` — 锚定一条**已巩固**记忆（理由必填；必须先 `promote()`）
+- `unpin(memory_id, reason?)` — 解除锚定并审计；请提供理由（旧调用保持兼容）
+- `corroborate(memory_id, source)` — 记录并审计证据；`archive` → `testimony` 仅在独立佐证后发生
+- `provenance(memory_id)` — 查看已记录来源与佐证是否充分；对证据不足的历史 testimony 给出警告
+- `forget(memory_id, reason)` / `restore(memory_id, reason)` — 墓碑式遗忘与恢复（理由必填；遗忘前须先解除锚定）
+- `remember(..., security_sensitive?)` / `flag_sensitive(memory_id, reason)` — 标记身份/权限/指令类内容为敏感；锚点、canon 与叙事使用需要来源证据
+- `narrate(content, reason, memory_ids?, scope?, ...)` — 提交带依赖校验的版本化综合叙事
+- `current_narrative(scope?)` — 当前范围叙事，未提交时为 null
+- `due_for_consolidation(days?, limit?)` — 会话结束时的巩固队列
+- `audit_log(limit?)` — promote/pin/unpin/corroborate/review/forget/restore 全部决策轨迹，含理由
+
+**Full 档位额外暴露**
+
+- `review(memory_id, note)` / `due_for_review(days?)` — 复核 `interpretation` 层记忆（默认 30 天过期）
+- `list_forgotten(limit?)` — 已遗忘记忆及原因
+- `review_narrative(narrative_id, note)` — 解决来源问题后显式复核当前叙事
+- `narrative_history(limit?, scope?)` / `list_narratives(limit?)` — 叙事版本链与账户发现
+- `canonize` / `decanonize` / `end_scope` / `list_canon` / `active_scopes` — 任务级经典圈流转
+- `set_frame(memory_id, frame, reason)` / `list_frames()` / `mark_conflict` / `resolve_conflict` / `list_conflicts` — 社会框架与分歧管理
+- `set_history_context` / `timeline` / `search_history` / `link_memories` / `unlink_memories` / `memory_links` — 显式时间/会话上下文与可撤回关联
+- 主张/证据操作与 `search_archive(...)`：见[完整 1.3 契约](docs/knowledge-history.md)
+- `recall(query?, limit?, frame?)` — 锚点 + canon 优先，普通记忆按 BM25 词法相关性排序；同时返回 `stale_interpretations`、可用 `narrative` 或 `narrative_review`、未决 `conflicts`
+- `search(query, limit?, frame?, mode?)` — 可选的本地语义/混合检索，沿用历史优先级与新鲜度检查；见[配置说明](docs/semantic-search.md)
 
 ## 时间线与关联证据
 

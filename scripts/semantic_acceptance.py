@@ -26,6 +26,7 @@ async def verify(root):
     params = StdioServerParameters(command=sys.executable,
                                   args=['-m', 'memory_as_history.server'],
                                   env={'MEMORY_AS_HISTORY_DB': str(root / 'memory.db'),
+                                       'MEMORY_AS_HISTORY_TOOLS': 'full',
                                        'HF_HUB_OFFLINE': '1', 'HF_HUB_DISABLE_TELEMETRY': '1'})
     checks = []
     with anyio.fail_after(120):

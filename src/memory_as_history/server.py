@@ -59,6 +59,7 @@ Environment:
 from __future__ import annotations
 
 import os
+import sys
 from typing import get_args
 
 from pydantic import StrictInt, StrictBool
@@ -76,6 +77,53 @@ _db_path = os.environ.get("MEMORY_AS_HISTORY_DB", str(DEFAULT_DB_PATH))
 store = Store(_db_path)
 
 mcp = _MCPBase("memory-as-history")
+
+# -- tool profiles --------------------------------------------------------
+#
+# Every exposed tool costs context in every turn of every conversation, so
+# the full 46-tool surface is opt-in. The default profile carries the
+# protocol's core loop — capture, consolidate, anchor, corroborate, forget,
+# narrate, recall, audit — and leaves claims, timelines, canon rotation,
+# frames and conflict adjudication to `full`. The storage layer is identical
+# either way: a database written under one profile is fully readable under
+# the other, so switching is just an env var and a client restart.
+
+CORE_TOOLS = frozenset({
+    "remember",
+    "recall",
+    "search",
+    "promote",
+    "pin",
+    "unpin",
+    "corroborate",
+    "provenance",
+    "flag_sensitive",
+    "forget",
+    "restore",
+    "narrate",
+    "current_narrative",
+    "due_for_consolidation",
+    "audit_log",
+})
+
+_PROFILES = ("core", "full")
+_profile = os.environ.get("MEMORY_AS_HISTORY_TOOLS", "core").strip().lower() or "core"
+if _profile not in _PROFILES:
+    print(
+        f"memory-as-history: unknown MEMORY_AS_HISTORY_TOOLS={_profile!r}; "
+        f"expected one of {', '.join(_PROFILES)}. Falling back to 'core'.",
+        file=sys.stderr,
+    )
+    _profile = "core"
+
+TOOL_PROFILE = _profile
+
+
+def _register(fn):
+    """Expose a tool only when the active profile includes it."""
+    if TOOL_PROFILE == "full" or fn.__name__ in CORE_TOOLS:
+        mcp.tool()(fn)
+    return fn
 
 
 def _tool_error(e: Exception) -> dict:
@@ -119,7 +167,7 @@ def _tool_error(e: Exception) -> dict:
     }
 
 
-@mcp.tool()
+@_register
 def remember(
     content: str,
     source: str | None = None,
@@ -172,7 +220,7 @@ def remember(
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def flag_sensitive(memory_id: str, reason: str) -> dict:
     """Retroactively mark an existing memory as security-sensitive (identity /
     permissions / standing-instruction content). Unsupported anchors/canon are
@@ -184,7 +232,7 @@ def flag_sensitive(memory_id: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def promote(memory_id: str, reason: str) -> dict:
     """Consolidate a working memory into long-term memory. This is a
     deliberate, auditable act — not a similarity/importance score threshold.
@@ -195,7 +243,7 @@ def promote(memory_id: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def pin(memory_id: str, reason: str) -> dict:
     """Mark a memory as an anchor: a 'site of memory' that is always surfaced
     on recall and never competes with ordinary memories on recency or
@@ -218,7 +266,7 @@ def pin(memory_id: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def unpin(memory_id: str, reason: str | None = None) -> dict:
     """Remove anchor status, preserving the memory and auditing the outcome.
     Supply a meaningful reason. Omitted/None reasons remain compatible with
@@ -232,7 +280,7 @@ def unpin(memory_id: str, reason: str | None = None) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def corroborate(memory_id: str, source: str) -> dict:
     """Record that an independent additional source corroborates this memory.
     An 'archive' (single-source, raw) memory is automatically upgraded to
@@ -248,7 +296,7 @@ def corroborate(memory_id: str, source: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def provenance(memory_id: str) -> dict:
     """Inspect recorded sources and the independent-corroboration gate.
     Read-only: historical testimony is preserved, with a warning if recorded
@@ -260,7 +308,7 @@ def provenance(memory_id: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def review(memory_id: str, note: str) -> dict:
     """Re-examine an 'interpretation'-tier memory and confirm it still holds.
     Interpretation is inherently provisional in this protocol — it must be
@@ -272,14 +320,14 @@ def review(memory_id: str, note: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def due_for_review(days: int | None = None) -> list[dict]:
     """List interpretation-tier memories overdue for re-examination (default
     threshold: 30 days since last review, or never reviewed)."""
     return store.due_for_review(days)
 
 
-@mcp.tool()
+@_register
 def due_for_consolidation(days: float = 0.0, limit: int = 20) -> list[dict]:
     """Consolidation queue: working-tier memories not yet promoted,
     oldest-first. Call this at session end (or start) — a fixed, ceremonial
@@ -291,7 +339,7 @@ def due_for_consolidation(days: float = 0.0, limit: int = 20) -> list[dict]:
     return store.due_for_consolidation(days, limit)
 
 
-@mcp.tool()
+@_register
 def forget(memory_id: str, reason: str) -> dict:
     """Deliberately forget a memory. Not a hard delete: content is retained
     as a tombstone but disappears from `recall()` and `list_anchors()`.
@@ -304,7 +352,7 @@ def forget(memory_id: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def restore(memory_id: str, reason: str) -> dict:
     """Reverse a forgetting decision. Always possible, since forgetting is
     a tombstone, not a delete. `reason` is required and logged."""
@@ -314,13 +362,13 @@ def restore(memory_id: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def list_forgotten(limit: int = 50) -> list[dict]:
     """List tombstoned memories — what was forgotten, and why."""
     return store.list_forgotten(limit)
 
 
-@mcp.tool()
+@_register
 def narrate(content: str, reason: str, memory_ids: list[str] | None = None,
             security_sensitive: bool = False, scope: str = 'global',
             perspective: str | None = None, coverage: str | None = None,
@@ -357,7 +405,7 @@ def narrate(content: str, reason: str, memory_ids: list[str] | None = None,
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def review_narrative(narrative_id: str, note: str) -> dict:
     """Review the current narrative after fixing all source issues. Inspect its
     text first; record why it still holds. Restore/corroborate alone do not clear
@@ -369,7 +417,7 @@ def review_narrative(narrative_id: str, note: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def current_narrative(scope: str = 'global') -> dict | None:
     """Inspect the latest stored narrative, including stale text, or null if
     none exists. Check review_status and source_issues before using the account
@@ -380,7 +428,7 @@ def current_narrative(scope: str = 'global') -> dict | None:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def narrative_history(limit: StrictInt = 20, scope: str | None = None) -> list[dict] | dict:
     """Return past narrative versions, most recent first (including the
     current one) — how the story of the user has been told and re-told."""
@@ -390,7 +438,7 @@ def narrative_history(limit: StrictInt = 20, scope: str | None = None) -> list[d
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def canonize(memory_id: str, scope: str, reason: str) -> dict:
     """Add a memory to the active canon within a named task scope. The canon
     is the small, rotating set of memories relevant to the current task —
@@ -409,7 +457,7 @@ def canonize(memory_id: str, scope: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def decanonize(memory_id: str, scope: str | None = None, reason: str = "") -> dict:
     """Remove a memory from the active canon (all scopes, or a specific
     one). The memory itself is untouched — only its prioritization ends.
@@ -420,7 +468,7 @@ def decanonize(memory_id: str, scope: str | None = None, reason: str = "") -> di
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def end_scope(scope: str, reason: str) -> dict:
     """Task/phase is over: move an entire scope's canon back into ordinary
     long-term memory in one operation. Entries are not forgotten or
@@ -432,20 +480,20 @@ def end_scope(scope: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def list_canon(scope: str | None = None) -> list[dict]:
     """Inspect active canon entries, optionally filtered by scope. Legacy entries
     without sufficient evidence have eligible_for_recall=False and a warning."""
     return store.list_canon(scope)
 
 
-@mcp.tool()
+@_register
 def active_scopes() -> list[str]:
     """List distinct scopes that currently have active canon entries."""
     return store.active_scopes()
 
 
-@mcp.tool()
+@_register
 def set_frame(memory_id: str, frame: str, reason: str) -> dict:
     """Assign (or re-assign) a memory's social frame (Halbwachs) — the
     relational/social context this memory belongs to, e.g. "team-alpha",
@@ -458,13 +506,13 @@ def set_frame(memory_id: str, frame: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def list_frames() -> list[str]:
     """List distinct social frames currently in use across memories."""
     return store.list_frames()
 
 
-@mcp.tool()
+@_register
 def mark_conflict(memory_id_a: str, memory_id_b: str, reason: str) -> dict:
     """Declare two memories as conflicting framed versions of the same
     subject — e.g. colleague A's account of a deadline vs. colleague B's.
@@ -478,7 +526,7 @@ def mark_conflict(memory_id_a: str, memory_id_b: str, reason: str) -> dict:
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def resolve_conflict(
     conflict_id: str, reason: str, adopted_memory_id: str | None = None
 ) -> dict:
@@ -494,14 +542,14 @@ def resolve_conflict(
         return _tool_error(e)
 
 
-@mcp.tool()
+@_register
 def list_conflicts(resolved: bool | None = None) -> list[dict]:
     """List conflicts: resolved=null → all, false → only open, true → only
     resolved. Each entry includes both memories' content and frame."""
     return store.list_conflicts(resolved)
 
 
-@mcp.tool()
+@_register
 def recall(
     query: str | None = None, limit: int = 10, frame: str | None = None
 ) -> dict:
@@ -521,7 +569,7 @@ def recall(
     return store.recall(query, limit, frame)
 
 
-@mcp.tool()
+@_register
 def search(query: str, limit: int = 10, frame: str | None = None,
            mode: str = 'hybrid') -> dict:
     """Find paraphrased evidence with an optional local multilingual encoder.
@@ -538,7 +586,7 @@ def search(query: str, limit: int = 10, frame: str | None = None,
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def audit_log(limit: int = 50) -> list[dict]:
     """Return the full audit trail — every promote/pin/corroborate/review
     action, with its reason and timestamp. Every accountable decision about
@@ -546,7 +594,7 @@ def audit_log(limit: int = 50) -> list[dict]:
     return store.audit_log(limit)
 
 
-@mcp.tool()
+@_register
 def set_history_context(memory_id: str, reason: str, event_at: str | None = None,
                         session_id: str | None = None, session_position: StrictInt | None = None) -> dict:
     """Replace ALL event/session context with an audited reason. Omitted fields clear.
@@ -562,7 +610,7 @@ def set_history_context(memory_id: str, reason: str, event_at: str | None = None
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def link_memories(from_id: str, to_id: str, relation: str, reason: str) -> dict:
     """Record a directed caller assertion: related, updates or explains.
 
@@ -575,7 +623,7 @@ def link_memories(from_id: str, to_id: str, relation: str, reason: str) -> dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def unlink_memories(link_id: str, reason: str) -> dict:
     """Retract a mistaken relationship with an audit; retain its history."""
     try:
@@ -584,7 +632,7 @@ def unlink_memories(link_id: str, reason: str) -> dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def memory_links(memory_id: str, include_retired: bool = False) -> list[dict]:
     """Inspect asserted relationships in either direction. Historical inspection
     can include forgotten endpoints; search_history only traverses active,
@@ -593,7 +641,7 @@ def memory_links(memory_id: str, include_retired: bool = False) -> list[dict]:
     return store.memory_links(memory_id, include_retired)
 
 
-@mcp.tool()
+@_register
 def timeline(frame: str | None = None, session_id: str | None = None,
              since: str | None = None, until: str | None = None, limit: StrictInt = 50) -> dict:
     """Inspect active records ordered by explicit event time, unknown times last.
@@ -608,7 +656,7 @@ def timeline(frame: str | None = None, session_id: str | None = None,
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def search_history(query: str, limit: StrictInt = 10, frame: str | None = None,
                    mode: str = 'hybrid', since: str | None = None,
                    until: str | None = None, expand: str = 'both') -> dict:
@@ -626,7 +674,7 @@ def search_history(query: str, limit: StrictInt = 10, frame: str | None = None,
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def create_claim(content: str, kind: str, reason: str, scope: str = 'global',
                  asserted_by: str | None = None, statement_at: str | None = None,
                  valid_from: str | None = None, valid_until: str | None = None,
@@ -646,7 +694,7 @@ def create_claim(content: str, kind: str, reason: str, scope: str = 'global',
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def add_evidence(claim_id: str, memory_id: str, stance: str, reason: str,
                  quote: str | None = None, locator: str | None = None) -> dict:
     """Link material to this particular claim: supports, challenges or context.
@@ -662,7 +710,7 @@ def add_evidence(claim_id: str, memory_id: str, stance: str, reason: str,
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def retract_evidence(evidence_id: str, reason: str) -> dict:
     """Retire an evidence association, preserving its history and requiring review."""
     try:
@@ -671,7 +719,7 @@ def retract_evidence(evidence_id: str, reason: str) -> dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def adopt_claim(claim_id: str, reason: str) -> dict:
     """Adopt or explicitly re-review a supported claim; adoption is a judgment.
 
@@ -684,7 +732,7 @@ def adopt_claim(claim_id: str, reason: str) -> dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def revise_claim(claim_id: str, replacement_id: str, reason: str) -> dict:
     """Atomically adopt a supported proposed replacement in the same scope and
     supersede the old adopted judgment. Original claims/material stay recorded;
@@ -696,7 +744,7 @@ def revise_claim(claim_id: str, replacement_id: str, reason: str) -> dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def withdraw_claim(claim_id: str, reason: str) -> dict:
     """Withdraw a proposed/adopted judgment without erasing material or events."""
     try:
@@ -705,7 +753,7 @@ def withdraw_claim(claim_id: str, reason: str) -> dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def inspect_claim(claim_id: str, as_of: str | None = None) -> dict | None:
     """Inspect a claim, evidence and decisions, optionally at a system recording
     timestamp. Late records cannot enter earlier knowledge. This is not a person's
@@ -718,7 +766,7 @@ def inspect_claim(claim_id: str, as_of: str | None = None) -> dict | None:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def recall_claims(query: str | None = None, limit: StrictInt = 10, scope: str | None = None,
                   as_of: str | None = None, valid_at: str | None = None,
                   include_inactive: StrictBool = False) -> dict:
@@ -736,7 +784,7 @@ def recall_claims(query: str | None = None, limit: StrictInt = 10, scope: str | 
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def list_narratives(limit: StrictInt = 20) -> list[dict] | dict:
     """Discover current accounts in different scopes. Stale accounts return only
     metadata and null content; current_narrative(scope) deliberately inspects
@@ -749,7 +797,7 @@ def list_narratives(limit: StrictInt = 20) -> list[dict] | dict:
         return _tool_error(exc)
 
 
-@mcp.tool()
+@_register
 def search_archive(query: str, limit: StrictInt = 10, frame: str | None = None,
                    session_id: str | None = None, since: str | None = None,
                    until: str | None = None) -> dict:

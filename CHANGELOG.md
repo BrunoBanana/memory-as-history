@@ -3,19 +3,23 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.3.0] — 2026-09-23
 
-### Repository note (2026-09-22)
+First tagged release. Promotes the 1.3.0a1 knowledge-history preview to a
+stable version and adds tool profiles.
 
-The GitHub repository was recreated from a clean history on 2026-09-22 to
-remove leaked committer identity data that GitHub's permanent pull-request
-refs retained after history rewriting. Pull requests #1–#10 no longer exist
-in this repository; their content is merged into `main` and their planning
-records live in `docs/plans/`. Stars, watchers and fork graph were reset
-(all were zero). Package versions, source code and test suites are
-unchanged.
+### Added
 
-### 1.3.0a1 — knowledge-history preview (not published)
+- **Tool profiles.** `MEMORY_AS_HISTORY_TOOLS` selects the MCP surface:
+  `core` (default) exposes the 15 tools that carry the protocol loop —
+  capture, consolidate, anchor, corroborate, forget, narrate, recall, audit
+  — at roughly 3.5k tokens of tool manifest; `full` keeps all 46 tools.
+  Profiles share one storage layer and one database: switching is an env
+  var and a restart, never a migration. Five new stdio protocol tests pin
+  the default surface, the corroboration gate on `core`, the full surface,
+  the unknown-value fallback and cross-profile database interoperability.
+
+### Previously integrated 1.3.0a1 work
 
 - Separate immutable claims from captured material, with claim-specific support,
   challenge/context evidence, exact quote checks and declared common-origin groups.
@@ -39,10 +43,16 @@ unchanged.
 - Correct simplified theory attribution and expose the limit of legacy provenance
   counts: source-label distinctness is not verified independence. Existing fields
   and gate semantics remain, with two additive explanatory provenance fields.
-- The suite now includes 419 tests: 70 new behavioral/protocol regressions covering
-  late evidence, reposts, self-reinterpretation, source withdrawal, migrations,
-  faults, concurrency and real stdio restarts. These are authored conformance
-  tests, not blind historical-reasoning results or a retrieval improvement claim.
+
+### Repository note (2026-09-22)
+
+The GitHub repository was recreated from a clean history on 2026-09-22 to
+remove leaked committer identity data that GitHub's permanent pull-request
+refs retained after history rewriting. Pull requests #1–#10 no longer exist
+in this repository; their content is merged into `main` and their planning
+records live in `docs/plans/`. Stars, watchers and fork graph were reset
+(all were zero). Package versions, source code and test suites are
+unchanged.
 
 ### Previously integrated 1.2 RC work
 
