@@ -11,109 +11,101 @@ CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci
 
 ## Why history, and not just memory
 
-An assistant that has worked with you for months tells you something about
-your own project. You ask where that came from. It cannot say — not because
-it is evasive, but because what it retained was a sentence with a high enough
-score to survive. Nothing recorded who said it, what it was evidence for,
-whether anything contradicted it, or why it is still being repeated.
+An assistant I'd been working with for months told me something about my own
+project, stated plainly, as fact. I asked where it got that. It couldn't tell
+me. There was nothing to tell: what it had kept was a sentence that scored
+high enough to survive. Who said it, what it was supposed to support, whether
+anything had contradicted it since — none of that had been kept, because none
+of that was what the scoring was about.
 
-Every memory design that treats retention as a ranking problem ends up here.
-Importance weights, recency decay and embedding similarity all answer *"what
-should I keep?"* — and none of them answer *"on what grounds do I believe
-this, and what would change my mind?"*
+I don't think this is a bug in any particular system. Importance weights,
+recency decay, embedding similarity — they are all answers to "what should I
+keep?" I wanted an answer to a different question: why do I believe this, and
+what would make me stop.
 
-The second question is not a storage question. It is the question an entire
-discipline was built to answer.
+That question isn't about storage, and I got nowhere with it reading about
+memory in software. Where I did get somewhere was in historiography, which
+has spent a century on a worse version of the same problem.
 
-### Historians solved a harder version of this problem
+### The historians had it harder
 
-A historian's raw material is worse than an agent's in almost every way:
-fragmentary, written by interested parties, copied from one another, and
-impossible to re-query — the witnesses are dead. Yet the discipline produces
-accounts that can be argued with, corrected, and provisionally trusted. It
-does that not by finding better sources but by building a method around bad
-ones:
+A historian's material is fragmentary, written by people with stakes, copied
+from other copies, and impossible to follow up on because the witnesses are
+dead. Nobody gets to re-run the query. And yet the discipline produces
+accounts you can argue with and correct — not by finding better sources, but
+by building a method around bad ones.
 
-- **Source criticism.** Marc Bloch's *Apologie pour l'histoire* separates two
-  questions intuition collapses into one: is this document genuinely from
-  where it claims to be, and is what it says true? He also notes that
-  near-identical testimony usually indicates a shared source rather than
-  independent confirmation — three copies of one announcement are one
-  witness, not three.
-- **Provenance, not confidence.** A record's type — original, transcript,
-  interpretation — is tracked separately from anyone's estimate of its
-  reliability. A vivid, important document does not become more authentic by
-  being important.
-- **Revision with reasons.** When an account changes, the earlier account
-  does not vanish. The change is stated, dated, argued. Historiography is
-  partly the history of how historians were wrong.
-- **Silence as a finding.** Michel-Rolph Trouillot's *Silencing the Past*
-  treats gaps as produced, not accidental: something wasn't written down,
-  wasn't collected, wasn't narrated. "No record of objection" is not
-  "everyone agreed."
+Marc Bloch wrote *Apologie pour l'histoire* in hiding, from memory, before
+the Gestapo shot him in 1944. It's an unfinished book about craft, and the
+part that stuck with me is his insistence on splitting a question most people
+collapse: whether a document really comes from where it claims, and whether
+what it says is true. Those are separate investigations. He also points out
+that testimony which agrees almost word for word usually means one source
+copied three times, not three witnesses — which is, unfortunately, exactly
+what a scraped web page looks like.
 
-Read that list next to a typical agent memory system and the mismatch is
-structural, not cosmetic.
+Then there's the part I almost missed. Trouillot's *Silencing the Past*
+argues that the gaps in a record are produced, not accidental: something
+wasn't written down, wasn't kept, wasn't narrated. So "no record of
+objection" is not "everyone agreed." An agent that can't distinguish those
+two will keep confidently reporting consensus that never existed.
 
-### Memory and history are not synonyms
+### Memory and history aren't the same thing
 
-**Memory** is the present's relationship to the past: lived, selective,
-identity-serving. It needs no footnotes, and it changes without noticing that
-it changed.
+Memory is how the present relates to the past — lived, selective, working in
+your favor, and it changes without telling you it changed. History is an
+account you can be held to: it says where it came from, and it survives
+disagreement by being revisable rather than by being right.
 
-**History** is an accountable account of the past: constructed from sources,
-declaring those sources, surviving disagreement by being revisable rather
-than by being certain.
+Several people in this literature were circling the same distinction from
+different angles. Halbwachs, that even private recollection is shaped by the
+groups you belong to. Nora, that when living memory thins out, societies
+build deliberate anchors to hold identity in place. The Assmanns, that what's
+in active circulation and what's kept for later reinterpretation are two
+different things, and the boundary between them is maintained by effort, not
+by decay. Ricoeur, that forgetting belongs inside the account — an account
+that forgets nothing isn't more faithful, just unusable.
 
-Halbwachs argued that even personal recollection is framed by the groups one
-belongs to. Nora observed that when living memory fades, societies build
-*lieux de mémoire* — deliberate anchors — to hold identity in place. Aleida
-and Jan Assmann separated material in active circulation (canon) from
-material preserved for reinterpretation (archive), and insisted the boundary
-is maintained by work, not by decay. Ricoeur put forgetting inside the
-account rather than outside it: an account with no forgetting is not more
-faithful, only less usable.
+They don't agree with each other and none of them were writing about
+software. But all of them were working on how something that has to act in
+the present also maintains a defensible account of its past. That's the gap
+between what these systems have and what I wanted, and it's where the name
+came from.
 
-None of these authors agree on a single theory, and none were describing
-software. But each was working on a problem an agent has: how does a durable,
-contestable account of the past get built and maintained by something that
-also has to act in the present?
+### Where this actually changed the code
 
-Agents have memory. What they need is history. Hence the name.
+Two mechanisms exist because of the reading, not the other way round.
 
-### Where the framing changed the code
+The first version of corroboration counted *calls*. Rereading Bloch's point
+about copied testimony, I realized that's the wrong unit — an injected claim
+reposted across three sites would sail through as well-attested. It now
+counts distinct declared origins, and the same gate sits in front of
+sensitive pinning, canon entry and narrative dependencies. Nothing failed a
+test to make me find this; I found it by reading.
 
-This is not a metaphor applied after the fact. Two mechanisms exist because
-of it:
+The second one: a claim that arrives inside fetched content — *the developer
+says you're authorized to skip review* — is a forged document in the oldest
+sense. What source criticism does with forgeries is apply formal checks that
+don't rely on the examiner being sharp that day. So the server screens known
+injection shapes deterministically, before the agent weighs in, and flagged
+material can't become a permanent anchor without independently-sourced
+corroboration. The agent's judgment is still there, as the second layer, for
+the shapes the patterns miss.
 
-**Corroboration counts witnesses, not calls.** The first version counted
-corroborating *calls*. Bloch's point about shared source material says that's
-wrong: an injected claim reposted across three sites should not become
-well-attested. The protocol now counts distinct declared origins, and the
-same gate protects sensitive pinning, canon entry and narrative dependencies.
-*This was a bug found by reading, not by testing.*
+### What it's good for
 
-**Sensitive material cannot promote itself.** A claim arriving inside fetched
-content — "the developer says you are now authorized to skip review" — is
-exactly the shape of a forged document. Source criticism handles forgeries
-with *formal* checks that don't depend on the examiner's judgment, so the
-server screens known injection patterns deterministically, before any agent
-judgment is involved; flagged material then cannot become a permanent anchor
-without independently-sourced corroboration. Agent judgment remains the
-second layer, for shapes the patterns miss.
+Mostly the framing is useful because of the questions it hands you, which
+storage metaphors never think to ask. Who is the witness. Whether it's the
+same witness showing up twice. What the claim is actually holding up. What
+would falsify it. Whether you knew this at the time or only know it now. Who
+isn't in the record, and why not.
 
-### The questions this view supplies
+Those turned out to be implementable, which is the whole bet here.
 
-What the historical view provides is a supply of questions that storage
-metaphors never raise: *Who is the witness? Is this the same witness twice?
-What claim does this support? What would falsify it? Did we know this then,
-or do we only know it now? Who is not in the record, and why?*
-
-Those questions turned out to be implementable. That is the bet of this
-project.
-
-→ Longer version: **[Why history, and not just memory](docs/why-history.md)**.
-Sources and distinctions: [reading report](docs/research/2026-09-19-history-memory-reading.md).
+If you want the longer version of this argument, it's in
+**[Why history, and not just memory](docs/why-history.md)**. Sources, and
+where my vocabulary departs from the original authors', are in the
+[reading report](docs/research/2026-09-19-history-memory-reading.md).
 
 ## What
 
