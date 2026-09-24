@@ -5,8 +5,10 @@
 Memory as History 保存**说过什么、主张依据什么，以及被采用的认识如何改变**。
 项目提供基于 SQLite 的 MCP 服务，让巩固、来源判断、修订、叙事版本与遗忘都有明确记录。
 
-**版本：1.3.0；变更见 [Changelog](CHANGELOG.md)
-CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+[![PyPI](https://img.shields.io/pypi/v/memory-as-history)](https://pypi.org/project/memory-as-history/)
+[![Python](https://img.shields.io/pypi/pyversions/memory-as-history)](https://pypi.org/project/memory-as-history/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)
 
 ## 为什么是历史，而不只是记忆
 
@@ -75,6 +77,16 @@ CI：[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/c
 
 ## 安装
 
+从 PyPI 安装：
+
+```bash
+pip install memory-as-history
+# 或不安装、按需运行：
+uvx memory-as-history --help
+```
+
+或从源码安装：
+
 ```bash
 git clone https://github.com/BrunoBanana/memory-as-history.git
 cd memory-as-history
@@ -91,15 +103,14 @@ python -m pytest tests/ -v   # 可选的自检
 {
   "mcpServers": {
     "memory-as-history": {
-      "command": "/绝对路径/memory-as-history/venv/bin/python",
-      "args": ["-m", "memory_as_history.server"],
-      "env": {
-        "PYTHONPATH": "/绝对路径/memory-as-history/src"
-      }
+      "command": "uvx",
+      "args": ["memory-as-history"]
     }
   }
 }
 ```
+
+打包后的入口命令自带 Python 路径——不需要 venv、不需要 `PYTHONPATH`。若用普通 `pip install`，写 `"command": "memory-as-history"`（或沿用旧方式 `"command": "/绝对路径/venv/bin/python", "args": ["-m", "memory_as_history.server"]`）。
 
 说明：
 - 环境变量 `MEMORY_AS_HISTORY_DB` 指定数据库路径（默认 `~/.memory-as-history/memory.db`，自动创建）

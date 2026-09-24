@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.1] — 2026-09-24
+
+### Added
+
+- **`--help` and `--version` on the packaged entry point.** Running the server
+  by hand used to sit silently waiting for JSON-RPC on stdin — correct
+  behavior that looks exactly like a hang, and running it by hand is the first
+  thing a new user does. `memory-as-history --help` now exits with a usage
+  note stating this is an MCP server rather than an interactive CLI, the
+  client config snippet to paste, the two environment variables, and the
+  profile/tool-count/database actually active in that process, so a
+  misconfigured client is diagnosable without reading the source. Unknown
+  arguments now fail with exit code 2 instead of starting a server on a typo
+  and hanging the client. Four regression tests cover this.
+- Project URLs (homepage, repository, changelog) in the package metadata.
+
 ## [1.3.0] — 2026-09-23
 
 First tagged release. Promotes the 1.3.0a1 knowledge-history preview to a

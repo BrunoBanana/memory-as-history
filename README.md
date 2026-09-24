@@ -6,8 +6,10 @@ Memory as History records **what was said, what evidence supports a claim, and
 how adopted judgments change**. It provides a SQLite-backed MCP server with
 explicit consolidation, source checks, revisions, narrative versions and forgetting.
 
-**Version: 1.3.0. Changes: [Changelog](CHANGELOG.md).
-CI: [![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)**
+[![PyPI](https://img.shields.io/pypi/v/memory-as-history)](https://pypi.org/project/memory-as-history/)
+[![Python](https://img.shields.io/pypi/pyversions/memory-as-history)](https://pypi.org/project/memory-as-history/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml/badge.svg)](https://github.com/BrunoBanana/memory-as-history/actions/workflows/ci.yml)
 
 ## Why history, and not just memory
 
@@ -153,6 +155,16 @@ Tool calls that violate protocol guards return **structured, self-correcting err
 
 ## Quick start
 
+Install from PyPI:
+
+```bash
+pip install memory-as-history
+# or run it on demand without installing:
+uvx memory-as-history --help
+```
+
+Or from source:
+
 ```bash
 git clone https://github.com/BrunoBanana/memory-as-history.git
 cd memory-as-history
@@ -169,15 +181,14 @@ Add to your client's MCP config (`.mcp.json` in the project you'll use it from, 
 {
   "mcpServers": {
     "memory-as-history": {
-      "command": "/absolute/path/to/memory-as-history/venv/bin/python",
-      "args": ["-m", "memory_as_history.server"],
-      "env": {
-        "PYTHONPATH": "/absolute/path/to/memory-as-history/src"
-      }
+      "command": "uvx",
+      "args": ["memory-as-history"]
     }
   }
 }
 ```
+
+The packaged entry point handles the Python path itself — no venv, no `PYTHONPATH`. With a plain `pip install`, use `"command": "memory-as-history"` (or `"command": "/absolute/path/to/venv/bin/python", "args": ["-m", "memory_as_history.server"]` as before).
 
 Notes:
 - `MEMORY_AS_HISTORY_DB` env var sets the database path (default `~/.memory-as-history/memory.db`, created automatically).

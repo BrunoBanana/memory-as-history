@@ -1,6 +1,9 @@
 """Protocol regressions: exercise the installed server over real MCP stdio."""
 
 import json
+import os
+import re
+import subprocess
 import sys
 
 import anyio
@@ -326,3 +329,52 @@ async def test_profiles_share_one_database(tmp_path):
     contents = [m["content"] for m in recalled["memories"]]
     assert "written under core" in contents
     assert claim["content"] == "core material is visible to full"
+
+
+
+def _run_cli(args, tmp_path, env_extra=None):
+    """Invoke the packaged entry point the way a user would from a shell."""
+    env = {
+        **os.environ,
+        "MEMORY_AS_HISTORY_DB": str(tmp_path / "cli.db"),
+        **(env_extra or {}),
+    }
+    return subprocess.run(
+        [sys.executable, "-m", "memory_as_history.server", *args],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+    )
+
+
+def test_help_explains_the_server_is_not_an_interactive_cli(tmp_path):
+    """`--help` must exit instead of silently waiting on stdin: a bare run looks
+    like a hang, and that is the first thing a new user does."""
+    result = _run_cli(["--help"], tmp_path)
+    assert result.returncode == 0
+    assert "MCP server, not an interactive CLI" in result.stdout
+    assert "MEMORY_AS_HISTORY_TOOLS" in result.stdout
+    assert "mcpServers" in result.stdout
+
+
+def test_help_reports_the_active_profile_and_database(tmp_path):
+    """The help text has to describe *this* process, not a generic default, so
+    a misconfigured client is diagnosable without reading the source."""
+    result = _run_cli(["--help"], tmp_path, {"MEMORY_AS_HISTORY_TOOLS": "full"})
+    assert result.returncode == 0
+    assert "profile=full, tools=46" in result.stdout
+    assert str(tmp_path / "cli.db") in result.stdout
+
+
+def test_version_prints_the_installed_distribution_version(tmp_path):
+    result = _run_cli(["--version"], tmp_path)
+    assert result.returncode == 0
+    assert re.match(r"^\d+\.\d+\.\d+", result.stdout.strip()), result.stdout
+
+
+def test_unknown_arguments_fail_loudly_instead_of_starting_a_server(tmp_path):
+    """Starting a stdio server on a typo would hang the client with no error."""
+    result = _run_cli(["--tools", "full"], tmp_path)
+    assert result.returncode == 2
+    assert "unrecognized arguments: --tools full" in result.stderr

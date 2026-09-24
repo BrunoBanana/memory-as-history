@@ -849,9 +849,75 @@ def _preserve_literal_string_arguments() -> None:
 _preserve_literal_string_arguments()
 
 
-def main() -> None:
+_USAGE = """memory-as-history — agent memory kept as history, over MCP stdio.
+
+Usage:
+  memory-as-history              run the server on stdio (what an MCP client does)
+  memory-as-history --help       show this message
+  memory-as-history --version    print the installed version
+
+This is an MCP server, not an interactive CLI. Running it directly leaves it
+waiting for JSON-RPC on stdin, which is correct but looks like a hang; normally
+an MCP client starts it for you. Add to your client config:
+
+  {{"mcpServers": {{"memory-as-history": {{"command": "memory-as-history"}}}}}}
+
+Environment:
+  MEMORY_AS_HISTORY_DB      SQLite database path
+                            (default: {db})
+  MEMORY_AS_HISTORY_TOOLS   tool profile: core (default, {core} tools) or full
+                            ({full} tools). One storage layer either way — a
+                            database written under one profile reads fine under
+                            the other, so switching is an env var and a restart.
+
+Active in this process: profile={profile}, tools={active}, db={active_db}
+
+Docs and source: https://github.com/BrunoBanana/memory-as-history"""
+
+
+def _usage() -> str:
+    try:
+        exposed = len(mcp._tool_manager.list_tools())
+    except Exception:  # pragma: no cover - defensive, never worth a crash
+        exposed = "?"
+    return _USAGE.format(
+        db=DEFAULT_DB_PATH,
+        core=len(CORE_TOOLS),
+        full=46,
+        profile=TOOL_PROFILE,
+        active=exposed,
+        active_db=_db_path,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point. Handles --help/--version, otherwise serves MCP over stdio."""
+    args = sys.argv[1:] if argv is None else argv
+
+    if any(a in ("-h", "--help") for a in args):
+        print(_usage())
+        return 0
+
+    if any(a in ("-V", "--version") for a in args):
+        try:
+            from importlib.metadata import version
+
+            print(version("memory-as-history"))
+        except Exception:
+            print("unknown (not installed as a distribution)")
+        return 0
+
+    if args:
+        print(
+            f"memory-as-history: unrecognized arguments: {' '.join(args)}\n",
+            file=sys.stderr,
+        )
+        print(_usage(), file=sys.stderr)
+        return 2
+
     mcp.run()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
