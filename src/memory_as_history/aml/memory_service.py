@@ -36,6 +36,7 @@ from ..storage import (
     _tokenize,
 )
 from .contract import ContractError, add_ok, parse_add, parse_search
+from .governance import govern_entries, record_possible_updates
 
 DEFAULT_DATA_DIR = Path.home() / ".memory-as-history" / "aml"
 
@@ -52,6 +53,13 @@ CREATE TABLE IF NOT EXISTS aml_add_log (
 CREATE TABLE IF NOT EXISTS aml_sessions (
     session_id    TEXT PRIMARY KEY,
     next_position INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS aml_updates (
+    memory_id     TEXT NOT NULL,
+    superseded_by TEXT NOT NULL,
+    similarity    REAL NOT NULL,
+    at            TEXT NOT NULL,
+    PRIMARY KEY (memory_id, superseded_by)
 );
 """
 
@@ -171,13 +179,24 @@ class MemoryService:
             )
             next_pos = self._session_next_position(conn, req["session_id"])
             for i, msg in enumerate(req["messages"]):
-                self._insert_message(
+                mid = self._insert_message(
                     conn,
                     content=msg["content"],
                     source=msg["role"],
                     event_at=_event_at(msg["timestamp"]),
                     session_id=req["session_id"],
                     session_position=next_pos + i,
+                )
+                # Write-time governance: record same-fact revisions audited
+                # (superseded_by edges). Deterministic, non-destructive.
+                record_possible_updates(
+                    conn,
+                    mid,
+                    msg["content"],
+                    event_at=_event_at(msg["timestamp"]),
+                    session_position=next_pos + i,
+                    created_at=at,
+                    at=at,
                 )
             conn.execute(
                 "INSERT INTO aml_sessions (session_id, next_position) "
@@ -212,9 +231,10 @@ class MemoryService:
         event_at: str | None,
         session_id: str,
         session_position: int,
-    ) -> None:
+    ) -> str:
         """Insert one memory row exactly as Store.remember would (archive
-        tier, working status, auto sensitivity screening)."""
+        tier, working status, auto sensitivity screening). Returns the new
+        memory id."""
         mid = uuid.uuid4().hex[:12]
         now = _now()
         auto_reason = _looks_injected(content)
@@ -247,12 +267,14 @@ class MemoryService:
                 "VALUES (?, ?, ?, ?, ?)",
                 (uuid.uuid4().hex[:12], mid, "auto_flag_sensitive", auto_reason, now),
             )
+        return mid
 
     # -- Search ----------------------------------------------------------
 
     def search(self, payload: object) -> dict:
         req = parse_search(payload)
         store = self._user_store(req["user_id"])
+        data: list[dict] = []
         try:
             if self.search_mode == "lexical":
                 result = store.recall(req["query"], limit=req["top_k"])
@@ -260,20 +282,23 @@ class MemoryService:
                 result = store.search(
                     req["query"], limit=req["top_k"], mode=self.search_mode
                 )
+            for section in ("anchors", "canon", "memories"):
+                for row in result.get(section, []):
+                    # Drop ordinary memories with zero/negative lexical
+                    # relevance: they carry no evidence signal and would only
+                    # pollute the answer generator. Anchors/canon are
+                    # identity/consensus entries and are always eligible.
+                    if section == "memories":
+                        rel = row.get("relevance")
+                        if not isinstance(rel, (int, float)) or rel <= 0:
+                            continue
+                    data.append(self._entry(row))
+            # Read-time governance: deduplicate near-exact evidence and
+            # discount older versions of the same fact (audited,
+            # non-destructive). Must run before the Store connection closes.
+            data = govern_entries(data, _now(), store._conn)
         finally:
             store.close()
-        data: list[dict] = []
-        for section in ("anchors", "canon", "memories"):
-            for row in result.get(section, []):
-                # Drop ordinary memories with zero/negative lexical
-                # relevance: they carry no evidence signal and would only
-                # pollute the answer generator. Anchors/canon are
-                # identity/consensus entries and are always eligible.
-                if section == "memories":
-                    rel = row.get("relevance")
-                    if not isinstance(rel, (int, float)) or rel <= 0:
-                        continue
-                data.append(self._entry(row))
         # Global budget: official Top K bounds the returned evidence.
         data = data[: req["top_k"]]
         return {"data": data}

@@ -179,3 +179,48 @@ Store(user_db).recall(query, limit=top_k)
 - 不实现代码/多模态赛道。
 - 不做无数据支撑的治理启发式；v0.1 忠实存储 + BM25。
 - 不把 Eval Key / Memory System Key 写入仓库。
+
+## 7. v0.2 登记：确定性记忆治理（2026-10-01 实现）
+
+> 设计稿原 3.5 节将「更新检测、冲突保留、过期抑制」列为 v0.2 候选。
+> 结合 Cycle 1 排行榜分析（MemoraX 治理维度拉开差距、确定性冲突解决
+> 配方在 MemoryAgentBench FactConsolidation 达 SOTA）与审核窗口期，
+> 于 2026-10-01 落地为 `src/memory_as_history/aml/governance.py`，
+> 以下为偏差登记。
+
+### 7.1 机制（全部确定性、无模型、可复现、可审计）
+
+1. **写时更新检测（Add）**：每条消息写入后，与同 user 最近 300 条记忆
+   比较。满足「新版显著更长（≥1.15×）」且「旧 token 完全包含于新表述」
+   （或 Jaccard ≥ 0.6）时，在 `aml_updates` 表记录
+   `(memory_id, superseded_by, similarity)` 边，并写 `audit_log`
+   （`aml_supersede`）。不删除、不改写任何既有行。
+2. **读时版本抑制（Search）**：展平后的证据窗口内：
+   - 内容归一化相等（仅空白/大小写差异）→ 去重保留新版（`aml_dedup_merge`）；
+   - 判定为同一事实的多版本 → 旧版 score ×0.25（强信号）/×0.5（弱信号）
+     （`aml_version_discount`），**旧版仍留在结果中**（历史类问题可检索），
+     仅排名后移。
+   - 治理后按新分数稳定重排：无 score 条目（anchors/canon）保持最高优先级，
+     有 score 条目降序。
+3. **去重只认内容实质相同**：`_tokenize` 丢弃单字符数字（"第8条"与"第9条"
+   token 相同但事实不同），因此去重判定使用归一化内容相等，绝不用 token
+   相似度。此规则由 `test_search_respects_top_k` 回归测试强制。
+
+### 7.2 与核心 schema 的边界
+
+- 仅新增 AML 自有表 `aml_updates`（前缀 `aml_`），`SCHEMA`/`KNOWLEDGE_SCHEMA`
+  未动；`storage.py`/`server.py` 零改动。
+- Search 响应保持契约纯净：每条目仍为 `{id, content, score?, created_at?}`，
+  治理决策只写 `audit_log`，不进响应。
+
+### 7.3 性能
+
+- 写时：每消息与最近 300 行比较（token 集合运算，毫秒级）。
+- 读时：O(n²) 仅在返回窗口（≤ 官方 Top K=100）内，实测 100 条内 <1ms 量级。
+
+### 7.4 测试
+
+- 新增 `tests/test_aml_governance.py`（14 项）：相似度信号、写时边记录与
+  审计、时间方向（旧不能 supersede 新）、幂等重放、读时降权与去重、
+  历史保留、响应契约纯净、等长模板条目不误判。
+- 全量回归：`pytest tests/`（原 455 + 新增 14 = 469 全绿）。
