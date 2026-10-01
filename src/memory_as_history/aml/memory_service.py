@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import os
 import sqlite3
 import uuid
 from pathlib import Path
@@ -115,6 +116,21 @@ def _normalize_ts(value: str | None) -> str | None:
     if not value:
         return value
     return value.replace("+00:00", "Z")
+
+
+def _audit_expand(conn: sqlite3.Connection, row: dict, at: str) -> None:
+    """Audit one neighbor-expansion decision (mirrors Store._log)."""
+    conn.execute(
+        "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            uuid.uuid4().hex[:12],
+            row["id"],
+            "aml_turn_expand",
+            f"expanded_from_seed position={row.get('session_position')}",
+            at,
+        ),
+    )
 
 
 def _event_at(timestamp: int | None) -> str | None:
@@ -282,6 +298,7 @@ class MemoryService:
                 result = store.search(
                     req["query"], limit=req["top_k"], mode=self.search_mode
                 )
+            flat: list[dict] = []
             for section in ("anchors", "canon", "memories"):
                 for row in result.get(section, []):
                     # Drop ordinary memories with zero/negative lexical
@@ -292,8 +309,24 @@ class MemoryService:
                         rel = row.get("relevance")
                         if not isinstance(rel, (int, float)) or rel <= 0:
                             continue
-                    data.append(self._entry(row))
-            # Read-time governance: deduplicate near-exact evidence and
+                    flat.append(row)
+            # Neighbor expansion: nearby turns of ranked seeds carry the
+            # extra evidence multi-hop questions need. Only turns sharing a
+            # query token are added; the Top K budget still bounds the total.
+            seeds = [
+                r
+                for r in flat
+                if r.get("session_id") is not None
+                and r.get("session_position") is not None
+            ]
+            if seeds:
+                flat.extend(
+                    self._expand_neighbors(
+                        store._conn, seeds, req["query"], req["top_k"]
+                    )
+                )
+            data = [self._entry(r) for r in flat]
+            # Read-time governance: deduplicate identical content and
             # discount older versions of the same fact (audited,
             # non-destructive). Must run before the Store connection closes.
             data = govern_entries(data, _now(), store._conn)
@@ -312,3 +345,75 @@ class MemoryService:
         if created_at:
             entry["created_at"] = created_at
         return entry
+
+    # -- read-time evidence expansion ------------------------------------
+
+    def _expand_neighbors(
+        self,
+        conn: sqlite3.Connection,
+        seed_rows: list[dict],
+        query: str,
+        top_k: int,
+    ) -> list[dict]:
+        """Expand each ranked seed to its nearby turns in the same session.
+
+        Multi-evidence questions ("where does X live" after a later "moved
+        to Y") often need more than one turn, and the missing turns usually
+        sit a few positions away from the seed that did match. This adds
+        turns within ``window`` positions of every seed — but only turns
+        that share at least one token with the query or with a seed, so
+        unrelated filler never enters the evidence window.
+
+        Returns expanded rows ordered by (session_id, session_position),
+        deduplicated against the seeds, bounded by the remaining Top K
+        budget. Every expansion decision is audited (``aml_turn_expand``).
+        """
+        budget = max(top_k - len(seed_rows), 0)
+        if budget <= 0 or not seed_rows:
+            return []
+        # Signal set: the query plus everything the ranked seeds talk about.
+        # A neighbor that shares no token with the query may still carry the
+        # decisive second piece of evidence ("moved to Shanghai" when the
+        # query only asks where someone lives), but it must talk about the
+        # same subject as a seed — otherwise it is filler, not evidence.
+        query_tokens = set(_tokenize(query))
+        seed_tokens: set[str] = set()
+        for seed in seed_rows:
+            seed_tokens |= set(_tokenize(seed["content"]))
+        signal = query_tokens | seed_tokens
+        if not signal:
+            return []
+        window = int(os.environ.get("AML_EXPAND_RADIUS", "3"))
+        seen_ids = {r["id"] for r in seed_rows}
+        found: dict[tuple[str, int], dict] = {}
+        now = _now()
+        for seed in seed_rows:
+            session_id = seed.get("session_id")
+            position = seed.get("session_position")
+            if session_id is None or position is None:
+                continue
+            rows = conn.execute(
+                "SELECT * FROM memories WHERE forgotten_at IS NULL "
+                "AND session_id = ? AND session_position BETWEEN ? AND ?",
+                (session_id, position - window, position + window),
+            ).fetchall()
+            for row in rows:
+                if row["id"] in seen_ids:
+                    continue
+                tokens = set(_tokenize(row["content"]))
+                hits = len(signal & tokens)
+                if hits <= 0:
+                    continue
+                key = (session_id, row["session_position"])
+                if key in found and found[key]["relevance"] >= hits:
+                    continue
+                expanded = dict(row)
+                # Deliberately small score: expansion rows are supplementary
+                # evidence and must rank below every BM25-ranked seed, while
+                # still carrying a positive, comparable signal.
+                expanded["relevance"] = float(hits) * 0.01
+                found[key] = expanded
+        ordered = [found[k] for k in sorted(found)]
+        for row in ordered[:budget]:
+            _audit_expand(conn, row, now)
+        return ordered[:budget]

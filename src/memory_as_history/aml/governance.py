@@ -243,6 +243,10 @@ def govern_entries(
     """
     n = len(entries)
     if n < 2:
+        if conn is not None:
+            # Commit any earlier uncommitted write on this connection
+            # (e.g. neighbor-expansion audits from the same read path).
+            conn.commit()
         return entries
     drop: set[int] = set()
     discount: dict[int, tuple[float, float]] = {}
@@ -298,4 +302,10 @@ def govern_entries(
             )
         out.append(item)
     out.sort(key=_sort_key)
+    if conn is not None:
+        # Persist read-time governance audits. The project connection uses
+        # manual transactions; without an explicit commit every audit INSERT
+        # here (and any earlier expansion audit on this connection) would be
+        # rolled back when the Store closes.
+        conn.commit()
     return out
