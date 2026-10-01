@@ -265,6 +265,14 @@ class MemoryService:
         data: list[dict] = []
         for section in ("anchors", "canon", "memories"):
             for row in result.get(section, []):
+                # Drop ordinary memories with zero/negative lexical
+                # relevance: they carry no evidence signal and would only
+                # pollute the answer generator. Anchors/canon are
+                # identity/consensus entries and are always eligible.
+                if section == "memories":
+                    rel = row.get("relevance")
+                    if not isinstance(rel, (int, float)) or rel <= 0:
+                        continue
                 data.append(self._entry(row))
         # Global budget: official Top K bounds the returned evidence.
         data = data[: req["top_k"]]

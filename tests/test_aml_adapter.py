@@ -173,6 +173,25 @@ def test_search_respects_top_k():
     assert len(result["data"]) == 30  # fewer than top_k is fine
 
 
+def test_unrelated_memories_are_filtered_out_of_search():
+    service, _ = _service()
+    _add(
+        service,
+        "r1",
+        "u1",
+        "s1",
+        [{"role": "user", "content": "我在杭州做后端开发，喜欢片儿川"}],
+    )
+    # A query sharing no token with any stored memory must not return it:
+    # zero-relevance evidence would only pollute the answer generator.
+    result = _search(service, "量子物理与意大利歌剧", "u1", top_k=5)
+    assert result["data"] == []
+    # A query with a lexical hit still returns the memory.
+    result = _search(service, "杭州 后端", "u1", top_k=5)
+    assert len(result["data"]) == 1
+    assert result["data"][0]["score"] > 0
+
+
 def test_result_shape_matches_contract():
     service, _ = _service()
     _add(service, "r1", "u1", "s1", [{"role": "user", "content": "唯一一条内容"}])
