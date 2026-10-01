@@ -32,6 +32,7 @@ Changelog = "https://github.com/BrunoBanana/memory-as-history/blob/main/CHANGELO
 
 [project.scripts]
 memory-as-history = "memory_as_history.server:main"
+memory-as-history-aml = "memory_as_history.aml.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
