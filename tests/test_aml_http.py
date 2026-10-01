@@ -31,11 +31,14 @@ def http_server():
     httpd.server_close()
 
 
-def _post(url: str, body: dict, token: str | None = None):
+def _post(url: str, body: dict, token: str | None = None, scheme: str = "Bearer"):
     data = json.dumps(body).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"Bearer {token}"
+        if scheme == "X-Api-Key":
+            headers["X-Api-Key"] = token
+        else:
+            headers["Authorization"] = f"{scheme} {token}"
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -132,6 +135,23 @@ def test_api_key_required_when_set(tmp_path):
             token="secret",
         )
         assert status == 200
+        # Official auth schemes: Bearer, Token and X-Api-Key must all work.
+        for scheme in ("Bearer", "Token", "X-Api-Key"):
+            status, _ = _post(
+                f"{base}/search",
+                {"query": "x", "user_id": "u1", "top_k": 5},
+                token="secret",
+                scheme=scheme,
+            )
+            assert status == 200, f"scheme {scheme} rejected"
+        # Wrong scheme/payload must be rejected.
+        status, _ = _post(
+            f"{base}/search",
+            {"query": "x", "user_id": "u1", "top_k": 5},
+            token="secret",
+            scheme="Basic",
+        )
+        assert status == 401
         # health stays unauthenticated
         with urllib.request.urlopen(f"{base}/health", timeout=10) as resp:
             assert resp.status == 200

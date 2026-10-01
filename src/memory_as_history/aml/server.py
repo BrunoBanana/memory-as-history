@@ -63,9 +63,12 @@ class AMLHandler(BaseHTTPRequestHandler):
         if not api_key:
             return True
         auth = self.headers.get("Authorization", "")
-        presented = (
-            auth[7:] if auth.startswith("Bearer ") else self.headers.get("X-Api-Key", "")
-        )
+        if auth.startswith("Bearer "):
+            presented = auth[7:]
+        elif auth.startswith("Token "):
+            presented = auth[6:]
+        else:
+            presented = self.headers.get("X-Api-Key", "")
         if not presented:
             return False
         return secrets.compare_digest(presented, api_key)
