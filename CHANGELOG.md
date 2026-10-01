@@ -3,6 +3,23 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- **AML (Agent Memory Leaderboard) Add/Search adapter — text track.**
+  A zero-dependency HTTP service exposing the project's memory storage and
+  BM25 retrieval through the competition's fixed contract: synchronous
+  `POST /add` (single-transaction request_id idempotency, per-user SQLite
+  isolation, per-session ordered positions), `POST /search`
+  (`{"data": [...]}` evidence array bounded by `top_k`, no answer leakage),
+  and unauthenticated `GET /health`. Runs as `python -m memory_as_history.aml`
+  or the new `memory-as-history-aml` entry point. 26 contract tests
+  (service + HTTP) and `scripts/aml_smoke.py` (end-to-end official-smoke
+  simulation) are included; full suite 454 passing. Deployment recipe and
+  submission materials checklist live in [docs/aml/](docs/aml/README.md),
+  design in [docs/plans/2026-09-30-aml-adapter.md](docs/plans/2026-09-30-aml-adapter.md).
+
 ## [1.3.1] — 2026-09-24
 
 ### Added

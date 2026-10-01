@@ -1,0 +1,36 @@
+# Minimal TLS deployment: Caddy terminates HTTPS (automatic Let's Encrypt)
+# in front of the AML service. Replace aml.example.com with your domain.
+#
+# Usage:
+#   docker compose -f docker-compose.example.yml up -d
+#
+# Then set AML_API_KEY in the environment / .env file before starting.
+
+services:
+  aml:
+    build: .
+    restart: unless-stopped
+    environment:
+      AML_DATA_DIR: /data
+      AML_API_KEY: ${AML_API_KEY:-}
+      AML_SEARCH_MODE: ${AML_SEARCH_MODE:-lexical}
+    volumes:
+      - aml-data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - aml
+
+volumes:
+  aml-data:
+  caddy-data:
+  caddy-config:

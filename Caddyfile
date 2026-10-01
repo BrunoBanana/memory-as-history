@@ -1,0 +1,8 @@
+# Caddy reverse proxy for the AML service (see docker-compose.example.yml).
+# Replace aml.example.com with your registered domain; Caddy obtains and
+# renews a Let's Encrypt certificate automatically. Keep the four Add/Search
+# paths and /health under this domain.
+
+aml.example.com {
+    reverse_proxy aml:8000
+}
