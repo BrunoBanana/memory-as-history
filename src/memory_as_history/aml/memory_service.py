@@ -366,15 +366,32 @@ class MemoryService:
             # multipliers; strongest matching clue wins per row.
             clues = detect_temporal_clues(req["query"]) if self.use_temporal else []
             if clues and data:
+                # Prefer the message's own timestamp (event_at, spans the real
+                # conversation time) over the write timestamp (created_at),
+                # which is identical for messages ingested in one /add batch.
+                conn = store._conn
+                event_map: dict[str, str | None] = {}
+                if conn is not None:
+                    try:
+                        ids = [item["id"] for item in data]
+                        q = (
+                            "SELECT id, event_at FROM memories "
+                            f"WHERE id IN ({','.join('?' * len(ids))})"
+                        )
+                        for row in conn.execute(q, ids).fetchall():
+                            event_map[row["id"]] = row["event_at"]
+                    except sqlite3.Error:
+                        pass  # fall back to created_at
                 stamps = [
-                    parse_iso_ts(item.get("created_at"))
+                    parse_iso_ts(event_map.get(item["id"]) or item.get("created_at"))
                     for item in data
-                    if item.get("created_at")
                 ]
                 now_ts = max((s for s in stamps if s is not None), default=None)
                 if now_ts is not None:
                     for item in data:
-                        ts = parse_iso_ts(item.get("created_at"))
+                        ts = parse_iso_ts(
+                            event_map.get(item["id"]) or item.get("created_at")
+                        )
                         if ts is None:
                             continue
                         factor = max(
@@ -382,7 +399,6 @@ class MemoryService:
                         )
                         if factor != 1.0 and "score" in item:
                             item["score"] = item["score"] * factor
-                    conn = store._conn
                     if conn is not None:
                         try:
                             for clue in clues:
