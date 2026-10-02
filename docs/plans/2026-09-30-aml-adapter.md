@@ -268,3 +268,55 @@ Store 连接为手动事务模式（`sqlite3.connect` 默认 `isolation_level=""
 - 扩展只取同会话 ±K 轮，不跨会话、不扩展锚点/规范条目（评测流无）。
 - token 门控是词法启发式：语义改写但与种子零共享 token 的轮次仍会
   漏掉——留给 P1 hybrid 的语义腿覆盖。
+
+## 9. v0.4 hybrid 检索（P1，2026-10-02）
+
+LoCoMo 自测基线：lexical mean recall@5 **42.76%**；同一数据跑 hybrid
+（E5-small + RRF，无过滤）**51.90%**（+9.14pp）。P1 把 hybrid 正式接入
+AML 层并上线。
+
+### 9.1 语义栈（项目已有，`semantic.py`）
+
+- `LocalE5`：pinned `intfloat/multilingual-e5-small`
+  （revision `614241f6…`，CPU，safetensors，512 tokens），默认
+  `local_files_only`，显式 `python -m memory_as_history.semantic download`
+  下载；查询/文档分别加 `query: `/`passage: ` 前缀，归一化余弦。
+- `rank_candidates`：RRF 融合（`RRF_K=60`），输出每行
+  `semantic_similarity` + `search_score`（hybrid 下 = BM25 排名腿 +
+  语义排名腿）。
+- `Store.search(mode='hybrid'|'semantic')`：惰性加载模型、事务外推理、
+  新鲜 eligibility 复核。
+
+### 9.2 AML 层接入
+
+- `MemoryService.search()`：lexical 走 `store.recall`（原路径）；hybrid/
+  semantic 走 `store.search`。契约 score 字段：lexical 用 BM25
+  `relevance`，hybrid/semantic 用 RRF `search_score`（`_entry` 增加
+  `score_key` 参数）。
+- **语义门控（关键）**：纯语义命中（`relevance=0`）要求
+  `semantic_similarity ≥ semantic_min`（默认 **0.85**）才算证据；词法
+  命中（BM25>0）无条件保留。E5-multilingual 中文短句相似度整体偏高
+  （实测无关 0.79–0.85、相关 0.90+），0.30 等宽松阈值会把无关行全量
+  放行、污染答案生成；0.85 让"完全无关"query 返回空。`semantic_min`
+  经 `--semantic-min` / `AML_SEMANTIC_MIN` 可调。
+- **进程级模型共享**：`LocalE5._shared_model` 类级缓存——AML 服务按
+  请求建 Store，若每次 search 重新加载 470MB 模型（实测 ~60s）会打爆
+  smoke 超时；共享后首请求加载、后续 <0.1s。
+
+### 9.3 部署
+
+- Dockerfile 启用 `.[semantic]` extra，构建期预下载 pinned 模型（镜像
+  自带，运行零外网依赖）。
+- 服务器（2C2G）加 2G swap（`/swapfile`，fstab 持久化）以容纳 torch
+  推理峰值。
+- compose `AML_SEARCH_MODE=hybrid`；`AML_SEMANTIC_MIN=0.85`（默认）。
+- 公网验证：同义改写 query 精确召回对应记忆；完全无关 query 返回空；
+  首次 search ~60s（加载），其后 <1s。
+
+### 9.4 测试与回归
+
+- 新增 `tests/test_aml_hybrid.py`（9 项，mock `Store.search`，不加载
+  模型）：语义独有命中保留/丢弃、词法命中不受门控、契约 score 用
+  RRF 分、高门槛过滤、零分丢弃、lexical 回归、semantic 模式、参数
+  校验。
+- 全量回归：`pytest tests/` = **489 passed**（474 + 15，零回归）。
