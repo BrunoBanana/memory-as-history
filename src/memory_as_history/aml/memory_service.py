@@ -37,6 +37,7 @@ from ..storage import (
     _tokenize,
 )
 from .contract import ContractError, add_ok, parse_add, parse_search
+from .chunking import split_long_message
 from .governance import govern_entries, record_possible_updates
 from .temporal import detect_temporal_clues, parse_iso_ts, time_weight
 
@@ -208,32 +209,44 @@ class MemoryService:
                 (req["request_id"], req["user_id"], req["session_id"], at),
             )
             next_pos = self._session_next_position(conn, req["session_id"])
+            rows_written = 0
             for i, msg in enumerate(req["messages"]):
-                mid = self._insert_message(
-                    conn,
-                    content=msg["content"],
-                    source=msg["role"],
-                    event_at=_event_at(msg["timestamp"]),
-                    session_id=req["session_id"],
-                    session_position=next_pos + i,
-                )
-                # Write-time governance: record same-fact revisions audited
-                # (superseded_by edges). Deterministic, non-destructive.
-                record_possible_updates(
-                    conn,
-                    mid,
-                    msg["content"],
-                    event_at=_event_at(msg["timestamp"]),
-                    session_position=next_pos + i,
-                    created_at=at,
-                    at=at,
-                )
+                event_at = _event_at(msg["timestamp"])
+                # Primary-source chunking: only over-long messages split at
+                # sentence boundaries into complete blocks; every block keeps
+                # the source event metadata and the message text is preserved
+                # as a whole for governance.
+                chunks = split_long_message(msg["content"])
+                for k, block in enumerate(chunks):
+                    mid = self._insert_message(
+                        conn,
+                        content=block,
+                        source=msg["role"],
+                        event_at=event_at,
+                        session_id=req["session_id"],
+                        session_position=next_pos + i + k,
+                    )
+                    # Write-time governance: record same-fact revisions audited
+                    # (superseded_by edges), once per source message using the
+                    # FULL original text (never per block). Deterministic,
+                    # non-destructive.
+                    if k == 0:
+                        record_possible_updates(
+                            conn,
+                            mid,
+                            msg["content"],
+                            event_at=event_at,
+                            session_position=next_pos + i,
+                            created_at=at,
+                            at=at,
+                        )
+                rows_written += len(chunks)
             conn.execute(
                 "INSERT INTO aml_sessions (session_id, next_position) "
                 "VALUES (?, ?) "
                 "ON CONFLICT(session_id) DO UPDATE SET "
                 "next_position = excluded.next_position",
-                (req["session_id"], next_pos + len(req["messages"])),
+                (req["session_id"], next_pos + rows_written),
             )
             conn.commit()
         except Exception:
