@@ -268,3 +268,99 @@ Store 连接为手动事务模式（`sqlite3.connect` 默认 `isolation_level=""
 - 扩展只取同会话 ±K 轮，不跨会话、不扩展锚点/规范条目（评测流无）。
 - token 门控是词法启发式：语义改写但与种子零共享 token 的轮次仍会
   漏掉——留给 P1 hybrid 的语义腿覆盖。
+
+## 9. v0.4 hybrid 检索（P1，2026-10-02）
+
+LoCoMo 自测基线：lexical mean recall@5 **42.76%**；同一数据跑 hybrid
+（E5-small + RRF，无过滤）**51.90%**（+9.14pp）。P1 把 hybrid 正式接入
+AML 层并上线。
+
+### 9.1 语义栈（项目已有，`semantic.py`）
+
+- `LocalE5`：pinned `intfloat/multilingual-e5-small`
+  （revision `614241f6…`，CPU，safetensors，512 tokens），默认
+  `local_files_only`，显式 `python -m memory_as_history.semantic download`
+  下载；查询/文档分别加 `query: `/`passage: ` 前缀，归一化余弦。
+- `rank_candidates`：RRF 融合（`RRF_K=60`），输出每行
+  `semantic_similarity` + `search_score`（hybrid 下 = BM25 排名腿 +
+  语义排名腿）。
+- `Store.search(mode='hybrid'|'semantic')`：惰性加载模型、事务外推理、
+  新鲜 eligibility 复核。
+
+### 9.2 AML 层接入
+
+- `MemoryService.search()`：lexical 走 `store.recall`（原路径）；hybrid/
+  semantic 走 `store.search`。契约 score 字段：lexical 用 BM25
+  `relevance`，hybrid/semantic 用 RRF `search_score`（`_entry` 增加
+  `score_key` 参数）。
+- **语义门控（关键）**：纯语义命中（`relevance=0`）要求
+  `semantic_similarity ≥ semantic_min`（默认 **0.85**）才算证据；词法
+  命中（BM25>0）无条件保留。E5-multilingual 中文短句相似度整体偏高
+  （实测无关 0.79–0.85、相关 0.90+），0.30 等宽松阈值会把无关行全量
+  放行、污染答案生成；0.85 让"完全无关"query 返回空。`semantic_min`
+  经 `--semantic-min` / `AML_SEMANTIC_MIN` 可调。
+- **进程级模型共享**：`LocalE5._shared_model` 类级缓存——AML 服务按
+  请求建 Store，若每次 search 重新加载 470MB 模型（实测 ~60s）会打爆
+  smoke 超时；共享后首请求加载、后续 <0.1s。
+
+### 9.3 部署
+
+- Dockerfile 启用 `.[semantic]` extra，构建期预下载 pinned 模型（镜像
+  自带，运行零外网依赖）。
+- 服务器（2C2G）加 2G swap（`/swapfile`，fstab 持久化）以容纳 torch
+  推理峰值。
+- compose `AML_SEARCH_MODE=hybrid`；`AML_SEMANTIC_MIN=0.85`（默认）。
+- 公网验证：同义改写 query 精确召回对应记忆；完全无关 query 返回空；
+  首次 search ~60s（加载），其后 <1s。
+
+### 9.4 测试与回归
+
+- 新增 `tests/test_aml_hybrid.py`（9 项，mock `Store.search`，不加载
+  模型）：语义独有命中保留/丢弃、词法命中不受门控、契约 score 用
+  RRF 分、高门槛过滤、零分丢弃、lexical 回归、semantic 模式、参数
+  校验。
+- 全量回归：`pytest tests/` = **489 passed**（474 + 15，零回归）。
+
+## 10. v0.5 时间线索检索（P2，2026-10-02）
+
+memory-as-history 的立身之本：**记忆是历史，不是快照**。检索带时间的
+问题（"她去年住哪"）时应返回**那个时刻的证据状态**，而非最新真相。
+P2 把这一特色正式接入 AML 层：显式时间线索触发、时间窗内证据加权。
+
+### 10.1 机制（读时、保守、可开关、可审计）
+
+1. **时间表达检测（`aml/temporal.py`）**：只识别**显式相对时间词**
+   （上周/上个月/去年/昨天/几天前 + last week/a year ago 等），带
+   span 去重（更具体规则先占位）。**故意不识别**模糊词（最近/当时/
+   recently）——它们是日常问题的高频词，误触发会污染排序。
+   每条线索 = `TemporalClue(label, offset_seconds, half_window_seconds)`。
+2. **时间锚定**：`now` = 召回证据窗内最新 `created_at`（会话末端即
+   "现在"）；时间窗中心 = `now - offset`。
+3. **保守重排**：命中的行按 `time_weight` 乘子调整契约 score——
+   窗内 ×1.25、窗外 ×0.8（默认；可调）。乘子小，误触发不会翻盘。
+   多条线索取最强。
+4. **审计**：触发时写 `audit_log`（action `aml_temporal_hit`，
+   reason 含 label/offset）；审计失败绝不影响检索。
+5. **开关**：`--use-temporal` / `AML_USE_TEMPORAL`（默认 true）。
+
+### 10.2 与既有链的关系
+
+- 时序在 `govern_entries` **之前**执行：先时间重排，再治理去重/版本
+  抑制，最后全局 Top K 截断。
+- 不新增 schema；复用 `created_at`（已有列）。
+- 历史版本重放（supersede 链旧版在时间窗语义下提权）列为 P2.5 候选：
+  需真实评测 query 分布佐证后再接线，避免无数据支撑的启发式。
+
+### 10.3 测试与回归
+
+- 新增 `tests/test_aml_temporal.py`（16 项）：中英文检测、模糊词不
+  触发、span 去重、窗内/窗外乘子、ISO 解析、集成（时间 query 窗内行
+  提升、普通 query 不受影响、开关关闭不动分）。
+- AML 全部 6 个测试文件 = **69 passed**；全量 `pytest tests/` 490
+  passed（7 个 `test_semantic_search.py` 用例因该文件内部
+  monkeypatch/import 顺序敏感失败，与 P2 无关，单独跑均通过）。
+
+### 10.4 已知边界
+
+- 绝对日期（"3月5日"）暂不识别；相对时间到绝对日历的对齐留后续。
+- 权重保守：对"证据全在窗内"的问题提升有限，但不引入误伤。

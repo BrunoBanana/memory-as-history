@@ -38,6 +38,7 @@ from ..storage import (
 )
 from .contract import ContractError, add_ok, parse_add, parse_search
 from .governance import govern_entries, record_possible_updates
+from .temporal import detect_temporal_clues, parse_iso_ts, time_weight
 
 DEFAULT_DATA_DIR = Path.home() / ".memory-as-history" / "aml"
 
@@ -153,6 +154,8 @@ class MemoryService:
         self,
         data_dir: str | Path = DEFAULT_DATA_DIR,
         search_mode: str = "lexical",
+        semantic_min: float = 0.85,
+        use_temporal: bool = True,
     ):
         self.data_dir = Path(data_dir)
         (self.data_dir / "users").mkdir(parents=True, exist_ok=True)
@@ -160,7 +163,18 @@ class MemoryService:
             raise ValueError(
                 f"search_mode must be lexical, hybrid or semantic, got {search_mode!r}"
             )
+        if type(semantic_min) is not float or not 0.0 <= semantic_min <= 1.0:
+            raise ValueError("semantic_min must be a float in [0, 1]")
+        if type(use_temporal) is not bool:
+            raise ValueError("use_temporal must be a bool")
         self.search_mode = search_mode
+        # Minimum cosine similarity for a semantic-only hit to count as
+        # evidence (hybrid/semantic modes). Lexical hits bypass the gate.
+        self.semantic_min = semantic_min
+        # memory-as-history: rerank evidence by explicit temporal clues
+        # ("last year", "上周") so questions about the past retrieve the
+        # facts as they stood then. Conservative by design.
+        self.use_temporal = use_temporal
 
     # -- connections -----------------------------------------------------
 
@@ -299,16 +313,37 @@ class MemoryService:
                     req["query"], limit=req["top_k"], mode=self.search_mode
                 )
             flat: list[dict] = []
+            # Score field surfaced to the contract: BM25 relevance for
+            # lexical mode, the RRF/hybrid combined score otherwise.
+            score_key = "relevance" if self.search_mode == "lexical" else "search_score"
             for section in ("anchors", "canon", "memories"):
                 for row in result.get(section, []):
-                    # Drop ordinary memories with zero/negative lexical
-                    # relevance: they carry no evidence signal and would only
-                    # pollute the answer generator. Anchors/canon are
-                    # identity/consensus entries and are always eligible.
+                    # Drop ordinary memories that carry no evidence signal:
+                    # they would only pollute the answer generator. Anchors/
+                    # canon are identity/consensus entries and always
+                    # eligible. In hybrid/semantic modes a row qualifies when
+                    # the combined score is positive AND it has either a
+                    # lexical hit (BM25 > 0) or a semantic hit above the
+                    # similarity threshold — a pure-semantic match whose
+                    # similarity is too low is noise, not evidence.
                     if section == "memories":
-                        rel = row.get("relevance")
-                        if not isinstance(rel, (int, float)) or rel <= 0:
-                            continue
+                        if self.search_mode == "lexical":
+                            rel = row.get("relevance")
+                            if not isinstance(rel, (int, float)) or rel <= 0:
+                                continue
+                        else:
+                            combined = row.get("search_score")
+                            if not isinstance(combined, (int, float)) or combined <= 0:
+                                continue
+                            rel = row.get("relevance")
+                            sem = row.get("semantic_similarity")
+                            has_lex = isinstance(rel, (int, float)) and rel > 0
+                            has_sem = (
+                                isinstance(sem, (int, float))
+                                and sem >= self.semantic_min
+                            )
+                            if not (has_lex or has_sem):
+                                continue
                     flat.append(row)
             # Neighbor expansion: nearby turns of ranked seeds carry the
             # extra evidence multi-hop questions need. Only turns sharing a
@@ -325,7 +360,61 @@ class MemoryService:
                         store._conn, seeds, req["query"], req["top_k"]
                     )
                 )
-            data = [self._entry(r) for r in flat]
+            data = [self._entry(r, score_key) for r in flat]
+            # Temporal clues ("where did she live LAST YEAR?") rerank by the
+            # time the facts were true, not by today's ranking. Conservative
+            # multipliers; strongest matching clue wins per row.
+            clues = detect_temporal_clues(req["query"]) if self.use_temporal else []
+            if clues and data:
+                # Prefer the message's own timestamp (event_at, spans the real
+                # conversation time) over the write timestamp (created_at),
+                # which is identical for messages ingested in one /add batch.
+                conn = store._conn
+                event_map: dict[str, str | None] = {}
+                if conn is not None:
+                    try:
+                        ids = [item["id"] for item in data]
+                        q = (
+                            "SELECT id, event_at FROM memories "
+                            f"WHERE id IN ({','.join('?' * len(ids))})"
+                        )
+                        for row in conn.execute(q, ids).fetchall():
+                            event_map[row["id"]] = row["event_at"]
+                    except sqlite3.Error:
+                        pass  # fall back to created_at
+                stamps = [
+                    parse_iso_ts(event_map.get(item["id"]) or item.get("created_at"))
+                    for item in data
+                ]
+                now_ts = max((s for s in stamps if s is not None), default=None)
+                if now_ts is not None:
+                    for item in data:
+                        ts = parse_iso_ts(
+                            event_map.get(item["id"]) or item.get("created_at")
+                        )
+                        if ts is None:
+                            continue
+                        factor = max(
+                            time_weight(ts, now_ts, clue) for clue in clues
+                        )
+                        if factor != 1.0 and "score" in item:
+                            item["score"] = item["score"] * factor
+                    if conn is not None:
+                        try:
+                            for clue in clues:
+                                conn.execute(
+                                    "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+                                    "VALUES (?, NULL, ?, ?, ?)",
+                                    (
+                                        uuid.uuid4().hex[:12],
+                                        "aml_temporal_hit",
+                                        f"clue={clue.label} offset={int(clue.offset_seconds)}",
+                                        _now(),
+                                    ),
+                                )
+                            conn.commit()
+                        except sqlite3.Error:
+                            pass  # audit must never break a search
             # Read-time governance: deduplicate identical content and
             # discount older versions of the same fact (audited,
             # non-destructive). Must run before the Store connection closes.
@@ -336,11 +425,11 @@ class MemoryService:
         data = data[: req["top_k"]]
         return {"data": data}
 
-    def _entry(self, row: dict) -> dict:
+    def _entry(self, row: dict, score_key: str = "relevance") -> dict:
         entry: dict = {"id": row["id"], "content": row["content"]}
-        relevance = row.get("relevance")
-        if isinstance(relevance, (int, float)):
-            entry["score"] = float(relevance)
+        value = row.get(score_key)
+        if isinstance(value, (int, float)):
+            entry["score"] = float(value)
         created_at = _normalize_ts(row.get("created_at"))
         if created_at:
             entry["created_at"] = created_at
