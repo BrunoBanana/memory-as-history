@@ -31,6 +31,12 @@ def main() -> None:
         default=os.environ.get("AML_SEARCH_MODE", "lexical"),
         choices=("lexical", "hybrid", "semantic"),
     )
+    parser.add_argument(
+        "--semantic-min",
+        type=float,
+        default=float(os.environ.get("AML_SEMANTIC_MIN", "0.85")),
+        help="minimum cosine similarity for a semantic-only evidence hit",
+    )
     args = parser.parse_args()
 
     from .server import serve
@@ -41,6 +47,7 @@ def main() -> None:
         data_dir=args.data_dir,
         api_key=args.api_key,
         search_mode=args.search_mode,
+        semantic_min=args.semantic_min,
     )
 
 

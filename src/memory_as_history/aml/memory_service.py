@@ -153,6 +153,7 @@ class MemoryService:
         self,
         data_dir: str | Path = DEFAULT_DATA_DIR,
         search_mode: str = "lexical",
+        semantic_min: float = 0.85,
     ):
         self.data_dir = Path(data_dir)
         (self.data_dir / "users").mkdir(parents=True, exist_ok=True)
@@ -160,7 +161,12 @@ class MemoryService:
             raise ValueError(
                 f"search_mode must be lexical, hybrid or semantic, got {search_mode!r}"
             )
+        if type(semantic_min) is not float or not 0.0 <= semantic_min <= 1.0:
+            raise ValueError("semantic_min must be a float in [0, 1]")
         self.search_mode = search_mode
+        # Minimum cosine similarity for a semantic-only hit to count as
+        # evidence (hybrid/semantic modes). Lexical hits bypass the gate.
+        self.semantic_min = semantic_min
 
     # -- connections -----------------------------------------------------
 
@@ -299,16 +305,37 @@ class MemoryService:
                     req["query"], limit=req["top_k"], mode=self.search_mode
                 )
             flat: list[dict] = []
+            # Score field surfaced to the contract: BM25 relevance for
+            # lexical mode, the RRF/hybrid combined score otherwise.
+            score_key = "relevance" if self.search_mode == "lexical" else "search_score"
             for section in ("anchors", "canon", "memories"):
                 for row in result.get(section, []):
-                    # Drop ordinary memories with zero/negative lexical
-                    # relevance: they carry no evidence signal and would only
-                    # pollute the answer generator. Anchors/canon are
-                    # identity/consensus entries and are always eligible.
+                    # Drop ordinary memories that carry no evidence signal:
+                    # they would only pollute the answer generator. Anchors/
+                    # canon are identity/consensus entries and always
+                    # eligible. In hybrid/semantic modes a row qualifies when
+                    # the combined score is positive AND it has either a
+                    # lexical hit (BM25 > 0) or a semantic hit above the
+                    # similarity threshold — a pure-semantic match whose
+                    # similarity is too low is noise, not evidence.
                     if section == "memories":
-                        rel = row.get("relevance")
-                        if not isinstance(rel, (int, float)) or rel <= 0:
-                            continue
+                        if self.search_mode == "lexical":
+                            rel = row.get("relevance")
+                            if not isinstance(rel, (int, float)) or rel <= 0:
+                                continue
+                        else:
+                            combined = row.get("search_score")
+                            if not isinstance(combined, (int, float)) or combined <= 0:
+                                continue
+                            rel = row.get("relevance")
+                            sem = row.get("semantic_similarity")
+                            has_lex = isinstance(rel, (int, float)) and rel > 0
+                            has_sem = (
+                                isinstance(sem, (int, float))
+                                and sem >= self.semantic_min
+                            )
+                            if not (has_lex or has_sem):
+                                continue
                     flat.append(row)
             # Neighbor expansion: nearby turns of ranked seeds carry the
             # extra evidence multi-hop questions need. Only turns sharing a
@@ -325,7 +352,7 @@ class MemoryService:
                         store._conn, seeds, req["query"], req["top_k"]
                     )
                 )
-            data = [self._entry(r) for r in flat]
+            data = [self._entry(r, score_key) for r in flat]
             # Read-time governance: deduplicate identical content and
             # discount older versions of the same fact (audited,
             # non-destructive). Must run before the Store connection closes.
@@ -336,11 +363,11 @@ class MemoryService:
         data = data[: req["top_k"]]
         return {"data": data}
 
-    def _entry(self, row: dict) -> dict:
+    def _entry(self, row: dict, score_key: str = "relevance") -> dict:
         entry: dict = {"id": row["id"], "content": row["content"]}
-        relevance = row.get("relevance")
-        if isinstance(relevance, (int, float)):
-            entry["score"] = float(relevance)
+        value = row.get(score_key)
+        if isinstance(value, (int, float)):
+            entry["score"] = float(value)
         created_at = _normalize_ts(row.get("created_at"))
         if created_at:
             entry["created_at"] = created_at

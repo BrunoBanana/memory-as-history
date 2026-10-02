@@ -17,10 +17,12 @@ WORKDIR /app
 COPY pyproject.toml README.md README.zh-CN.md LICENSE ./
 COPY src ./src
 
-# Default install is model-free (BM25). To enable hybrid search (local E5),
-# uncomment the semantic extra; the pinned model downloads on first use and
-# needs roughly 2-4 GB of RAM.
-RUN pip install --no-cache-dir .
+# Default install is model-free (BM25). Hybrid search (local E5) needs the
+# semantic extra; the pinned model is pre-downloaded at build time so the
+# container never needs network access at runtime. Model weights add
+# roughly 1 GB to the image and need ~2-4 GB of RAM (see swap notes).
+RUN pip install --no-cache-dir ".[semantic]" \
+    && python -m memory_as_history.semantic download
 
 ENV AML_DATA_DIR=/data \
     AML_API_KEY="" \

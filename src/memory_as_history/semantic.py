@@ -37,7 +37,13 @@ class LocalE5:
     Download explicitly with `python -m memory_as_history.semantic download`.
     The cache stores text hashes and vectors, not source text, and never supplies
     candidate IDs. Eligibility always comes from a fresh Store recall.
+
+    The underlying model is shared process-wide (one load per process): the
+    AML HTTP service creates one Store per request, and re-loading a 470 MB
+    model on every search would time out the smoke checks.
     """
+    _shared_model = None
+
     def __init__(self, device='cpu', cache_size=10000, allow_download=False):
         if type(cache_size) is not int or cache_size < 1:
             raise ValueError('cache_size must be a positive integer')
@@ -51,6 +57,9 @@ class LocalE5:
 
     def _load(self):
         if self._model is None:
+            if LocalE5._shared_model is not None:
+                self._model = LocalE5._shared_model
+                return self._model
             try:
                 from sentence_transformers import SentenceTransformer
             except ImportError as exc:
@@ -64,6 +73,7 @@ class LocalE5:
                 )
                 model.max_seq_length = 512
                 self._model = model
+                LocalE5._shared_model = model
             except Exception as exc:
                 raise RuntimeError('Local semantic model unavailable. Run '
                                    'python -m memory_as_history.semantic download; '
