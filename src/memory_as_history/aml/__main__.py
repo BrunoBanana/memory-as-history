@@ -37,6 +37,13 @@ def main() -> None:
         default=float(os.environ.get("AML_SEMANTIC_MIN", "0.85")),
         help="minimum cosine similarity for a semantic-only evidence hit",
     )
+    parser.add_argument(
+        "--use-temporal",
+        type=lambda v: v.lower() in ("1", "true", "yes", "on"),
+        default=os.environ.get("AML_USE_TEMPORAL", "true").lower()
+        in ("1", "true", "yes", "on"),
+        help="rerank evidence by explicit temporal clues (memory-as-history)",
+    )
     args = parser.parse_args()
 
     from .server import serve
@@ -48,6 +55,7 @@ def main() -> None:
         api_key=args.api_key,
         search_mode=args.search_mode,
         semantic_min=args.semantic_min,
+        use_temporal=args.use_temporal,
     )
 
 

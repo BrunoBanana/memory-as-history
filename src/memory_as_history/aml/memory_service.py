@@ -38,6 +38,7 @@ from ..storage import (
 )
 from .contract import ContractError, add_ok, parse_add, parse_search
 from .governance import govern_entries, record_possible_updates
+from .temporal import detect_temporal_clues, parse_iso_ts, time_weight
 
 DEFAULT_DATA_DIR = Path.home() / ".memory-as-history" / "aml"
 
@@ -154,6 +155,7 @@ class MemoryService:
         data_dir: str | Path = DEFAULT_DATA_DIR,
         search_mode: str = "lexical",
         semantic_min: float = 0.85,
+        use_temporal: bool = True,
     ):
         self.data_dir = Path(data_dir)
         (self.data_dir / "users").mkdir(parents=True, exist_ok=True)
@@ -163,10 +165,16 @@ class MemoryService:
             )
         if type(semantic_min) is not float or not 0.0 <= semantic_min <= 1.0:
             raise ValueError("semantic_min must be a float in [0, 1]")
+        if type(use_temporal) is not bool:
+            raise ValueError("use_temporal must be a bool")
         self.search_mode = search_mode
         # Minimum cosine similarity for a semantic-only hit to count as
         # evidence (hybrid/semantic modes). Lexical hits bypass the gate.
         self.semantic_min = semantic_min
+        # memory-as-history: rerank evidence by explicit temporal clues
+        # ("last year", "上周") so questions about the past retrieve the
+        # facts as they stood then. Conservative by design.
+        self.use_temporal = use_temporal
 
     # -- connections -----------------------------------------------------
 
@@ -353,6 +361,44 @@ class MemoryService:
                     )
                 )
             data = [self._entry(r, score_key) for r in flat]
+            # Temporal clues ("where did she live LAST YEAR?") rerank by the
+            # time the facts were true, not by today's ranking. Conservative
+            # multipliers; strongest matching clue wins per row.
+            clues = detect_temporal_clues(req["query"]) if self.use_temporal else []
+            if clues and data:
+                stamps = [
+                    parse_iso_ts(item.get("created_at"))
+                    for item in data
+                    if item.get("created_at")
+                ]
+                now_ts = max((s for s in stamps if s is not None), default=None)
+                if now_ts is not None:
+                    for item in data:
+                        ts = parse_iso_ts(item.get("created_at"))
+                        if ts is None:
+                            continue
+                        factor = max(
+                            time_weight(ts, now_ts, clue) for clue in clues
+                        )
+                        if factor != 1.0 and "score" in item:
+                            item["score"] = item["score"] * factor
+                    conn = store._conn
+                    if conn is not None:
+                        try:
+                            for clue in clues:
+                                conn.execute(
+                                    "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+                                    "VALUES (?, NULL, ?, ?, ?)",
+                                    (
+                                        uuid.uuid4().hex[:12],
+                                        "aml_temporal_hit",
+                                        f"clue={clue.label} offset={int(clue.offset_seconds)}",
+                                        _now(),
+                                    ),
+                                )
+                            conn.commit()
+                        except sqlite3.Error:
+                            pass  # audit must never break a search
             # Read-time governance: deduplicate identical content and
             # discount older versions of the same fact (audited,
             # non-destructive). Must run before the Store connection closes.

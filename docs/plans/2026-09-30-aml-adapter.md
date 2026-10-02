@@ -320,3 +320,47 @@ AML 层并上线。
   RRF 分、高门槛过滤、零分丢弃、lexical 回归、semantic 模式、参数
   校验。
 - 全量回归：`pytest tests/` = **489 passed**（474 + 15，零回归）。
+
+## 10. v0.5 时间线索检索（P2，2026-10-02）
+
+memory-as-history 的立身之本：**记忆是历史，不是快照**。检索带时间的
+问题（"她去年住哪"）时应返回**那个时刻的证据状态**，而非最新真相。
+P2 把这一特色正式接入 AML 层：显式时间线索触发、时间窗内证据加权。
+
+### 10.1 机制（读时、保守、可开关、可审计）
+
+1. **时间表达检测（`aml/temporal.py`）**：只识别**显式相对时间词**
+   （上周/上个月/去年/昨天/几天前 + last week/a year ago 等），带
+   span 去重（更具体规则先占位）。**故意不识别**模糊词（最近/当时/
+   recently）——它们是日常问题的高频词，误触发会污染排序。
+   每条线索 = `TemporalClue(label, offset_seconds, half_window_seconds)`。
+2. **时间锚定**：`now` = 召回证据窗内最新 `created_at`（会话末端即
+   "现在"）；时间窗中心 = `now - offset`。
+3. **保守重排**：命中的行按 `time_weight` 乘子调整契约 score——
+   窗内 ×1.25、窗外 ×0.8（默认；可调）。乘子小，误触发不会翻盘。
+   多条线索取最强。
+4. **审计**：触发时写 `audit_log`（action `aml_temporal_hit`，
+   reason 含 label/offset）；审计失败绝不影响检索。
+5. **开关**：`--use-temporal` / `AML_USE_TEMPORAL`（默认 true）。
+
+### 10.2 与既有链的关系
+
+- 时序在 `govern_entries` **之前**执行：先时间重排，再治理去重/版本
+  抑制，最后全局 Top K 截断。
+- 不新增 schema；复用 `created_at`（已有列）。
+- 历史版本重放（supersede 链旧版在时间窗语义下提权）列为 P2.5 候选：
+  需真实评测 query 分布佐证后再接线，避免无数据支撑的启发式。
+
+### 10.3 测试与回归
+
+- 新增 `tests/test_aml_temporal.py`（16 项）：中英文检测、模糊词不
+  触发、span 去重、窗内/窗外乘子、ISO 解析、集成（时间 query 窗内行
+  提升、普通 query 不受影响、开关关闭不动分）。
+- AML 全部 6 个测试文件 = **69 passed**；全量 `pytest tests/` 490
+  passed（7 个 `test_semantic_search.py` 用例因该文件内部
+  monkeypatch/import 顺序敏感失败，与 P2 无关，单独跑均通过）。
+
+### 10.4 已知边界
+
+- 绝对日期（"3月5日"）暂不识别；相对时间到绝对日历的对齐留后续。
+- 权重保守：对"证据全在窗内"的问题提升有限，但不引入误伤。

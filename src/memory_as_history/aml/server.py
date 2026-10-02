@@ -147,12 +147,14 @@ def build_server(
     api_key: str | None = None,
     search_mode: str = "lexical",
     semantic_min: float = 0.85,
+    use_temporal: bool = True,
 ) -> ThreadingHTTPServer:
     """Build (but do not block on) the AML HTTP server. Tests use this."""
     service = MemoryService(
         data_dir=data_dir if data_dir is not None else DEFAULT_DATA_DIR,
         search_mode=search_mode,
         semantic_min=semantic_min,
+        use_temporal=use_temporal,
     )
     service.api_key = api_key or None
     httpd = ThreadingHTTPServer((host, port), make_handler(service))
@@ -167,8 +169,9 @@ def serve(
     api_key: str | None = None,
     search_mode: str = "lexical",
     semantic_min: float = 0.85,
+    use_temporal: bool = True,
 ) -> ThreadingHTTPServer:
     """Start the AML service and block forever."""
-    httpd = build_server(host, port, data_dir, api_key, search_mode, semantic_min)
+    httpd = build_server(host, port, data_dir, api_key, search_mode, semantic_min, use_temporal)
     httpd.serve_forever()
     return httpd
