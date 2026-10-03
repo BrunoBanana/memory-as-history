@@ -226,12 +226,14 @@ def test_local_provider_prefixes_normalizes_caches_and_bounds_memory(monkeypatch
 def test_provider_rejects_invalid_embedding_batches(monkeypatch, vectors):
     fake = SimpleNamespace(encode=lambda *_a, **_k: vectors)
     monkeypatch.setitem(sys.modules, 'sentence_transformers', SimpleNamespace(SentenceTransformer=lambda *_a, **_k: fake))
+    semantic().LocalE5._shared_model = None  # cold state: no cached model
     with pytest.raises(RuntimeError, match='embedding'):
         semantic().LocalE5().similarities('q', ['doc'])
 
 
 def test_missing_optional_dependency_has_actionable_error(monkeypatch):
     monkeypatch.setitem(sys.modules, 'sentence_transformers', None)
+    semantic().LocalE5._shared_model = None  # cold state: no cached model
     with pytest.raises(RuntimeError, match='semantic'):
         semantic().LocalE5().similarities('q', ['doc'])
 
@@ -251,10 +253,12 @@ def test_model_load_failure_and_mismatched_dimensions_fail_explicitly(monkeypatc
     def fail(*args, **kwargs):
         raise OSError('no cached model')
     monkeypatch.setitem(sys.modules, 'sentence_transformers', SimpleNamespace(SentenceTransformer=fail))
+    semantic().LocalE5._shared_model = None  # cold state: no cached model
     with pytest.raises(RuntimeError, match='download'):
         semantic().LocalE5().similarities('q', ['doc'])
     fake = SimpleNamespace(encode=lambda texts, **kw: [[1., 0., 0.] if text.startswith('query:')
                                                       else [1., 0.] for text in texts])
     monkeypatch.setitem(sys.modules, 'sentence_transformers', SimpleNamespace(SentenceTransformer=lambda *_a, **_k: fake))
+    semantic().LocalE5._shared_model = None  # cold state again for the new fake provider
     with pytest.raises(RuntimeError, match='dimensions'):
         semantic().LocalE5().similarities('q', ['doc'])
