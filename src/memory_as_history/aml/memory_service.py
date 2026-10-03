@@ -209,7 +209,12 @@ class MemoryService:
                 (req["request_id"], req["user_id"], req["session_id"], at),
             )
             next_pos = self._session_next_position(conn, req["session_id"])
-            rows_written = 0
+            # Monotonic per-session position cursor: every chunk (a long
+            # message may split into several sentence-boundary blocks) gets
+            # its own position, so positions are never shared between blocks
+            # of different messages (i+k arithmetic collides whenever chunk
+            # counts differ).
+            cursor = next_pos
             for i, msg in enumerate(req["messages"]):
                 event_at = _event_at(msg["timestamp"])
                 # Primary-source chunking: only over-long messages split at
@@ -224,8 +229,9 @@ class MemoryService:
                         source=msg["role"],
                         event_at=event_at,
                         session_id=req["session_id"],
-                        session_position=next_pos + i + k,
+                        session_position=cursor,
                     )
+                    cursor += 1
                     # Write-time governance: record same-fact revisions audited
                     # (superseded_by edges), once per source message using the
                     # FULL original text (never per block). Deterministic,
@@ -236,17 +242,16 @@ class MemoryService:
                             mid,
                             msg["content"],
                             event_at=event_at,
-                            session_position=next_pos + i,
+                            session_position=cursor - 1,
                             created_at=at,
                             at=at,
                         )
-                rows_written += len(chunks)
             conn.execute(
                 "INSERT INTO aml_sessions (session_id, next_position) "
                 "VALUES (?, ?) "
                 "ON CONFLICT(session_id) DO UPDATE SET "
                 "next_position = excluded.next_position",
-                (req["session_id"], next_pos + rows_written),
+                (req["session_id"], cursor),
             )
             conn.commit()
         except Exception:
