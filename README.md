@@ -153,6 +153,34 @@ see [setup and concurrency contracts](docs/semantic-search.md).
 
 Tool calls that violate protocol guards return **structured, self-correcting errors** (`{"error", "message", "hint"}`) instead of bare tracebacks — e.g. a premature `pin()` comes back with the hint "This memory is still working-tier. Call promote(memory_id, reason) first", so an agent can fix its own call without a guessing round-trip.
 
+## Agent Memory Leaderboard (AML) adapter
+
+`src/memory_as_history/aml/` is a self-contained HTTP adapter (Add/Search, plus
+`/health`) submitted to the **Agent Memory Leaderboard 2026** text-memory
+track (academic / open-source group). It serves the same history philosophy
+through five versioned optimizations, all deterministic, auditable and
+deployed end-to-end:
+
+| Version | Mechanism | Why it matters |
+| --- | --- | --- |
+| **v0.2 governance** | Write-time supersede edges (`aml_updates`) + read-time version suppression/dedup | A memory is a revision history, not a latest fact — updates are recorded, never destructive |
+| **v0.3 adjacent-turn expansion** | ±K turns within the session, token-gated | Multi-evidence questions need the surrounding evidence chain, not one line |
+| **v0.4 hybrid retrieval** | Local multilingual E5 (pinned revision, CPU, 512 tokens) + BM25, RRF fusion, 0.85 semantic gate | Evidence recall 42.76% → 51.90% (recall@5, same frozen budget); lexical hits always kept |
+| **v0.5 temporal clues** | Conservative relative-time detection (去年/上周/…), window anchored on real message timestamps | "Where did I live last year?" returns the state at that time, not the newest truth — a core memory-as-history claim |
+| **v0.6 primary-source chunking** | Long messages split at sentence boundaries into complete blocks sharing source metadata; full text reconstructable | No semantic segment is lost to a retrieval length cap — 史料保真 |
+
+Runtime hardening (v0.6.1–v0.6.2): the shared E5 model is pre-warmed inside
+the serving process, so the first official `/search` cold start drops from
+**13.1s to 0.5s** (the only plausible timeout risk is eliminated); warm p50
+0.44s, 8-concurrency wall ≈3.4s, memory ≈1.0 GiB of 2 GiB. All JSON responses
+carry `charset=utf-8` so Chinese evidence never mojibakes on the client side.
+
+AML adapter tests: **79 cases** (adapter / http / governance / expansion /
+hybrid / temporal / chunking), all green. Deployment is Docker + Caddy HTTPS,
+reproducible from a single `docker build` — the pinned model is downloaded at
+build time, so the container needs no network at runtime. Design decisions and
+version history: `docs/plans/2026-09-30-aml-adapter.md`.
+
 ## Quick start
 
 Install from PyPI:
