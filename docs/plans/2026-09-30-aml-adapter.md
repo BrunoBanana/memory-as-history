@@ -404,3 +404,66 @@ P2 把这一特色正式接入 AML 层：显式时间线索触发、时间窗内
   无影响）。
 - 阈值与 min 尺寸可调（常量，未暴露 env——评测数据形态确定后如需
   微调再暴露）。
+
+## 12. 性能压测与运行时加固（v0.6.1–v0.6.2，2026-10-03）
+
+官方 Full 评测前的最后风险项：性能。容器内压测（`diag_perf.py`，
+`127.0.0.1:8000`）结论：
+
+| 指标 | 结果 | 判断 |
+| --- | --- | --- |
+| 冷启动（重启后首个 /search） | 修复前 13.1s → 修复后 **0.5s** | 唯一超时风险，已消除 |
+| Warm 延迟（n=20） | p50 0.44s / p90 0.46s / max 0.50s | 合格（官方串行 100 query ≈ 45s） |
+| 8 并发 | wall ≈3.3–3.4s（近似串行） | 可接受（官方大概率串行） |
+| 容器内存 | ≈1.0 GiB / 1.886 GiB 限制 | 有 ~0.9 GiB 余量 |
+
+### 12.1 发现并修复的部署链 bug（重要）
+
+增量镜像原为 `FROM latest + COPY src/ /app/src/`，**没有 pip install**；
+而主 Dockerfile 是 `pip install`（拷贝安装），运行时从 site-packages 加载
+**v1.3.1 旧代码**——导致 v0.5 时间线索、v0.6 分块、预热等后续增量**从未
+真正上线**（此前容器验证通过是因为验证脚本 import 的是 /app/src，而非
+运行进程）。
+
+修复：增量镜像改为 **editable 安装**（`COPY pyproject.toml …` +
+`RUN pip install -e /app`），site-packages 以 `.pth` 指向 /app/src，运行时
+直读最新源码。**以后增量只需 COPY src/ 即生效**，不再有两套代码漂移。
+部署后探针确认：运行时 `__main__.__file__` = `/app/src/...`，且
+temporal/chunking/prewarm 均在运行进程内。
+
+### 12.2 冷启动预热（v0.6.1）
+
+`_shared_model` 是**进程级**类单例——独立子进程预热无效（进程退出模型
+即释放）。改为在 `aml/__main__.py` 的 `main()` 内、`serve()` 前同进程
+预热：
+
+```python
+if args.search_mode in ("hybrid", "semantic"):
+    try:
+        LocalE5(allow_download=False).similarities("query: warm", ["passage: warm"])
+    except Exception:
+        pass  # warm-up failure must never prevent serving
+```
+
+首次 /search 冷启动 13.1s → **0.5s**；容器启动阶段耗时约 15s（预热
++ 服务启动），官方评测调用时已是 warm。
+
+### 12.3 JSON 响应 charset（v0.6.2）
+
+`server.py._json()` 的 `Content-Type` 由 `application/json` 改为
+`application/json; charset=utf-8`——避免客户端（如 PowerShell/部分解析器）
+按 Latin-1 误解码中文证据产生 mojibake。契约测试同步更新。
+
+### 12.4 端到端验证（公网 HTTPS，官方真实调用路径）
+
+`diag_full.ps1` 走 `https://aml.brunobanana.xyz`，六项全 PASS：
+health、hybrid（语义召回上海）、governance（旧版本抑制）、expansion
+（邻轮证据链）、temporal（"去年住哪"→杭州而非最新上海）、chunking
+（长消息深处"三文鱼"独立命中）。
+
+### 12.5 测试与回归
+
+- v0.6.1/v0.6.2 改动后 AML 全套仍 **79 passed**，零回归。
+- 压测中识别过一次"全 FAIL"假警报：`diag_full.ps1` 中 PowerShell
+  `$_` 后接中文被解析为未定义变量（`$_在`/`$_号`），发送的原文即残缺
+  ——线上数据完好，属测试脚本 bug，改用 `[string]::Format` 占位符修复。
