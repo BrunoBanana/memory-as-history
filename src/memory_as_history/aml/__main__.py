@@ -46,6 +46,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.search_mode in ("hybrid", "semantic"):
+        # Pre-warm the shared E5 model inside THIS process so the first
+        # official /search never pays the ~13s cold-start cost. The class-level
+        # singleton is process-scoped, so a separate warm-up process would be
+        # useless. Warm-up failure must never prevent serving.
+        try:
+            from memory_as_history.semantic import LocalE5
+
+            LocalE5(allow_download=False).similarities(
+                "query: warm", ["passage: warm"]
+            )
+        except Exception:
+            pass
+
     from .server import serve
 
     serve(

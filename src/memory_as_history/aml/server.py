@@ -32,7 +32,9 @@ class AMLHandler(BaseHTTPRequestHandler):
     def _json(self, status: int, body: dict) -> None:
         payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header(
+            "Content-Type", "application/json; charset=utf-8"
+        )
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
