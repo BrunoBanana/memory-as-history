@@ -87,6 +87,28 @@ _SUMMARY_QUERY_PATTERN = re.compile(
     r"these years|past few years|all the (?:things|events|facts|memories)"
 )
 
+# -- v1.5 G2: rule memories ----------------------------------------------
+# Write-time: statements that state a rule / standing constraint get
+# material_type='rule' so read time can surface them for rule questions.
+_RULE_WRITE_PATTERN = re.compile(
+    r"规则|规矩|规定|约定|必须|禁止|不允许|不能|只能|要求|条例|政策|制度|"
+    r"习惯|惯例|原则|"
+    r"每次.{0,8}都|从来(?:不|都)|绝对不|一定(?:要|会|得)|总是"
+)
+# Read-time: questions about what is allowed / required / customary.
+_RULE_QUERY_PATTERN = re.compile(
+    r"规则|规矩|规定|约定|必须|禁止|不允许|能不能|是否.{0,6}(?:可以|允许|必须)|"
+    r"可以.{0,6}吗|怎么办|如何处理|要求|政策|制度|惯例|原则|允许|习惯"
+)
+
+
+def _is_rule_statement(text: str) -> bool:
+    return bool(text) and _RULE_WRITE_PATTERN.search(text) is not None
+
+
+def _is_rule_question(query: str) -> bool:
+    return bool(query) and _RULE_QUERY_PATTERN.search(query) is not None
+
 # Column-for-column mirror of Store.remember's INSERT (storage.py). Keeping
 # the two write paths aligned is enforced by tests/test_aml_adapter.py.
 _MEMORY_COLUMNS = (
@@ -319,6 +341,9 @@ class MemoryService:
                         event_at=event_at,
                         session_id=req["session_id"],
                         session_position=cursor,
+                        # G2: rule statements are marked so read time can
+                        # surface them for rule questions.
+                        material_type="rule" if _is_rule_statement(msg["content"]) else "unspecified",
                     )
                     cursor += 1
                     # F1: keep a rolling per-session summary so review-style
@@ -373,6 +398,7 @@ class MemoryService:
         event_at: str | None,
         session_id: str,
         session_position: int,
+        material_type: str = "unspecified",
     ) -> str:
         """Insert one memory row exactly as Store.remember would (archive
         tier, working status, auto sensitivity screening). Returns the new
@@ -398,7 +424,7 @@ class MemoryService:
                 event_at,
                 session_id,
                 session_position,
-                "unspecified",
+                material_type,
                 None,
                 None,
             ),
@@ -564,6 +590,13 @@ class MemoryService:
                 summaries = self._summary_entries(store, req["top_k"])
                 if summaries:
                     data = summaries + data
+            # G2: rule questions ("可以…吗/有什么规矩/允许吗") surface the
+            # standing rule statements ahead of the ranked evidence. Same
+            # trigger discipline as summaries: no rule clue -> no entries.
+            if _is_rule_question(req["query"]):
+                rules = self._rule_entries(store, req["top_k"])
+                if rules:
+                    data = rules + data
         finally:
             store.close()
         # Global budget: official Top K bounds the returned evidence.
@@ -640,6 +673,32 @@ class MemoryService:
             if len(entries) >= 3 or len(entries) * 2000 >= top_k:
                 break
         return entries
+
+    def _rule_entries(self, store: Store, top_k: int) -> list[dict]:
+        """Rule statements (material_type='rule', G2) surfaced ahead of the
+        ranked evidence when the query asks about rules / permissions /
+        customs. A question like "有什么规矩" shares no token with the
+        statements themselves, so BM25 alone would miss them; surfacing makes
+        the answer generator see the standing constraints. Newest first:
+        a later rule supersedes an earlier one for current-state questions.
+        Bounded by Top K and a sanity cap (a dozen rules is already more
+        than any single answer needs)."""
+        conn = store._conn
+        if conn is None:
+            return []
+        rows = conn.execute(
+            "SELECT id, content FROM memories "
+            "WHERE forgotten_at IS NULL AND material_type = 'rule' "
+            "ORDER BY created_at DESC, session_position DESC LIMIT ?",
+            (max(top_k, 12),),
+        ).fetchall()
+        if not rows:
+            return []
+        entries = [
+            {"id": r["id"], "content": r["content"], "score": 999.0}
+            for r in rows
+        ]
+        return entries[: min(top_k, 12)]
 
     def _expand_neighbors(
         self,
