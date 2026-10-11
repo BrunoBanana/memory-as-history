@@ -48,12 +48,158 @@ def test_english_expressions_detected():
     assert [c.label for c in detect_temporal_clues("what happened a week ago")] == ["last_week"]
 
 
+def test_digit_counted_relative_ago():
+    clues = detect_temporal_clues("where was she living 3 years ago?")
+    assert len(clues) == 1
+    assert clues[0].label == "3_years_ago"
+    assert clues[0].offset_seconds == pytest.approx(3 * 365 * DAY)
+    assert detect_temporal_clues("two days ago we met")[0].offset_seconds == pytest.approx(2 * DAY)
+    assert detect_temporal_clues("five weeks ago it started")[0].offset_seconds == pytest.approx(5 * 7 * DAY)
+    assert detect_temporal_clues("a couple of months ago")[0].offset_seconds == pytest.approx(2 * 30 * DAY)
+
+
+def test_absolute_year_anchor_in():
+    clues = detect_temporal_clues("where did Alice live in 2021?")
+    assert len(clues) == 1
+    assert clues[0].label == "year_in"
+    assert clues[0].anchor_epoch is not None
+    assert clues[0].anchor_epoch == pytest.approx(_year_epoch_ts(2021))
+
+
+def test_absolute_year_anchor_since_and_after():
+    assert detect_temporal_clues("what changed since 2020?")[0].label == "year_since"
+    assert detect_temporal_clues("what happened after 2019?")[0].label == "year_after"
+
+
+def test_year_range_anchor():
+    clues = detect_temporal_clues("what did she do from 2018 to 2022?")
+    assert len(clues) == 1
+    assert clues[0].label == "year_range"
+    assert clues[0].anchor_epoch is not None
+    # window spans the full range (center 2020, half ~2.5y)
+    assert clues[0].half_window_seconds == pytest.approx(2.5 * 365 * DAY)
+    clues_b = detect_temporal_clues("between 2019 and 2021 what happened?")
+    assert clues_b[0].label == "year_range"
+
+
+def test_month_day_anchor():
+    clues = detect_temporal_clues("on March 5 who was there?")
+    assert len(clues) == 1
+    assert clues[0].label == "month_day"
+    assert clues[0].anchor_epoch is not None
+
+
+def test_absolute_anchor_time_weight_uses_anchor():
+    clue = detect_temporal_clues("where did Alice live in 2021?")[0]
+    now = 1_800_000_000.0
+    inside = clue.anchor_epoch + 100 * DAY  # inside the 180d half-window
+    outside = now  # today, far outside 2021
+    assert time_weight(inside, now, clue) == pytest.approx(1.25)
+    assert time_weight(outside, now, clue) == pytest.approx(0.8)
+
+
+def _year_epoch_ts(year: int) -> float:
+    import datetime as dt
+
+    return dt.datetime(year, 1, 1, tzinfo=dt.timezone.utc).timestamp()
+
+
 def test_fuzzy_words_do_not_fire():
     # "最近/当时/recently" are ordinary conversational words; firing on
     # them would poison most queries.
     assert detect_temporal_clues("她最近怎么样") == []
     assert detect_temporal_clues("当时我们在讨论什么") == []
     assert detect_temporal_clues("have you seen her recently?") == []
+
+
+# -- v1.5: Chinese digit-counted relative time ---------------------------
+
+def test_chinese_digit_relative_ago():
+    clues = detect_temporal_clues("她三年前住在哪里")
+    assert len(clues) == 1
+    assert clues[0].label == "3_years_ago"
+    assert clues[0].offset_seconds == pytest.approx(3 * 365 * DAY)
+    assert detect_temporal_clues("两个月前我们见过")[0].offset_seconds == pytest.approx(2 * 30 * DAY)
+    assert detect_temporal_clues("五天前发生的")[0].offset_seconds == pytest.approx(5 * DAY)
+    assert detect_temporal_clues("十年前")[0].offset_seconds == pytest.approx(10 * 365 * DAY)
+    assert detect_temporal_clues("两星期前")[0].offset_seconds == pytest.approx(2 * 7 * DAY)
+    assert detect_temporal_clues("一个月前")[0].offset_seconds == pytest.approx(1 * 30 * DAY)
+
+
+def test_chinese_few_stays_fixed():
+    # 几/半 stay on the fixed few_* windows (no regression).
+    assert [c.label for c in detect_temporal_clues("几周前我们见过")] == ["few_weeks_ago"]
+    assert [c.label for c in detect_temporal_clues("半年前")] == ["few_months_ago"]
+
+
+# -- v1.5: Chinese absolute years / month-year ---------------------------
+
+def test_chinese_absolute_year_in():
+    clues = detect_temporal_clues("2023年她在哪里住")
+    assert len(clues) == 1
+    assert clues[0].label == "year_in"
+    assert clues[0].anchor_epoch == pytest.approx(_year_epoch_ts(2023))
+
+
+def test_chinese_year_range():
+    clues = detect_temporal_clues("2018年到2022年她都在做什么")
+    assert len(clues) == 1
+    assert clues[0].label == "year_range"
+    assert clues[0].anchor_epoch == pytest.approx(_year_epoch_ts(2020))
+    assert detect_temporal_clues("从2019年到2021年呢")[0].label == "year_range"
+
+
+def test_chinese_year_since_after():
+    assert detect_temporal_clues("2020年以来发生了什么")[0].label == "year_since"
+    assert detect_temporal_clues("2021年以后呢")[0].label == "year_after"
+
+
+def test_chinese_month_year():
+    clues = detect_temporal_clues("2020年3月她去了哪里")
+    assert len(clues) == 1
+    assert clues[0].label == "month_year"
+    assert clues[0].anchor_epoch == pytest.approx(_month_year_ts(2020, 3))
+
+
+# -- v1.5: English during / month-year / date-year / month alone ---------
+
+def test_during_year():
+    clues = detect_temporal_clues("what happened during 2020?")
+    assert len(clues) == 1
+    assert clues[0].label == "year_in"
+    assert clues[0].anchor_epoch == pytest.approx(_year_epoch_ts(2020))
+
+
+def test_english_month_year():
+    clues = detect_temporal_clues("what did she do in March 2020?")
+    assert len(clues) == 1
+    assert clues[0].label == "month_year"
+    assert clues[0].anchor_epoch == pytest.approx(_month_year_ts(2020, 3))
+    assert detect_temporal_clues("during June 2019 we met")[0].label == "month_year"
+
+
+def test_english_date_with_year():
+    clues = detect_temporal_clues("on March 5, 2020 who was there?")
+    assert len(clues) == 1
+    assert clues[0].label == "month_day"
+    import datetime as dt
+
+    assert clues[0].anchor_epoch == pytest.approx(
+        dt.datetime(2020, 3, 5, tzinfo=dt.timezone.utc).timestamp()
+    )
+
+
+def test_english_month_alone():
+    clues = detect_temporal_clues("what happened in March?")
+    assert len(clues) == 1
+    assert clues[0].label == "month_in"
+    assert clues[0].anchor_epoch is not None
+
+
+def _month_year_ts(year: int, month: int) -> float:
+    import datetime as dt
+
+    return dt.datetime(year, month, 1, tzinfo=dt.timezone.utc).timestamp()
 
 
 def test_no_false_positive_on_plain_query():
