@@ -54,6 +54,44 @@ _STRONG_COVERAGE = 0.75    # near-full coverage: strong discount
 _DISCOUNT_STRONG = 0.25
 _DISCOUNT_WEAK = 0.50
 
+# -- v1.5 D1: predicate-group revision detection -------------------------
+# "李明住在福州" then "李明搬到上海" share no strong token overlap, so the
+# raw Jaccard/coverage gates miss the revision. Grouping predicates by fact
+# domain (residence / occupation / preference / acquired / relationship /
+# identity) lets a same-domain restatement supersede the older version.
+_PREDICATE_GROUPS: dict[str, tuple[str, ...]] = {
+    "residence": ("住在", "居住", "搬到", "迁往", "移居", "定居", "回了", "去了", "离开", "搬去", "搬回"),
+    "occupation": ("工作", "就职", "任职", "上班", "职业", "辞职", "跳槽", "入职"),
+    "preference": ("喜欢", "热爱", "讨厌", "偏爱", "最爱", "爱吃", "爱喝", "钟情", "痴迷"),
+    "acquired": ("养了", "买了", "领养", "收养", "得到", "拥有", "买了辆", "买了只"),
+    "relationship": ("结婚", "离婚", "交往", "分手", "订婚", "恋爱", "成家"),
+    "identity": ("改名", "成为", "毕业于", "出生", "年龄", "生日", "国籍", "籍贯"),
+}
+# Same-domain restatement with any shared subject token is treated as a
+# version candidate even at low raw overlap.
+_DOMAIN_JACCARD = 0.15
+_DOMAIN_COVERAGE = 0.25
+
+
+def predicate_group(text: str) -> str | None:
+    """Fact domain of a statement, or None when no known predicate fires."""
+    if not text:
+        return None
+    for group, predicates in _PREDICATE_GROUPS.items():
+        if any(p in text for p in predicates):
+            return group
+    return None
+
+
+def _same_domain_version(old_text: str, new_text: str) -> bool:
+    """Same fact domain AND at least one shared subject token: treat the
+    newer statement as a version candidate (D1: current state wins)."""
+    group = predicate_group(new_text)
+    if group is None or predicate_group(old_text) != group:
+        return False
+    shared = token_set(old_text) & token_set(new_text)
+    return bool(shared)
+
 
 def token_set(text: str) -> set[str]:
     """Token set for a memory content (CJK bigrams + latin words)."""
@@ -191,9 +229,13 @@ def record_possible_updates(
         if _normalize(old["content"]) == _normalize(content):
             continue  # identical content: dedup is a read-time concern
         jac, coverage = overlap_signals(old_tokens, new_tokens)
-        if not _version_decision(jac, coverage, old["content"], content):
+        domain_version = _same_domain_version(old["content"], content)
+        if not domain_version and not _version_decision(
+            jac, coverage, old["content"], content
+        ):
             continue
-        if jac >= _STRONG_JACCARD or coverage >= _STRONG_COVERAGE:
+        if (jac >= _STRONG_JACCARD or coverage >= _STRONG_COVERAGE
+                or domain_version):
             conn.execute(
                 "INSERT INTO aml_updates (memory_id, superseded_by, "
                 "similarity, at) VALUES (?, ?, ?, ?) "
@@ -204,7 +246,8 @@ def record_possible_updates(
                 conn,
                 old["id"],
                 "aml_supersede",
-                f"superseded_by={memory_id} jaccard={jac:.3f} coverage={coverage:.3f}",
+                f"superseded_by={memory_id} jaccard={jac:.3f} coverage={coverage:.3f} "
+                f"domain={predicate_group(content) or '-'}",
                 at,
             )
             recorded += 1
@@ -223,7 +266,8 @@ def _sort_key(entry: dict[str, Any]) -> tuple[int, float]:
 
 
 def govern_entries(
-    entries: list[dict[str, Any]], at: str, conn: Any = None
+    entries: list[dict[str, Any]], at: str, conn: Any = None,
+    supersede_discount: float | None = None,
 ) -> list[dict[str, Any]]:
     """Deduplicate and version-suppress the returned evidence window.
 
@@ -235,6 +279,11 @@ def govern_entries(
       discount the older entry's score (0.25 for strong overlap, 0.5
       otherwise). The older entry stays in the list, so history questions can
       still find it; it just ranks lower.
+    - ``supersede_discount``: when given (a float, typically small), entries
+      recorded as superseded by a later statement (write-time ``aml_updates``
+      edges) are additionally discounted by that factor. This lets
+      current-state questions ("where does X live NOW?") push older versions
+      well down while history-anchored queries keep them by passing ``None``.
 
     After governance the list is re-ranked: unscored entries (anchors/canon)
     keep priority, then scored entries descend by the new score. Never drops
@@ -248,6 +297,19 @@ def govern_entries(
             # (e.g. neighbor-expansion audits from the same read path).
             conn.commit()
         return entries
+    superseded: set[int] = set()
+    if supersede_discount is not None and conn is not None:
+        ids = [e["id"] for e in entries]
+        if ids:
+            try:
+                rows = conn.execute(
+                    "SELECT DISTINCT memory_id FROM aml_updates "
+                    f"WHERE memory_id IN ({','.join('?' * len(ids))})",
+                    ids,
+                ).fetchall()
+                superseded = {r[0] for r in rows}
+            except Exception:  # noqa: BLE001 - governance must never break search
+                pass
     drop: set[int] = set()
     discount: dict[int, tuple[float, float]] = {}
     for i in range(n):
@@ -278,9 +340,14 @@ def govern_entries(
             jac, cov = overlap_signals(
                 token_set(older_text), token_set(newer_text)
             )
-            if not _version_decision(jac, cov, older_text, newer_text):
+            domain_version = _same_domain_version(older_text, newer_text)
+            if not domain_version and not _version_decision(
+                jac, cov, older_text, newer_text
+            ):
                 continue
             cur = discount.get(older_idx, (0.0, 0.0))
+            # Domain revisions count as weak evidence unless raw overlap is
+            # strong; either way the older version must rank below.
             discount[older_idx] = (max(cur[0], jac), max(cur[1], cov))
     out: list[dict[str, Any]] = []
     for idx, entry in enumerate(entries):
@@ -298,6 +365,16 @@ def govern_entries(
                 "aml_version_discount",
                 f"older_version jaccard={jac:.3f} coverage={cov:.3f} "
                 f"factor={factor}",
+                at,
+            )
+        if (supersede_discount is not None and item["id"] in superseded
+                and isinstance(item.get("score"), (int, float))):
+            item["score"] = round(float(item["score"]) * supersede_discount, 4)
+            _audit(
+                conn,
+                item["id"],
+                "aml_supersede_discount",
+                f"superseded_current_state factor={supersede_discount}",
                 at,
             )
         out.append(item)
