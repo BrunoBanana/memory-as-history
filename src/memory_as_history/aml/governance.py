@@ -62,7 +62,7 @@ _DISCOUNT_WEAK = 0.50
 _PREDICATE_GROUPS: dict[str, tuple[str, ...]] = {
     "residence": ("住在", "居住", "搬到", "迁往", "移居", "定居", "回了", "去了", "离开", "搬去", "搬回"),
     "occupation": ("工作", "就职", "任职", "上班", "职业", "辞职", "跳槽", "入职"),
-    "preference": ("喜欢", "热爱", "讨厌", "偏爱", "最爱", "爱吃", "爱喝", "钟情", "痴迷"),
+    "preference": ("喜欢", "热爱", "讨厌", "偏爱", "最爱", "爱吃", "爱喝", "钟情", "痴迷", "支持", "反对"),
     "acquired": ("养了", "买了", "领养", "收养", "得到", "拥有", "买了辆", "买了只"),
     "relationship": ("结婚", "离婚", "交往", "分手", "订婚", "恋爱", "成家"),
     "identity": ("改名", "成为", "毕业于", "出生", "年龄", "生日", "国籍", "籍贯"),
@@ -91,6 +91,113 @@ def _same_domain_version(old_text: str, new_text: str) -> bool:
         return False
     shared = token_set(old_text) & token_set(new_text)
     return bool(shared)
+
+
+# -- v1.5 D2: contradiction detection ------------------------------------
+# Two statements about the same subject and fact domain whose polarity
+# flips (negation appears in exactly one of them) are contradictory, not
+# versions: we keep BOTH (the history is preserved), record the pair, and
+# at read time surface the partner when either side is retrieved, so the
+# answer generator sees the conflict instead of one side only.
+_NEGATION_WORDS = ("不", "没", "无", "别", "禁止", "不允许", "反对")
+_OPPOSITE_PAIRS: tuple[tuple[str, str], ...] = (
+    ("喜欢", "讨厌"),
+    ("支持", "反对"),
+    ("同意", "拒绝"),
+    ("允许", "禁止"),
+    ("接受", "拒绝"),
+    ("是", "不是"),
+)
+
+
+def contradiction_signal(old_text: str, new_text: str) -> str | None:
+    """Contradiction signal between two statements, or None.
+
+    Fires when both statements are about the same fact domain, share at
+    least one subject token, and the polarity flips: either a negation word
+    appears in exactly one of them, or each side carries one word of an
+    opposite pair. Conservative on purpose — unrelated facts sharing a
+    common word must never be flagged.
+    """
+    if not old_text or not new_text:
+        return None
+    group = predicate_group(new_text)
+    if group is None or predicate_group(old_text) != group:
+        return None
+    # Subject/substance overlap at the character level: CJK bigrams make
+    # short statements ("她喜欢猫" / "她讨厌猫") share zero bigrams even
+    # though they talk about the same subject and object. Requiring two
+    # shared characters keeps unrelated same-domain facts apart while
+    # catching genuine flips.
+    shared_chars = set(old_text) & set(new_text)
+    if len(shared_chars) < 2:
+        return None
+    old_neg = any(w in old_text for w in _NEGATION_WORDS)
+    new_neg = any(w in new_text for w in _NEGATION_WORDS)
+    if old_neg != new_neg:
+        return "negation_flip"
+    for a, b in _OPPOSITE_PAIRS:
+        if (a in old_text and b in new_text) or (b in old_text and a in new_text):
+            return f"opposite:{a}/{b}"
+    return None
+
+
+def record_possible_contradictions(
+    conn: Any,
+    memory_id: str,
+    content: str,
+    *,
+    event_at: str | None,
+    session_position: int,
+    created_at: str,
+    at: str,
+    recent: int = 300,
+) -> int:
+    """Scan recent memories of the same user for contradictory statements
+    and record ``aml_contradictions`` pairs (audited, never destructive).
+
+    Returns the number of pairs recorded. Called inside the Add
+    transaction, after the new memory row is inserted. Pairs are symmetric
+    (both directions stored) so read time can find the partner from either
+    side with a single query.
+    """
+    if not content:
+        return 0
+    rows = conn.execute(
+        "SELECT id, content, event_at, session_position, created_at "
+        "FROM memories WHERE id != ? AND forgotten_at IS NULL "
+        "ORDER BY created_at DESC, session_position DESC LIMIT ?",
+        (memory_id, recent),
+    ).fetchall()
+    recorded = 0
+    for row in rows:
+        old_text = row["content"]
+        if not old_text:
+            continue
+        signal = contradiction_signal(old_text, content)
+        if signal is None:
+            continue
+        conn.execute(
+            "INSERT INTO aml_contradictions (memory_id, conflicts_with, "
+            "signal, at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(memory_id, conflicts_with) DO NOTHING",
+            (row["id"], memory_id, signal, at),
+        )
+        conn.execute(
+            "INSERT INTO aml_contradictions (memory_id, conflicts_with, "
+            "signal, at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(memory_id, conflicts_with) DO NOTHING",
+            (memory_id, row["id"], signal, at),
+        )
+        _audit(
+            conn,
+            row["id"],
+            "aml_contradiction",
+            f"conflicts_with={memory_id} signal={signal}",
+            at,
+        )
+        recorded += 1
+    return recorded
 
 
 def token_set(text: str) -> set[str]:

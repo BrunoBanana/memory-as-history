@@ -1767,7 +1767,7 @@ class Store(KnowledgeMixin):
         }
 
     def search(self, query: str, limit: int = 10, frame: str | None = None,
-               mode: str = 'hybrid') -> dict:
+               mode: str = 'hybrid', candidate_cap: int | None = None) -> dict:
         """Opt-in local semantic/hybrid search with the same history priorities.
 
         Inference runs outside write transactions. Re-read protocol eligibility
@@ -1775,6 +1775,13 @@ class Store(KnowledgeMixin):
         Newly eligible/changed text follows ranked rows in fresh lexical order
         and is counted as unranked; its embedding is available next search.
         This is a derived view, never an evidence or priority upgrade.
+
+        ``candidate_cap`` bounds how many BM25-ranked ordinary memories are
+        embedded for semantic reranking (performance guard for large stores:
+        embedding every row of a multi-thousand-entry user library is
+        quadratic in practice and blows the request budget on small hosts).
+        The cap is applied after lexical ranking, so the strongest lexical
+        matches are always among the reranked set.
         """
         if not isinstance(query, str) or not query.strip():
             raise ValueError('query is required and cannot be empty')
@@ -1792,6 +1799,10 @@ class Store(KnowledgeMixin):
         snapshot = self.recall(query, limit=2**63 - 1, frame=frame)
         budget = max(limit - len(snapshot['anchors']) - len(snapshot['canon']), 0)
         candidates = snapshot['memories'] if budget else []
+        if candidate_cap is not None:
+            # Recall returns BM25-ranked rows; keep only the top `cap` for
+            # semantic reranking. Unranked tail stays unranked (as before).
+            candidates = candidates[:candidate_cap]
         ranked = rank_candidates(candidates, query, backend, mode)
         current = self.recall(query, limit=2**63 - 1, frame=frame)
         eligible = {row['id']: row for row in current['memories']}

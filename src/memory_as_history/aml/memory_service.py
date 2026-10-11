@@ -40,7 +40,11 @@ from ..storage import (
 )
 from .contract import ContractError, add_ok, parse_add, parse_search
 from .chunking import split_long_message
-from .governance import govern_entries, record_possible_updates
+from .governance import (
+    govern_entries,
+    record_possible_contradictions,
+    record_possible_updates,
+)
 from .temporal import detect_temporal_clues, parse_iso_ts, time_weight
 
 DEFAULT_DATA_DIR = Path.home() / ".memory-as-history" / "aml"
@@ -70,6 +74,13 @@ CREATE TABLE IF NOT EXISTS aml_summaries (
     session_id TEXT PRIMARY KEY,
     summary    TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS aml_contradictions (
+    memory_id     TEXT NOT NULL,
+    conflicts_with TEXT NOT NULL,
+    signal        TEXT NOT NULL,
+    at            TEXT NOT NULL,
+    PRIMARY KEY (memory_id, conflicts_with)
 );
 """
 
@@ -365,6 +376,19 @@ class MemoryService:
                             created_at=at,
                             at=at,
                         )
+                    # D2: record contradictory statements (same subject,
+                    # same fact domain, flipped polarity) so read time can
+                    # surface the partner when either side is retrieved.
+                    if k == 0:
+                        record_possible_contradictions(
+                            conn,
+                            mid,
+                            msg["content"],
+                            event_at=event_at,
+                            session_position=cursor - 1,
+                            created_at=at,
+                            at=at,
+                        )
             conn.execute(
                 "INSERT INTO aml_sessions (session_id, next_position) "
                 "VALUES (?, ?) "
@@ -597,6 +621,14 @@ class MemoryService:
                 rules = self._rule_entries(store, req["top_k"])
                 if rules:
                     data = rules + data
+            # D2: when either side of a recorded contradiction is in the
+            # evidence, pull in the other side so the answer generator sees
+            # the conflict in full instead of one-sided evidence. Appended
+            # after the ranked evidence (never ahead of it); Top K bounds
+            # the total.
+            partners = self._contradiction_partners(store, data)
+            if partners:
+                data = data + partners
         finally:
             store.close()
         # Global budget: official Top K bounds the returned evidence.
@@ -699,6 +731,77 @@ class MemoryService:
             for r in rows
         ]
         return entries[: min(top_k, 12)]
+
+    def _contradiction_partners(
+        self, store: Store, entries: list[dict]
+    ) -> list[dict]:
+        """For every ranked entry that participates in a recorded
+        contradiction (D2), fetch the other side's memory row and append it
+        as evidence. The partner carries a small positive score so it never
+        outranks the ranked evidence, and the pair is deduplicated against
+        entries already in the window."""
+        if not entries:
+            return []
+        conn = store._conn
+        if conn is None:
+            return []
+        ids = [e["id"] for e in entries]
+        seen = set(ids)
+        try:
+            q = (
+                "SELECT memory_id, conflicts_with, signal FROM aml_contradictions "
+                f"WHERE memory_id IN ({','.join('?' * len(ids))}) "
+                f"OR conflicts_with IN ({','.join('?' * len(ids))})"
+            )
+            pairs = conn.execute(q, ids + ids).fetchall()
+        except sqlite3.Error:
+            return []  # governance must never break a search
+        partners: dict[str, tuple[str, str]] = {}
+        for row in pairs:
+            mine = row["memory_id"] if row["memory_id"] in seen else row["conflicts_with"]
+            other = row["conflicts_with"] if row["memory_id"] in seen else row["memory_id"]
+            if other in seen:
+                continue  # both sides already in the window
+            if other not in partners:
+                partners[other] = (mine, row["signal"])
+        if not partners:
+            return []
+        ph = ",".join("?" * len(partners))
+        rows = conn.execute(
+            "SELECT id, content, created_at FROM memories "
+            f"WHERE id IN ({ph}) AND forgotten_at IS NULL",
+            list(partners),
+        ).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            mine, signal = partners[r["id"]]
+            out.append({
+                "id": r["id"],
+                "content": r["content"],
+                "score": 0.5,  # evidence-grade, below any ranked seed
+                "created_at": _normalize_ts(r["created_at"]),
+            })
+            if conn is not None:
+                try:
+                    conn.execute(
+                        "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (
+                            uuid.uuid4().hex[:12],
+                            r["id"],
+                            "aml_contradiction_partner",
+                            f"partner_of={mine} signal={signal}",
+                            _now(),
+                        ),
+                    )
+                except sqlite3.Error:
+                    pass
+        if conn is not None:
+            try:
+                conn.commit()
+            except sqlite3.Error:
+                pass
+        return out
 
     def _expand_neighbors(
         self,

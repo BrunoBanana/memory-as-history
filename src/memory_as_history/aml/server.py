@@ -13,6 +13,7 @@ import os
 import secrets
 import sys
 import traceback
+import datetime as _dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
 
@@ -72,8 +73,22 @@ class AMLHandler(BaseHTTPRequestHandler):
         else:
             presented = self.headers.get("X-Api-Key", "")
         if not presented:
+            # Diagnostic only, redacted: never log the presented secret.
+            print(
+                f"[aml-auth] REJECT missing-key auth_len={len(auth)} "
+                f"auth_head={auth[:4]!r} at={_dt.datetime.now(_dt.timezone.utc).isoformat()}",
+                flush=True,
+            )
             return False
-        return secrets.compare_digest(presented, api_key)
+        ok = secrets.compare_digest(presented, api_key)
+        if not ok:
+            print(
+                f"[aml-auth] REJECT mismatch presented_len={len(presented)} "
+                f"presented_head={presented[:4]!r} "
+                f"at={_dt.datetime.now(_dt.timezone.utc).isoformat()}",
+                flush=True,
+            )
+        return ok
 
     def _handle_post(self, path: str) -> None:
         if not self._authorized():

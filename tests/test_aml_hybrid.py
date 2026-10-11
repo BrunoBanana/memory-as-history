@@ -32,7 +32,7 @@ class FakeStore:
     def recall(self, query, limit=10):
         return {"anchors": [], "canon": [], "memories": self.rows}
 
-    def search(self, query, limit=10, mode="hybrid"):
+    def search(self, query, limit=10, mode="hybrid", candidate_cap=None):
         return {"anchors": [], "canon": [], "memories": self.rows}
 
     def close(self):
