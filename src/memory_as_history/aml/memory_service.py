@@ -23,7 +23,9 @@ import datetime as _dt
 import hashlib
 import json
 import os
+import re
 import sqlite3
+import threading
 import uuid
 from pathlib import Path
 
@@ -64,7 +66,26 @@ CREATE TABLE IF NOT EXISTS aml_updates (
     at            TEXT NOT NULL,
     PRIMARY KEY (memory_id, superseded_by)
 );
+CREATE TABLE IF NOT EXISTS aml_summaries (
+    session_id TEXT PRIMARY KEY,
+    summary    TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
+
+# Rolling-summary budget (F1: long-history global synthesis). One row of
+# "key points" per session; oversized histories keep the earliest head plus
+# the latest tail so both the beginning and the recent state stay visible.
+SUMMARY_LIMIT = 4000
+SUMMARY_HEAD_RATIO = 0.4
+
+# Review-style queries ("总结/回顾/Summarize...") trigger a summary entry;
+# ordinary questions must never see one. Conservative on purpose.
+_SUMMARY_QUERY_PATTERN = re.compile(
+    r"总结|回顾|综述|概括|整体|总体|全部|这些年|这段时间|这段|经历|"
+    r"summar|overview|overall|the whole|entire|story|"
+    r"these years|past few years|all the (?:things|events|facts|memories)"
+)
 
 # Column-for-column mirror of Store.remember's INSERT (storage.py). Keeping
 # the two write paths aligned is enforced by tests/test_aml_adapter.py.
@@ -143,6 +164,58 @@ def _event_at(timestamp: int | None) -> str | None:
     ).isoformat()
 
 
+def _point(text: str, limit: int = 96) -> str:
+    """One summary point from a message: first non-empty line, truncated."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    head = t.split("\n")[0].strip()
+    return head if len(head) <= limit else head[:limit].rstrip() + "…"
+
+
+def _update_summary(old: str | None, point: str) -> str:
+    """Rolling per-session summary: append the new point (deduped), then
+    keep the earliest head plus the latest tail when over budget so both
+    the beginning of the history and the recent state stay visible."""
+    if not point:
+        return old or ""
+    parts = old.split("\n") if old else []
+    if point in parts:
+        return old or ""
+    parts.append(point)
+    text = "\n".join(parts)
+    if len(text) <= SUMMARY_LIMIT:
+        return text
+    keep_head = int(SUMMARY_LIMIT * SUMMARY_HEAD_RATIO)
+    keep_tail = SUMMARY_LIMIT - keep_head - 3  # "\n…\n" separator
+    return text[:keep_head] + "\n…\n" + text[-keep_tail:]
+
+
+def _upsert_summary(conn: sqlite3.Connection, session_id: str, point: str) -> None:
+    """Append one point to the session summary inside the Add transaction."""
+    row = conn.execute(
+        "SELECT summary FROM aml_summaries WHERE session_id = ?",
+        (session_id,),
+    ).fetchone()
+    old = row["summary"] if row is not None else None
+    new = _update_summary(old, point)
+    if new == old and row is not None:
+        return
+    conn.execute(
+        "INSERT OR REPLACE INTO aml_summaries (session_id, summary, updated_at) "
+        "VALUES (?, ?, ?)",
+        (session_id, new, _now()),
+    )
+
+
+def _summary_clue(query: str) -> bool:
+    """True when the query asks for a global synthesis / review. Ordinary
+    factual questions must not be affected."""
+    if not query:
+        return False
+    return _SUMMARY_QUERY_PATTERN.search(query) is not None
+
+
 class MemoryService:
     """AML-facing memory service for one data directory.
 
@@ -157,6 +230,7 @@ class MemoryService:
         search_mode: str = "lexical",
         semantic_min: float = 0.85,
         use_temporal: bool = True,
+        max_concurrent_search: int = 2,
     ):
         self.data_dir = Path(data_dir)
         (self.data_dir / "users").mkdir(parents=True, exist_ok=True)
@@ -176,6 +250,15 @@ class MemoryService:
         # ("last year", "上周") so questions about the past retrieve the
         # facts as they stood then. Conservative by design.
         self.use_temporal = use_temporal
+        # Concurrency gate for the expensive retrieval stage (embedding
+        # inference). The AML service runs on a 2 GB host; without this,
+        # 16 parallel Search calls can push the E5 model past physical
+        # memory and trip the OOM killer (observed 2026-10-04). Requests
+        # queue inside the gate instead of exhausting memory. Retrieval
+        # logic is unchanged.
+        if type(max_concurrent_search) is not int or max_concurrent_search < 1:
+            raise ValueError("max_concurrent_search must be an int >= 1")
+        self._search_gate = threading.BoundedSemaphore(max_concurrent_search)
 
     # -- connections -----------------------------------------------------
 
@@ -189,6 +272,12 @@ class MemoryService:
 
     def add(self, payload: object) -> dict:
         req = parse_add(payload)
+        print(
+            f"[aml-add] rid={req['request_id'][:24]} "
+            f"uid={req['user_id'][:24]} sid={req['session_id'][:24]} "
+            f"msgs={len(req['messages'])} at={_now()}",
+            flush=True,
+        )
         conn = self._open_connection(req["user_id"])
         try:
             conn.execute("BEGIN IMMEDIATE")
@@ -232,6 +321,11 @@ class MemoryService:
                         session_position=cursor,
                     )
                     cursor += 1
+                    # F1: keep a rolling per-session summary so review-style
+                    # questions can draw on the whole history, not just the
+                    # retrieved window. One point per source message.
+                    if k == 0:
+                        _upsert_summary(conn, req["session_id"], _point(msg["content"]))
                     # Write-time governance: record same-fact revisions audited
                     # (superseded_by edges), once per source message using the
                     # FULL original text (never per block). Deterministic,
@@ -321,15 +415,32 @@ class MemoryService:
 
     def search(self, payload: object) -> dict:
         req = parse_search(payload)
+        print(
+            f"[aml-search] uid={req['user_id'][:24]} "
+            f"q={req['query'][:200]} top_k={req.get('top_k')} at={_now()}",
+            flush=True,
+        )
         store = self._user_store(req["user_id"])
         data: list[dict] = []
         try:
-            if self.search_mode == "lexical":
-                result = store.recall(req["query"], limit=req["top_k"])
-            else:
-                result = store.search(
-                    req["query"], limit=req["top_k"], mode=self.search_mode
-                )
+            # The expensive stage (embedding inference) runs inside the
+            # concurrency gate. Queued requests wait here; memory stays
+            # bounded on the 2 GB host instead of OOM-killing the worker.
+            with self._search_gate:
+                if self.search_mode == "lexical":
+                    result = store.recall(req["query"], limit=req["top_k"])
+                else:
+                    # candidate_cap: BM25 pre-filters before semantic rerank.
+                    # Official Full stores run into thousands of entries;
+                    # embedding all of them blows the 2 GB host's request
+                    # budget (SEARCH_TIMEOUT, observed 2026-10-05). 300 keeps
+                    # top_k=100 well covered while cutting inference ~5-10x.
+                    result = store.search(
+                        req["query"],
+                        limit=req["top_k"],
+                        mode=self.search_mode,
+                        candidate_cap=300,
+                    )
             flat: list[dict] = []
             # Score field surfaced to the contract: BM25 relevance for
             # lexical mode, the RRF/hybrid combined score otherwise.
@@ -433,10 +544,26 @@ class MemoryService:
                             conn.commit()
                         except sqlite3.Error:
                             pass  # audit must never break a search
-            # Read-time governance: deduplicate identical content and
-            # discount older versions of the same fact (audited,
-            # non-destructive). Must run before the Store connection closes.
-            data = govern_entries(data, _now(), store._conn)
+            # Read-time governance: deduplicate identical content, discount
+            # older versions of the same fact, and (for current-state
+            # questions — no temporal clue) push superseded older versions
+            # well down so the answer generator sees the current truth.
+            # History-anchored queries keep them for evidence. Audited,
+            # non-destructive. Must run before the Store connection closes.
+            data = govern_entries(
+                data,
+                _now(),
+                store._conn,
+                supersede_discount=None if clues else 0.1,
+            )
+            # F1: review-style questions ("总结/Summarize...") get global
+            # synthesis entries in front of the ranked evidence, so the
+            # answer generator can draw on the whole history. Ordinary
+            # queries are untouched (no trigger -> no entries).
+            if _summary_clue(req["query"]):
+                summaries = self._summary_entries(store, req["top_k"])
+                if summaries:
+                    data = summaries + data
         finally:
             store.close()
         # Global budget: official Top K bounds the returned evidence.
@@ -454,6 +581,65 @@ class MemoryService:
         return entry
 
     # -- read-time evidence expansion ------------------------------------
+
+    def _get_summaries(self, store: Store) -> list[dict]:
+        """All session summaries for this user, building them lazily from the
+        memories table when the table is empty (e.g. data written before the
+        summary feature shipped). Returns list of (session_id, summary)."""
+        conn = store._conn
+        if conn is None:
+            return []
+        rows = conn.execute(
+            "SELECT session_id, summary FROM aml_summaries"
+        ).fetchall()
+        if rows:
+            return [(r["session_id"], r["summary"]) for r in rows]
+        # Lazy build: group memories by session, one point per content row.
+        mems = conn.execute(
+            "SELECT session_id, content FROM memories "
+            "WHERE forgotten_at IS NULL "
+            "ORDER BY session_id, session_position"
+        ).fetchall()
+        by_session: dict[str, list[str]] = {}
+        for r in mems:
+            by_session.setdefault(r["session_id"], []).append(r["content"])
+        built: list[tuple[str, str]] = []
+        now = _now()
+        for sid, contents in by_session.items():
+            summary = ""
+            for content in contents:
+                summary = _update_summary(summary, _point(content))
+            conn.execute(
+                "INSERT OR REPLACE INTO aml_summaries (session_id, summary, updated_at) "
+                "VALUES (?, ?, ?)",
+                (sid, summary, now),
+            )
+            built.append((sid, summary))
+        if built:
+            conn.commit()
+        return built
+
+    def _summary_entries(self, store: Store, top_k: int) -> list[dict]:
+        """Global-synthesis entries for review-style queries: one entry per
+        session summary chunk, placed ahead of the ranked evidence with a
+        high score. Empty when nothing is available."""
+        summaries = self._get_summaries(store)
+        if not summaries:
+            return []
+        entries: list[dict] = []
+        for sid, summary in summaries:
+            if not summary:
+                continue
+            # One entry per session, chunked to a sane size.
+            chunk = summary[:2000]
+            entries.append({
+                "id": f"summary_{hashlib.sha256(sid.encode('utf-8')).hexdigest()[:10]}",
+                "content": chunk,
+                "score": 999.0,
+            })
+            if len(entries) >= 3 or len(entries) * 2000 >= top_k:
+                break
+        return entries
 
     def _expand_neighbors(
         self,
