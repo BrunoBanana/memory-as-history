@@ -243,6 +243,32 @@ def test_governance_entries_directly():
     assert out[1]["score"] == pytest.approx(0.8 * 0.25, abs=1e-3)
 
 
+def test_govern_entries_supersede_discount_current_state():
+    entries = [
+        {"id": "old", "content": "李明住在福州", "score": 0.8, "created_at": "2026-01-01T00:00:00Z"},
+        {"id": "new", "content": "李明住在福州，后来搬到上海", "score": 0.6, "created_at": "2026-02-01T00:00:00Z"},
+    ]
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        "CREATE TABLE aml_updates (memory_id TEXT NOT NULL, "
+        "superseded_by TEXT NOT NULL, similarity REAL, at TEXT);"
+        "CREATE TABLE audit_log (id TEXT, memory_id TEXT, action TEXT, "
+        "reason TEXT, at TEXT);"
+    )
+    conn.execute(
+        "INSERT INTO aml_updates VALUES ('old','new',0.8,'2026-02-01T00:00:00Z')"
+    )
+    conn.commit()
+    # current-state question (no temporal clue): extra supersede discount
+    out = govern_entries(entries, "2026-03-01T00:00:00Z", conn=conn, supersede_discount=0.1)
+    assert [e["id"] for e in out] == ["new", "old"]
+    assert out[1]["score"] == pytest.approx(0.8 * 0.25 * 0.1, abs=1e-4)
+    # history-anchored question: no extra discount, old version stays strong
+    out2 = govern_entries(entries, "2026-03-01T00:00:00Z", conn=conn, supersede_discount=None)
+    assert out2[1]["score"] == pytest.approx(0.8 * 0.25, abs=1e-3)
+
+
 def test_record_possible_updates_returns_edge_count():
     import uuid as _uuid
 
@@ -290,3 +316,140 @@ def test_record_possible_updates_returns_edge_count():
     ).fetchone()
     assert audit is not None
     conn.close()
+
+
+# -- v1.5 D1: predicate-group revision detection -------------------------
+
+def test_predicate_group_residence():
+    from memory_as_history.aml.governance import predicate_group
+
+    assert predicate_group("李明住在福州") == "residence"
+    assert predicate_group("李明搬到上海") == "residence"
+    assert predicate_group("她喜欢画画") == "preference"
+    assert predicate_group("普通陈述没有谓词") is None
+
+
+def test_domain_revision_captured_when_jaccard_low():
+    """'住在福州' -> '搬到上海' shares only the subject token; the raw
+    Jaccard gate misses it, but the residence-domain restatement must be
+    recorded as a supersede (D1: current state wins)."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE memories (
+            id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
+            session_position INTEGER, created_at TEXT, forgotten_at TEXT
+        );
+        CREATE TABLE aml_updates (
+            memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
+            similarity REAL NOT NULL, at TEXT NOT NULL,
+            PRIMARY KEY (memory_id, superseded_by)
+        );
+        CREATE TABLE audit_log (
+            id TEXT PRIMARY KEY, memory_id TEXT, action TEXT,
+            reason TEXT, at TEXT
+        );
+        """
+    )
+    old_id = "old-res"
+    conn.execute(
+        "INSERT INTO memories VALUES (?, ?, ?, ?, ?, NULL)",
+        (old_id, "李明住在福州", None, 0, "2026-01-01T00:00:00+00:00"),
+    )
+    count = record_possible_updates(
+        conn,
+        memory_id="new-res",
+        content="李明搬到上海",
+        event_at=None,
+        session_position=1,
+        created_at="2026-02-01T00:00:00+00:00",
+        at="2026-03-01T00:00:00+00:00",
+    )
+    assert count == 1
+    row = conn.execute(
+        "SELECT memory_id, superseded_by FROM aml_updates"
+    ).fetchone()
+    assert row["memory_id"] == old_id
+    assert row["superseded_by"] == "new-res"
+    audit = conn.execute(
+        "SELECT action FROM audit_log WHERE action = 'aml_supersede'"
+    ).fetchone()
+    assert audit is not None
+    conn.close()
+
+
+def test_domain_revision_not_cross_domain():
+    """A preference change must not supersede a residence fact: different
+    domains are independent facts, never versions of each other."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE memories (
+            id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
+            session_position INTEGER, created_at TEXT, forgotten_at TEXT
+        );
+        CREATE TABLE aml_updates (
+            memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
+            similarity REAL NOT NULL, at TEXT NOT NULL,
+            PRIMARY KEY (memory_id, superseded_by)
+        );
+        CREATE TABLE audit_log (
+            id TEXT PRIMARY KEY, memory_id TEXT, action TEXT,
+            reason TEXT, at TEXT
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO memories VALUES (?, ?, ?, ?, ?, NULL)",
+        ("old", "李明住在福州", None, 0, "2026-01-01T00:00:00+00:00"),
+    )
+    count = record_possible_updates(
+        conn,
+        memory_id="new",
+        content="李明喜欢画画",
+        event_at=None,
+        session_position=1,
+        created_at="2026-02-01T00:00:00+00:00",
+        at="2026-03-01T00:00:00+00:00",
+    )
+    assert count == 0
+    conn.close()
+
+
+def test_current_state_question_ranks_new_version_first():
+    """End-to-end: residence change recorded at write time pushes the old
+    version down on a current-state question ('现在住哪')."""
+    service, _ = _service()
+    _add(
+        service,
+        "r1",
+        "u1",
+        "s1",
+        [
+            {
+                "role": "user",
+                "content": "李明住在福州",
+                "timestamp": 1_700_000_000_000,
+            }
+        ],
+    )
+    _add(
+        service,
+        "r2",
+        "u1",
+        "s1",
+        [
+            {
+                "role": "user",
+                "content": "李明搬到上海",
+                "timestamp": 1_700_000_010_000,
+            }
+        ],
+    )
+    res = _search(service, "李明现在住在哪里", "u1", top_k=10)
+    contents = [e["content"] for e in res["data"]]
+    # both versions are still retrievable (history preserved), but the new
+    # one must appear first for a current-state question
+    assert contents[0] == "李明搬到上海"
