@@ -156,6 +156,20 @@ def _is_rule_question(query: str) -> bool:
     return _RULE_QUERY_EN.search(query.lower()) is not None
 
 
+# -- v1.7 B2: causal questions widen the neighbor window -----------------
+# "为什么/怎么/后来/how did/why" need the chain of steps, not one turn;
+# a wider expansion radius pulls the path that led to the outcome.
+_CAUSAL_QUERY_PATTERN = re.compile(
+    r"为什么|什么原因|原因|因为|所以|怎么|如何|导致|结果|变成|后来|"
+    r"起因|经过|why|because|how did|how come|what led to|what caused|"
+    r"result of|then what|what happened next"
+)
+
+
+def _is_causal_query(query: str) -> bool:
+    return bool(query) and _CAUSAL_QUERY_PATTERN.search(query) is not None
+
+
 # -- v1.6 C1: content years ----------------------------------------------
 # Years named inside memory content ("2021年我住在福州", "in 2020 we moved",
 # "during 2019"). Stored in aml_time_ctx at write time; a question anchored
@@ -275,8 +289,10 @@ def _event_at(timestamp: int | None) -> str | None:
     ).isoformat()
 
 
-def _point(text: str, limit: int = 96) -> str:
-    """One summary point from a message: first non-empty line, truncated."""
+def _point(text: str, limit: int = 160) -> str:
+    """One summary point from a message: first non-empty line, truncated.
+    v1.7: 96 -> 160 chars so a review answer has the substance (who/what/
+    where), not just the sentence head."""
     t = (text or "").strip()
     if not t:
         return ""
@@ -626,7 +642,11 @@ class MemoryService:
             if seeds:
                 flat.extend(
                     self._expand_neighbors(
-                        store._conn, seeds, req["query"], req["top_k"]
+                        store._conn,
+                        seeds,
+                        req["query"],
+                        req["top_k"],
+                        radius=5 if _is_causal_query(req["query"]) else None,
                     )
                 )
             data = [self._entry(r, score_key) for r in flat]
@@ -963,6 +983,7 @@ class MemoryService:
         seed_rows: list[dict],
         query: str,
         top_k: int,
+        radius: int | None = None,
     ) -> list[dict]:
         """Expand each ranked seed to its nearby turns in the same session.
 
@@ -992,7 +1013,9 @@ class MemoryService:
         signal = query_tokens | seed_tokens
         if not signal:
             return []
-        window = int(os.environ.get("AML_EXPAND_RADIUS", "3"))
+        window = radius if radius is not None else int(
+            os.environ.get("AML_EXPAND_RADIUS", "3")
+        )
         seen_ids = {r["id"] for r in seed_rows}
         found: dict[tuple[str, int], dict] = {}
         now = _now()
@@ -1010,9 +1033,18 @@ class MemoryService:
                 if row["id"] in seen_ids:
                     continue
                 tokens = set(_tokenize(row["content"]))
-                hits = len(signal & tokens)
-                if hits <= 0:
-                    continue
+                if radius is not None:
+                    # Causal questions widen the window AND relax the token
+                    # gate: the middle step of a chain ("价格谈不拢") often
+                    # shares no token with the outcome ("合作取消了") or the
+                    # question ("为什么合作取消"), yet it is exactly the
+                    # evidence the answer needs. Every in-window neighbor is
+                    # admitted at the same low evidence weight.
+                    hits = 1 if tokens else 0
+                else:
+                    hits = len(signal & tokens)
+                    if hits <= 0:
+                        continue
                 key = (session_id, row["session_position"])
                 if key in found and found[key]["relevance"] >= hits:
                     continue

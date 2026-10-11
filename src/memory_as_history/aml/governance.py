@@ -60,12 +60,13 @@ _DISCOUNT_WEAK = 0.50
 # domain (residence / occupation / preference / acquired / relationship /
 # identity) lets a same-domain restatement supersede the older version.
 _PREDICATE_GROUPS: dict[str, tuple[str, ...]] = {
-    "residence": ("住在", "居住", "搬到", "迁往", "移居", "定居", "回了", "去了", "离开", "搬去", "搬回"),
+    "residence": ("住在", "居住", "搬到", "迁往", "移居", "定居", "回了", "去了", "离开", "搬去", "搬回", "地址", "住址"),
     "occupation": ("工作", "就职", "任职", "上班", "职业", "辞职", "跳槽", "入职"),
     "preference": ("喜欢", "热爱", "讨厌", "偏爱", "最爱", "爱吃", "爱喝", "钟情", "痴迷", "支持", "反对"),
     "acquired": ("养了", "买了", "领养", "收养", "得到", "拥有", "买了辆", "买了只"),
     "relationship": ("结婚", "离婚", "交往", "分手", "订婚", "恋爱", "成家"),
     "identity": ("改名", "成为", "毕业于", "出生", "年龄", "生日", "国籍", "籍贯"),
+    "contact": ("电话", "号码", "手机", "邮箱", "微信", "联系方式", "手机号", "换了号"),
 }
 # Same-domain restatement with any shared subject token is treated as a
 # version candidate even at low raw overlap.

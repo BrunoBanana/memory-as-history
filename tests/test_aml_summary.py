@@ -63,7 +63,7 @@ def test_summary_clue_detection():
 def test_point_extraction():
     assert _point("第一行\n第二行") == "第一行"
     assert _point("  ") == ""
-    assert _point("x" * 200) == "x" * 96 + "…"
+    assert _point("x" * 200) == "x" * 160 + "…"
 
 
 def test_update_summary_dedupe_and_roll():
