@@ -156,6 +156,76 @@ def _is_rule_question(query: str) -> bool:
     return _RULE_QUERY_EN.search(query.lower()) is not None
 
 
+# -- v1.8 A1: synonym query expansion ------------------------------------
+# A single-fact question ("她的手机号是多少") often uses words the memory
+# does not ("我的电话号码是…"). Expanding the retrieval input with a small
+# domain dictionary lets BM25 match the stored phrasing without touching
+# ranking semantics: expansions are appended as ordinary tokens, so the
+# original query words keep their natural weight. Triggers (summary/rule/
+# temporal) still run on the original query, never on the expansion.
+_QUERY_SYNONYMS_ZH: dict[str, tuple[str, ...]] = {
+    "电话": ("手机", "联系方式", "号码", "手机号", "电话号码"),
+    "手机": ("电话", "联系方式", "号码", "手机号"),
+    "手机号": ("电话", "手机", "号码", "联系方式"),
+    "联系方式": ("电话", "手机", "号码", "微信", "邮箱"),
+    "号码": ("电话", "手机", "联系方式"),
+    "微信": ("联系方式", "号码", "微信"),
+    "邮箱": ("联系方式", "邮件", "电子邮箱"),
+    "邮件": ("邮箱", "电子邮件"),
+    "名字": ("姓名", "叫什么", "称呼"),
+    "姓名": ("名字", "叫什么", "称呼"),
+    "住": ("住在", "居住", "家", "住址"),
+    "住在": ("居住", "住", "家住"),
+    "家": ("住在", "居住", "住址", "家在"),
+    "喜欢": ("爱", "偏爱", "最爱", "中意"),
+    "爱": ("喜欢", "偏爱", "最爱"),
+    "讨厌": ("不喜欢", "反感"),
+    "工作": ("职业", "上班", "职位", "干什么"),
+    "职业": ("工作", "职位", "上班"),
+    "宠物": ("养了", "养", "猫", "狗"),
+    "猫": ("猫咪", "小猫"),
+    "狗": ("狗狗", "小狗"),
+}
+_QUERY_SYNONYMS_EN: dict[str, tuple[str, ...]] = {
+    "phone": ("number", "mobile", "contact", "tel"),
+    "number": ("phone", "mobile", "contact"),
+    "mobile": ("phone", "number"),
+    "email": ("mail", "contact", "e-mail"),
+    "name": ("called", "call me"),
+    "live": ("lived", "reside", "stay", "residing"),
+    "lives": ("lived", "reside", "stays"),
+    "like": ("love", "prefer", "favorite", "enjoy"),
+    "likes": ("loves", "prefers", "enjoys"),
+    "job": ("work", "occupation", "career", "position"),
+    "work": ("job", "occupation", "career"),
+    "pet": ("cat", "dog", "animal"),
+    "cat": ("kitten", "kitty"),
+    "dog": ("puppy"),
+}
+
+
+def _expand_query(query: str) -> str:
+    """Retrieval-input expansion: append synonyms of words the query uses.
+    Returns the original query unchanged when nothing expands."""
+    if not query:
+        return query
+    extra: list[str] = []
+    for word, syns in _QUERY_SYNONYMS_ZH.items():
+        if word in query:
+            for s in syns:
+                if s not in query and s not in extra:
+                    extra.append(s)
+    lowered = query.lower()
+    for word, syns in _QUERY_SYNONYMS_EN.items():
+        if re.search(rf"\b{re.escape(word)}\b", lowered):
+            for s in syns:
+                if s.lower() not in lowered and s not in extra:
+                    extra.append(s)
+    if not extra:
+        return query
+    return query + " " + " ".join(extra)
+
+
 # -- v1.7 B2: causal questions widen the neighbor window -----------------
 # "为什么/怎么/后来/how did/why" need the chain of steps, not one turn;
 # a wider expansion radius pulls the path that led to the outcome.
@@ -578,13 +648,17 @@ class MemoryService:
         )
         store = self._user_store(req["user_id"])
         data: list[dict] = []
+        # A1: expand the retrieval input with synonyms so "手机号" matches
+        # stored "电话" and "家" matches "住在". Triggers (summary / rule /
+        # temporal) still use the original query below.
+        retrieval_query = _expand_query(req["query"])
         try:
             # The expensive stage (embedding inference) runs inside the
             # concurrency gate. Queued requests wait here; memory stays
             # bounded on the 2 GB host instead of OOM-killing the worker.
             with self._search_gate:
                 if self.search_mode == "lexical":
-                    result = store.recall(req["query"], limit=req["top_k"])
+                    result = store.recall(retrieval_query, limit=req["top_k"])
                 else:
                     # candidate_cap: BM25 pre-filters before semantic rerank.
                     # Official Full stores run into thousands of entries;
@@ -592,7 +666,7 @@ class MemoryService:
                     # budget (SEARCH_TIMEOUT, observed 2026-10-05). 300 keeps
                     # top_k=100 well covered while cutting inference ~5-10x.
                     result = store.search(
-                        req["query"],
+                        retrieval_query,
                         limit=req["top_k"],
                         mode=self.search_mode,
                         candidate_cap=300,
@@ -644,7 +718,7 @@ class MemoryService:
                     self._expand_neighbors(
                         store._conn,
                         seeds,
-                        req["query"],
+                        retrieval_query,
                         req["top_k"],
                         radius=5 if _is_causal_query(req["query"]) else None,
                     )
