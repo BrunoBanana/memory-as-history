@@ -153,13 +153,14 @@ see [setup and concurrency contracts](docs/semantic-search.md).
 
 Tool calls that violate protocol guards return **structured, self-correcting errors** (`{"error", "message", "hint"}`) instead of bare tracebacks — e.g. a premature `pin()` comes back with the hint "This memory is still working-tier. Call promote(memory_id, reason) first", so an agent can fix its own call without a guessing round-trip.
 
-## Agent Memory Leaderboard (AML) adapter
+## Agent Memory Leaderboard (AML) interface
 
-`src/memory_as_history/aml/` is a self-contained HTTP adapter (Add/Search, plus
-`/health`) submitted to the **Agent Memory Leaderboard 2026** text-memory
-track (academic / open-source group). It serves the same history philosophy
-through five versioned optimizations, all deterministic, auditable and
-deployed end-to-end:
+`src/memory_as_history/aml/` exposes the same history philosophy over the
+**Agent Memory Leaderboard 2026** Add/Search protocol (text track, academic /
+open-source group). memory-as-history stands on its own as a project; AML is
+one evaluation protocol it speaks, not the other way around. The interface
+serves the history philosophy through five versioned optimizations, all
+deterministic, auditable and deployed end-to-end:
 
 | Version | Mechanism | Why it matters |
 | --- | --- | --- |
@@ -175,8 +176,8 @@ the serving process, so the first official `/search` cold start drops from
 0.44s, 8-concurrency wall ≈3.4s, memory ≈1.0 GiB of 2 GiB. All JSON responses
 carry `charset=utf-8` so Chinese evidence never mojibakes on the client side.
 
-AML adapter tests: **79 cases** (adapter / http / governance / expansion /
-hybrid / temporal / chunking), all green. Deployment is Docker + Caddy HTTPS,
+AML interface tests: **101 cases** (contract / hybrid / governance / temporal /
+summary / rules / contradiction), all green. Deployment is Docker + Caddy HTTPS,
 reproducible from a single `docker build` — the pinned model is downloaded at
 build time, so the container needs no network at runtime. Design decisions and
 version history: `docs/plans/2026-09-30-aml-adapter.md`.

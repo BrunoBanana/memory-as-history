@@ -84,8 +84,9 @@ Memory as History 保存**说过什么、主张依据什么，以及被采用的
 warm p50 0.44s、8 并发 ≈3.4s、内存 ≈1.0 GiB / 2 GiB。所有 JSON 响应带
 `charset=utf-8`，中文证据不会被客户端误解码成乱码。
 
-AML 适配层测试：**79 项**（adapter/http/governance/expansion/hybrid/
-temporal/chunking）全绿。部署为 Docker + Caddy HTTPS，一次 `docker build`
+AML 接口测试：**101 项**（contract/governance/expansion/hybrid/
+temporal/summary/rules/contradiction）全绿。memory-as-history 是独立项目，
+AML 只是其评测接口。部署为 Docker + Caddy HTTPS，一次 `docker build`
 即可复现——模型在构建期下载，容器运行零外网。设计与版本历史：
 `docs/plans/2026-09-30-aml-adapter.md`。
 

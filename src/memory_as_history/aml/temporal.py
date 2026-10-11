@@ -43,9 +43,15 @@ def _month_epoch(month: int, day: int) -> float:
 # ("3 years ago") are handled separately in detect_temporal_clues.
 _RULES: list[tuple[re.Pattern[str], str, float, float, float | None]] = [
     # -- Chinese relative ------------------------------------------------
+    # Longer, more specific expressions first so "上周五" wins over "上周",
+    # "上上个月" over "上个月", "大前天" over "前天".
+    (re.compile(r"上上个月|两个月前"), "two_months_ago", 60 * DAY, 5 * DAY, None),
+    (re.compile(r"上上周|上上个星期"), "two_weeks_ago", 14 * DAY, 3 * DAY, None),
+    (re.compile(r"上周[一二三四五六日天]|上个星期[一二三四五六日天]"), "last_weekday", 7 * DAY, 3 * DAY, None),
     (re.compile(r"上个?星期|上周|上礼拜"), "last_week", 7 * DAY, 1.5 * DAY, None),
     (re.compile(r"上个月|上月"), "last_month", 30 * DAY, 5 * DAY, None),
     (re.compile(r"去年|前年"), "last_year", 365 * DAY, 15 * DAY, None),
+    (re.compile(r"大前天"), "three_days_ago", 3 * DAY, 12 * 3600, None),
     (re.compile(r"前天"), "day_before_yesterday", 2 * DAY, 12 * 3600, None),
     (re.compile(r"昨天|昨日"), "yesterday", 1 * DAY, 12 * 3600, None),
     (re.compile(r"几天前|前几天"), "few_days_ago", 3 * DAY, 2 * DAY, None),

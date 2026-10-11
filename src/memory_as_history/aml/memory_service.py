@@ -82,6 +82,11 @@ CREATE TABLE IF NOT EXISTS aml_contradictions (
     at            TEXT NOT NULL,
     PRIMARY KEY (memory_id, conflicts_with)
 );
+CREATE TABLE IF NOT EXISTS aml_time_ctx (
+    memory_id TEXT PRIMARY KEY,
+    year      INTEGER NOT NULL,
+    at        TEXT NOT NULL
+);
 """
 
 # Rolling-summary budget (F1: long-history global synthesis). One row of
@@ -94,8 +99,11 @@ SUMMARY_HEAD_RATIO = 0.4
 # ordinary questions must never see one. Conservative on purpose.
 _SUMMARY_QUERY_PATTERN = re.compile(
     r"总结|回顾|综述|概括|整体|总体|全部|这些年|这段时间|这段|经历|"
-    r"summar|overview|overall|the whole|entire|story|"
-    r"these years|past few years|all the (?:things|events|facts|memories)"
+    r"故事|一生|人生|过往|经历过什么|都发生了什么|"
+    r"summar|overview|overall|the whole|entire|story|backstory|journey|"
+    r"what happened|what have i been through|my life|life events|"
+    r"tell me about myself|these years|past few years|"
+    r"all the (?:things|events|facts|memories)"
 )
 
 # -- v1.5 G2: rule memories ----------------------------------------------
@@ -104,21 +112,91 @@ _SUMMARY_QUERY_PATTERN = re.compile(
 _RULE_WRITE_PATTERN = re.compile(
     r"规则|规矩|规定|约定|必须|禁止|不允许|不能|只能|要求|条例|政策|制度|"
     r"习惯|惯例|原则|"
-    r"每次.{0,8}都|从来(?:不|都)|绝对不|一定(?:要|会|得)|总是"
+    r"每次.{0,8}都|从来(?:不|都)|绝对不|一定(?:要|会|得)|总是|"
+    r"不准|不许|别忘了|切记|务必要|无论如何|"
+    r"\b(?:always|never|must|rules?|requirement|forbidden|prohibited|"
+    r"not allowed|make sure|remember to)\b"
 )
 # Read-time: questions about what is allowed / required / customary.
 _RULE_QUERY_PATTERN = re.compile(
     r"规则|规矩|规定|约定|必须|禁止|不允许|能不能|是否.{0,6}(?:可以|允许|必须)|"
-    r"可以.{0,6}吗|怎么办|如何处理|要求|政策|制度|惯例|原则|允许|习惯"
+    r"可以.{0,6}吗|怎么办|如何处理|要求|政策|制度|惯例|原则|允许|习惯|"
+    r"注意|讲究|忌讳|小心|什么规矩|"
+    r"\b(?:rules?|allowed|permitted|must|always|never|policy|regulation|"
+    r"habit|custom|requirement|can i|am i allowed)\b"
+)
+
+
+# English rule patterns match case-insensitively (a separate lower-cased
+# scan keeps the Chinese patterns byte-exact).
+_RULE_WRITE_EN = re.compile(
+    r"\b(always|never|must|rules?|requirement|requirements|forbidden|"
+    r"prohibited|not allowed|make sure|remember to)\b|"
+    r"\bno (?:smoking|eating|drinking|parking|phones?|guests|pets)\b"
+)
+_RULE_QUERY_EN = re.compile(
+    r"\b(rules?|allowed|permitted|must|always|never|policy|regulation|"
+    r"habit|custom|requirement|requirements|can i|am i allowed)\b"
 )
 
 
 def _is_rule_statement(text: str) -> bool:
-    return bool(text) and _RULE_WRITE_PATTERN.search(text) is not None
+    if not text:
+        return False
+    if _RULE_WRITE_PATTERN.search(text) is not None:
+        return True
+    return _RULE_WRITE_EN.search(text.lower()) is not None
 
 
 def _is_rule_question(query: str) -> bool:
-    return bool(query) and _RULE_QUERY_PATTERN.search(query) is not None
+    if not query:
+        return False
+    if _RULE_QUERY_PATTERN.search(query) is not None:
+        return True
+    return _RULE_QUERY_EN.search(query.lower()) is not None
+
+
+# -- v1.6 C1: content years ----------------------------------------------
+# Years named inside memory content ("2021年我住在福州", "in 2020 we moved",
+# "during 2019"). Stored in aml_time_ctx at write time; a question anchored
+# to a year boosts the memories that describe that year.
+_CONTENT_YEAR_PATTERN = re.compile(
+    r"(20\d\d)年|in (?:the year )?(20\d\d)|during (?:the year )?(20\d\d)"
+)
+
+
+def _content_years(text: str) -> list[int]:
+    """Years explicitly named in a memory's content (valid range only)."""
+    if not text:
+        return []
+    out: list[int] = []
+    for m in _CONTENT_YEAR_PATTERN.finditer(text):
+        for g in m.groups():
+            if g is None:
+                continue
+            y = int(g)
+            if 1900 <= y <= 2100:
+                out.append(y)
+    return out
+
+
+def _query_years(clues: list) -> set[int]:
+    """Years the query anchors to, from detected temporal clues. A year
+    question ("in 2021", "2021年") must match the memories that describe
+    that year, not the ones written around that date."""
+    years: set[int] = set()
+    for c in clues:
+        if c.anchor_epoch is not None and hasattr(c, "label"):
+            if c.label in ("year_in", "year_since", "year_after",
+                           "month_year", "month_day", "month_in"):
+                years.add(int(_dt.datetime.fromtimestamp(
+                    c.anchor_epoch, tz=_dt.timezone.utc).year))
+            elif c.label == "year_range":
+                # Range clues carry a center-year anchor; re-extract both
+                # endpoints from the raw text for an accurate span.
+                for y in re.findall(r"(20\d\d)", c.raw):
+                    years.add(int(y))
+    return {y for y in years if 1900 <= y <= 2100}
 
 # Column-for-column mirror of Store.remember's INSERT (storage.py). Keeping
 # the two write paths aligned is enforced by tests/test_aml_adapter.py.
@@ -389,6 +467,18 @@ class MemoryService:
                             created_at=at,
                             at=at,
                         )
+                    # C1: extract years named in the content ("2021年我住在
+                    # 福州" -> year 2021). Questions anchored to a year then
+                    # boost the memories that actually describe that year,
+                    # instead of reranking write times — the historical
+                    # archive answers "where did she live in 2021?" with the
+                    # fact as it stood then.
+                    for year in _content_years(block):
+                        conn.execute(
+                            "INSERT OR IGNORE INTO aml_time_ctx "
+                            "(memory_id, year, at) VALUES (?, ?, ?)",
+                            (mid, year, at),
+                        )
             conn.execute(
                 "INSERT INTO aml_sessions (session_id, next_position) "
                 "VALUES (?, ?) "
@@ -545,6 +635,14 @@ class MemoryService:
             # multipliers; strongest matching clue wins per row.
             clues = detect_temporal_clues(req["query"]) if self.use_temporal else []
             if clues and data:
+                # C1 time-context boost: a question anchored to a year
+                # ("in 2021", "2021年") boosts the memories whose content
+                # names that year, so the archive answers with the fact as
+                # it stood then. Runs before write-time rerank so the boost
+                # and the temporal window combine, not cancel.
+                years = _query_years(clues)
+                if years:
+                    data = self._time_context_boost(store, data, years)
                 # Prefer the message's own timestamp (event_at, spans the real
                 # conversation time) over the write timestamp (created_at),
                 # which is identical for messages ingested in one /add batch.
@@ -801,6 +899,62 @@ class MemoryService:
                 conn.commit()
             except sqlite3.Error:
                 pass
+        return out
+
+    def _time_context_boost(
+        self, store: Store, entries: list[dict], years: set[int]
+    ) -> list[dict]:
+        """Boost memories whose content names one of the query's years.
+
+        Returns a re-ranked copy (scored entries descend by boosted score,
+        unscored anchors/canon keep priority). Every boost is audited.
+        A no-match run returns the entries untouched.
+        """
+        if not entries:
+            return entries
+        conn = store._conn
+        if conn is None:
+            return entries
+        ids = [e["id"] for e in entries]
+        try:
+            rows = conn.execute(
+                "SELECT memory_id FROM aml_time_ctx "
+                f"WHERE memory_id IN ({','.join('?' * len(ids))}) "
+                f"AND year IN ({','.join('?' * len(years))})",
+                ids + sorted(years),
+            ).fetchall()
+        except sqlite3.Error:
+            return entries  # time context must never break a search
+        matched = {r["memory_id"] for r in rows}
+        if not matched:
+            return entries
+        out: list[dict] = []
+        now = _now()
+        for item in entries:
+            item = dict(item)
+            if item["id"] in matched and "score" in item:
+                item["score"] = round(float(item["score"]) * 1.5, 4)
+                try:
+                    conn.execute(
+                        "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (
+                            uuid.uuid4().hex[:12],
+                            item["id"],
+                            "aml_time_ctx_boost",
+                            f"years={','.join(map(str, sorted(years)))}",
+                            now,
+                        ),
+                    )
+                except sqlite3.Error:
+                    pass
+            out.append(item)
+        out.sort(key=lambda e: (0 if "score" not in e else 1,
+                                -(e.get("score") or 0.0)))
+        try:
+            conn.commit()
+        except sqlite3.Error:
+            pass
         return out
 
     def _expand_neighbors(

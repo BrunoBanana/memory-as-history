@@ -7,8 +7,10 @@ loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- **AML (Agent Memory Leaderboard) Add/Search adapter — text track.**
-  A zero-dependency HTTP service exposing the project's memory storage and
+- **AML (Agent Memory Leaderboard) Add/Search interface — text track.**
+  memory-as-history is an independent project; AML is one evaluation protocol
+  it speaks. The interface is a zero-dependency HTTP service exposing the
+  project's memory storage and
   BM25 retrieval through the competition's fixed contract: synchronous
   `POST /add` (single-transaction request_id idempotency, per-user SQLite
   isolation, per-session ordered positions), `POST /search`
