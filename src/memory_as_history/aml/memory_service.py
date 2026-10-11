@@ -156,6 +156,39 @@ def _is_rule_question(query: str) -> bool:
     return _RULE_QUERY_EN.search(query.lower()) is not None
 
 
+# -- v2.1 G2: rule-QA boost ----------------------------------------------
+# "她可以吃辣吗 / can she eat spicy food" asks about a rule: the stored
+# rule statement ("她不能吃辣 / she never eats spicy") is the answer, and
+# it must rank above merely-similar memories. Rule-question patterns get a
+# lift on memories carrying rule indicators.
+_RULE_QA_PATTERN = re.compile(
+    r"可以.{0,6}吗|能不能|可不可以|允许.{0,6}吗|是否.{0,6}(?:可以|允许)|"
+    r"有什么讲究|有什么忌讳|需要注意什么|"
+    r"\b(can she|could she|is she allowed|am i allowed|is it ok|"
+    r"is it okay|does she always|does she never|is she permitted)\b"
+)
+_RULE_INDICATORS = (
+    "不能", "不可以", "不行", "不许", "不准", "禁止", "不允许",
+    "never", "always", "don't", "do not", "must not", "forbidden",
+    "prohibited", "not allowed", "忌", "讲究", "注意", "小心",
+)
+
+
+def _rule_qa_boost(query: str, entries: list[dict]) -> list[dict]:
+    """Lift rule-carrying memories when the question is a rule question.
+    Boosts the *minimum* of rule candidates to 0.9 so the answer generator
+    sees the rule first; non-rule memories keep their own scores."""
+    if not _RULE_QA_PATTERN.search(query.lower()):
+        return entries
+    for item in entries:
+        if "score" not in item:
+            continue
+        content = item["content"].lower()
+        if any(ind in content for ind in _RULE_INDICATORS):
+            item["score"] = max(item["score"], 0.9)
+    return entries
+
+
 # -- v1.8 A1: synonym query expansion ------------------------------------
 # A single-fact question ("她的手机号是多少") often uses words the memory
 # does not ("我的电话号码是…"). Expanding the retrieval input with a small
@@ -231,8 +264,10 @@ def _expand_query(query: str) -> str:
 # a wider expansion radius pulls the path that led to the outcome.
 _CAUSAL_QUERY_PATTERN = re.compile(
     r"为什么|什么原因|原因|因为|所以|怎么|如何|导致|结果|变成|后来|"
-    r"起因|经过|why|because|how did|how come|what led to|what caused|"
-    r"result of|then what|what happened next"
+    r"起因|经过|造成|影响|于是|因此|随之|演变|前因后果|来由|缘由|缘故|后果|来龙去脉|"
+    r"what happened|why|because|how did|how come|what led to|what caused|"
+    r"what triggered|result of|result in|then what|what happened next|"
+    r"consequence|effect of|stem from|arise from|what came of|why did"
 )
 
 
@@ -829,6 +864,9 @@ class MemoryService:
                 rules = self._rule_entries(store, req["top_k"])
                 if rules:
                     data = rules + data
+            # G2: rule questions ("可以…吗/can she") lift rule statements
+            # above merely-similar memories.
+            data = _rule_qa_boost(req["query"], data)
             # D2: when either side of a recorded contradiction is in the
             # evidence, pull in the other side so the answer generator sees
             # the conflict in full instead of one-sided evidence. Appended
