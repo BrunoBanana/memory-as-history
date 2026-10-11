@@ -63,9 +63,11 @@ _PREDICATE_GROUPS: dict[str, tuple[str, ...]] = {
     "residence": ("住在", "居住", "搬到", "迁往", "移居", "定居", "回了", "去了", "离开", "搬去", "搬回", "地址", "住址"),
     "occupation": ("工作", "就职", "任职", "上班", "职业", "辞职", "跳槽", "入职"),
     "preference": ("喜欢", "热爱", "讨厌", "偏爱", "最爱", "爱吃", "爱喝", "钟情", "痴迷", "支持", "反对"),
-    "acquired": ("养了", "买了", "领养", "收养", "得到", "拥有", "买了辆", "买了只"),
+    "acquired": ("养了", "买了", "领养", "收养", "得到", "拥有", "买了辆", "买了只",
+                 "养猫", "养狗", "养宠物"),
     "relationship": ("结婚", "离婚", "交往", "分手", "订婚", "恋爱", "成家"),
-    "identity": ("改名", "成为", "毕业于", "出生", "年龄", "生日", "国籍", "籍贯"),
+    "identity": ("改名", "成为", "毕业于", "出生", "年龄", "生日", "国籍", "籍贯",
+                 "岁", "多大了", "几岁", "属相"),
     "contact": ("电话", "号码", "手机", "邮箱", "微信", "联系方式", "手机号", "换了号"),
 }
 # Same-domain restatement with any shared subject token is treated as a
@@ -111,6 +113,29 @@ _OPPOSITE_PAIRS: tuple[tuple[str, str], ...] = (
 )
 
 
+# -- v2.0 I1: preference revocation --------------------------------------
+# "我不喜欢咖啡了" is NOT a contradiction (a stable, continuing conflict
+# "她喜欢猫 / 她讨厌猫") — it is a state change: the old preference is
+# revoked and the current state wins (D1 version path). Detecting the
+# negation on a known fact domain routes revocation away from D2 so the
+# old value is discounted instead of being kept alive as a conflict pair.
+_REVOCATION_NEG = ("不", "不再", "没", "没有", "从不", "很少")
+
+
+def _is_revocation(text: str) -> bool:
+    """True when the statement negates a known fact domain as a STATE CHANGE
+    (a revocation of the earlier state), e.g. "我不喜欢咖啡了". Requires a
+    domain predicate AND a change marker (了/再): "她不住在福州" without 了
+    is a flat negative assertion (kept as a contradiction, both sides
+    preserved), while "她不住在福州了" is a move-out (version). Plain
+    negations ("今天不下雨") never count."""
+    if not text or predicate_group(text) is None:
+        return False
+    if "了" not in text and "再" not in text:
+        return False
+    return any(w in text for w in _REVOCATION_NEG)
+
+
 def contradiction_signal(old_text: str, new_text: str) -> str | None:
     """Contradiction signal between two statements, or None.
 
@@ -119,8 +144,14 @@ def contradiction_signal(old_text: str, new_text: str) -> str | None:
     appears in exactly one of them, or each side carries one word of an
     opposite pair. Conservative on purpose — unrelated facts sharing a
     common word must never be flagged.
+
+    v2.0: a revocation on either side ("我不喜欢咖啡了" vs "我喜欢咖啡")
+    is a state change, not a conflict — returns None so D1 handles it as a
+    version and the current state wins.
     """
     if not old_text or not new_text:
+        return None
+    if _is_revocation(old_text) or _is_revocation(new_text):
         return None
     group = predicate_group(new_text)
     if group is None or predicate_group(old_text) != group:
