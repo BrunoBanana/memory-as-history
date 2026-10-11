@@ -240,6 +240,22 @@ def _is_causal_query(query: str) -> bool:
     return bool(query) and _CAUSAL_QUERY_PATTERN.search(query) is not None
 
 
+# -- v1.9 C2: order questions --------------------------------------------
+# "先后/顺序/按时间/timeline" ask for the story in the order it happened.
+# These reorder the evidence by message time so the answer generator does
+# not narrate events out of sequence.
+_ORDER_QUERY_PATTERN = re.compile(
+    r"先后|顺序|按时间|一步步|过程|时间线|按顺序|"
+    r"timeline|in order|sequence|step by step|chronological|"
+    r"what happened first|before that|after that|then what|"
+    r"先.{0,4}后"
+)
+
+
+def _is_order_query(query: str) -> bool:
+    return bool(query) and _ORDER_QUERY_PATTERN.search(query) is not None
+
+
 # -- v1.6 C1: content years ----------------------------------------------
 # Years named inside memory content ("2021年我住在福州", "in 2020 we moved",
 # "during 2019"). Stored in aml_time_ctx at write time; a question anchored
@@ -821,6 +837,11 @@ class MemoryService:
             partners = self._contradiction_partners(store, data)
             if partners:
                 data = data + partners
+            # C2: order questions ("先后/顺序/timeline") reorder the evidence
+            # by message time ascending, so the story is narrated as it
+            # happened. Unscored anchors/canon keep priority.
+            if _is_order_query(req["query"]):
+                data = self._order_by_time(store, data)
         finally:
             store.close()
         # Global budget: official Top K bounds the returned evidence.
@@ -1050,6 +1071,55 @@ class MemoryService:
         except sqlite3.Error:
             pass
         return out
+
+    def _order_by_time(
+        self, store: Store, entries: list[dict]
+    ) -> list[dict]:
+        """Reorder evidence by message time ascending (C2: sequence
+        questions). event_at (the message's own timestamp, spans real
+        conversation time) wins over created_at; unscored anchors/canon
+        keep their priority above the sequence. Audited when entries move."""
+        if len(entries) < 2:
+            return entries
+        conn = store._conn
+        times: dict[str, float | None] = {}
+        if conn is not None:
+            ids = [e["id"] for e in entries]
+            try:
+                rows = conn.execute(
+                    "SELECT id, event_at FROM memories "
+                    f"WHERE id IN ({','.join('?' * len(ids))})",
+                    ids,
+                ).fetchall()
+                for r in rows:
+                    times[r["id"]] = parse_iso_ts(r["event_at"])
+            except sqlite3.Error:
+                pass  # fall back to created_at
+        ordered = sorted(
+            entries,
+            key=lambda e: (
+                0 if "score" not in e else 1,
+                times.get(e["id"])
+                or parse_iso_ts(e.get("created_at"))
+                or 0.0,
+            ),
+        )
+        if ordered != entries and conn is not None:
+            try:
+                conn.execute(
+                    "INSERT INTO audit_log (id, memory_id, action, reason, at) "
+                    "VALUES (?, NULL, ?, ?, ?)",
+                    (
+                        uuid.uuid4().hex[:12],
+                        "aml_order_rerank",
+                        f"chronological n={len(entries)}",
+                        _now(),
+                    ),
+                )
+                conn.commit()
+            except sqlite3.Error:
+                pass
+        return ordered
 
     def _expand_neighbors(
         self,
