@@ -291,6 +291,40 @@ def _is_order_query(query: str) -> bool:
     return bool(query) and _ORDER_QUERY_PATTERN.search(query) is not None
 
 
+# -- v2.2 C1: relative-time anchoring ------------------------------------
+# "最近/上周/昨天/recently/last week" ask about the newest slice of the
+# conversation. Memories that literally say "最近" already match by BM25;
+# the ones that only carry a recent timestamp ("我搬到上海了") need a
+# recency lift so the current state answers instead of an older memory.
+_RECENT_TIME_PATTERN = re.compile(
+    r"最近|近期|上周|这周|本周|昨天|前天|刚才|刚刚|今天|这两天|这几(?:天|周|个月)|"
+    r"\b(recent(?:ly)?|yesterday|last (?:week|month|night|time|weekend)|"
+    r"just now|earlier (?:today|this week)|these days)\b"
+)
+
+
+def _recent_time_boost(
+    query: str, entries: list[dict], times: dict[str, float | None]
+) -> list[dict]:
+    """Lift the newest third of scored evidence when the question asks about
+    recent time. Timestamps come from event_at (message time), which spans
+    real conversation time even inside one batch."""
+    if not entries or not _RECENT_TIME_PATTERN.search(query.lower()):
+        return entries
+    scored = [(i, e) for i, e in enumerate(entries) if "score" in e]
+    if not scored:
+        return entries
+    ordered = sorted(
+        scored, key=lambda p: -(times.get(p[1]["id"]) or 0.0)
+    )
+    n = max(1, int(len(ordered) * 0.3))
+    top_ids = {e["id"] for _, e in ordered[:n]}
+    for item in entries:
+        if "score" in item and item["id"] in top_ids:
+            item["score"] = min(item["score"] + 0.15, 1.0)
+    return entries
+
+
 # -- v1.6 C1: content years ----------------------------------------------
 # Years named inside memory content ("2021年我住在福州", "in 2020 we moved",
 # "during 2019"). Stored in aml_time_ctx at write time; a question anchored
@@ -867,6 +901,27 @@ class MemoryService:
             # G2: rule questions ("可以…吗/can she") lift rule statements
             # above merely-similar memories.
             data = _rule_qa_boost(req["query"], data)
+            # C1: relative-time questions ("最近/上周/yesterday") answer
+            # with the newest slice — which may share no word with the
+            # question. Append the newest memories (mid score), then lift the
+            # newest third so the current state wins.
+            if _RECENT_TIME_PATTERN.search(req["query"].lower()):
+                seen = {e["id"] for e in data}
+                for m in self._recent_memories(store, req["top_k"]):
+                    if m["id"] in seen:
+                        continue
+                    data.append(
+                        {
+                            "id": m["id"],
+                            "content": m["content"],
+                            "score": 0.7,
+                            "created_at": m["created_at"],
+                        }
+                    )
+                    seen.add(m["id"])
+            data = _recent_time_boost(
+                req["query"], data, self._event_times(store, data)
+            )
             # D2: when either side of a recorded contradiction is in the
             # evidence, pull in the other side so the answer generator sees
             # the conflict in full instead of one-sided evidence. Appended
@@ -882,6 +937,16 @@ class MemoryService:
                 data = self._order_by_time(store, data)
         finally:
             store.close()
+        # Boosted scores (rule-QA / recency) must re-rank the evidence.
+        # Unscored anchors/canon stay ahead of scored entries; only order
+        # questions keep the chronological arrangement from above.
+        if not _is_order_query(req["query"]):
+            data.sort(
+                key=lambda e: (
+                    0 if "score" not in e else 1,
+                    -(e.get("score") or 0.0),
+                )
+            )
         # Global budget: official Top K bounds the returned evidence.
         data = data[: req["top_k"]]
         return {"data": data}
@@ -1110,18 +1175,13 @@ class MemoryService:
             pass
         return out
 
-    def _order_by_time(
-        self, store: Store, entries: list[dict]
-    ) -> list[dict]:
-        """Reorder evidence by message time ascending (C2: sequence
-        questions). event_at (the message's own timestamp, spans real
-        conversation time) wins over created_at; unscored anchors/canon
-        keep their priority above the sequence. Audited when entries move."""
-        if len(entries) < 2:
-            return entries
+    def _event_times(self, store: Store, entries: list[dict]) -> dict[str, float | None]:
+        """id -> event_at epoch for the given entries (message timestamps
+        span real conversation time, unlike created_at which is shared by a
+        batch). Falls back to empty on any DB error."""
         conn = store._conn
         times: dict[str, float | None] = {}
-        if conn is not None:
+        if conn is not None and entries:
             ids = [e["id"] for e in entries]
             try:
                 rows = conn.execute(
@@ -1132,7 +1192,37 @@ class MemoryService:
                 for r in rows:
                     times[r["id"]] = parse_iso_ts(r["event_at"])
             except sqlite3.Error:
-                pass  # fall back to created_at
+                pass
+        return times
+
+    def _recent_memories(self, store: Store, limit: int) -> list[dict]:
+        """Newest memories of the user by message time (C1: relative-time
+        questions). These may share no word with the question ("我搬到上海了"
+        vs "她最近住在哪里"), yet they ARE the answer."""
+        conn = store._conn
+        if conn is None:
+            return []
+        try:
+            rows = conn.execute(
+                "SELECT id, content, created_at FROM memories "
+                "WHERE forgotten_at IS NULL "
+                "ORDER BY event_at DESC, created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except sqlite3.Error:
+            return []
+
+    def _order_by_time(
+        self, store: Store, entries: list[dict]
+    ) -> list[dict]:
+        """Reorder evidence by message time ascending (C2: sequence
+        questions). event_at (the message's own timestamp, spans real
+        conversation time) wins over created_at; unscored anchors/canon
+        keep their priority above the sequence. Audited when entries move."""
+        if len(entries) < 2:
+            return entries
+        times = self._event_times(store, entries)
         ordered = sorted(
             entries,
             key=lambda e: (
