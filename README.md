@@ -159,8 +159,9 @@ Tool calls that violate protocol guards return **structured, self-correcting err
 **Agent Memory Leaderboard 2026** Add/Search protocol (text track, academic /
 open-source group). memory-as-history stands on its own as a project; AML is
 one evaluation protocol it speaks, not the other way around. The interface
-serves the history philosophy through five versioned optimizations, all
-deterministic, auditable and deployed end-to-end:
+serves the history philosophy through versioned optimizations, all
+deterministic, auditable and committed to `main` one at a time (v0.2 → v2.3,
+full suite green at every step):
 
 | Version | Mechanism | Why it matters |
 | --- | --- | --- |
@@ -169,6 +170,11 @@ deterministic, auditable and deployed end-to-end:
 | **v0.4 hybrid retrieval** | Local multilingual E5 (pinned revision, CPU, 512 tokens) + BM25, RRF fusion, 0.85 semantic gate | Evidence recall 42.76% → 51.90% (recall@5, same frozen budget); lexical hits always kept |
 | **v0.5 temporal clues** | Conservative relative-time detection (去年/上周/…), window anchored on real message timestamps | "Where did I live last year?" returns the state at that time, not the newest truth — a core memory-as-history claim |
 | **v0.6 primary-source chunking** | Long messages split at sentence boundaries into complete blocks sharing source metadata; full text reconstructable | No semantic segment is lost to a retrieval length cap — 史料保真 |
+| **v1.5 time/domain/rules/conflict** | Relative-time expansion + content-year anchoring; predicate-group version detection (residence/occupation/preference/contact/age…); write-time rule memory (不能/禁止/always/never); contradiction pairs surfaced at read time | Current state wins, rules are remembered, conflicts are seen in full — the history stays accountable |
+| **v1.6–v1.7 summary & causal** | Summary trigger expansion + 160-char points; causal questions widen the neighbor window and relax the token gate; contact-domain versions | Long-history synthesis has substance; the middle step of a causal chain ("价格谈不拢") stops being lost |
+| **v1.8–v1.9 retrieval precision** | Synonym query expansion (手机号→电话, 家→住在, mobile→phone); chronological rerank for sequence questions (先后/timeline) | Single-fact questions match stored phrasing; stories are narrated in the order they happened |
+| **v2.0–v2.1 semantics** | Preference revocation as version (我不喜欢咖啡了 ≠ contradiction); age versions; rule-QA boost (她可以吃辣吗); causal trigger growth | State changes discount the old value; rules answer first; causal chains stay open |
+| **v2.2–v2.3 aggregation** | Relative-time anchoring (最近/上周/yesterday lifts the newest slice); cross-session preference aggregation (她喜欢什么) | The newest state answers recent-time questions even without word overlap; preferences aggregate across sessions |
 
 Runtime hardening (v0.6.1–v0.6.2): the shared E5 model is pre-warmed inside
 the serving process, so the first official `/search` cold start drops from
@@ -176,11 +182,12 @@ the serving process, so the first official `/search` cold start drops from
 0.44s, 8-concurrency wall ≈3.4s, memory ≈1.0 GiB of 2 GiB. All JSON responses
 carry `charset=utf-8` so Chinese evidence never mojibakes on the client side.
 
-AML interface tests: **101 cases** (contract / hybrid / governance / temporal /
-summary / rules / contradiction), all green. Deployment is Docker + Caddy HTTPS,
-reproducible from a single `docker build` — the pinned model is downloaded at
-build time, so the container needs no network at runtime. Design decisions and
-version history: `docs/plans/2026-09-30-aml-adapter.md`.
+AML interface tests: **157 cases** (contract / hybrid / governance / temporal /
+summary / rules / contradiction / v1.6–v2.3), all green; full suite **612
+passing**. Deployment is Docker + Caddy HTTPS, reproducible from a single
+`docker build` — the pinned model is downloaded at build time, so the
+container needs no network at runtime. Design decisions and version history:
+`docs/plans/2026-09-30-aml-adapter.md`.
 
 ## Quick start
 

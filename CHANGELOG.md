@@ -3,9 +3,69 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [2.3.0] — 2026-10-12
 
-### Added
+Memory-as-history 2.x is the capability line behind the Agent Memory
+Leaderboard interface: every version below is a deterministic, auditable
+improvement to the retrieval/governance engine, landed on `main` one commit
+at a time with the full suite green. The project stands on its own; AML is
+one evaluation protocol it speaks.
+
+### Added (AML interface capability line)
+
+- **v2.3 — cross-session preference aggregation.** Generic preference
+  questions ("她喜欢什么 / what does she like") append the user's
+  preference-domain memories across sessions so the answer generator sees
+  the full preference set; specific questions still rank their BM25 hit
+  first. Filtered by the governance domain so 爱/喜欢 hits like "爱人"
+  never leak in.
+- **v2.2 — relative-time anchoring.** "最近/上周/yesterday" questions
+  answer with the newest slice of the conversation, even when the newest
+  memory shares no word with the question ("我搬到上海了" vs "她最近住在
+  哪里"). Boosted scores re-rank the evidence; order questions keep the
+  chronological arrangement.
+- **v2.1 — rule-QA boost + causal trigger expansion.** Rule questions
+  ("她可以吃辣吗 / can she eat spicy food") lift rule statements above
+  merely-similar memories; causal triggers grow (造成/影响/后果/来龙去脉/
+  why did/what triggered/effect of) to keep widening the neighbor window.
+- **v2.0 — preference revocation + age domain.** "我不喜欢咖啡了" is a
+  state change, not a contradiction: negation + change marker (了/再) +
+  known fact domain routes it to the version path (old value discounted)
+  and suppresses the D2 pair, while stable conflicts ("她喜欢猫"/"她讨厌猫")
+  still fire. Age domain (岁/多大了/几岁/属相) joins identity so
+  "我今年25岁"→"我今年26岁" supersedes the older value.
+- **v1.9 — chronological rerank.** Sequence questions (先后/顺序/按时间/
+  timeline) reorder evidence by message time ascending so the story is
+  narrated as it happened; ordinary questions keep relevance ranking.
+- **v1.8 — synonym query expansion.** A small Chinese/English domain
+  dictionary appends synonyms to the retrieval input only ("手机号"→"电话",
+  "家"→"住在", mobile→phone, name→called); triggers still read the
+  original query, and no dictionary hit returns the query unchanged.
+- **v1.7 — richer summary points + causal neighbors.** Summary points keep
+  160 chars (was 96) so a review answer has substance; causal questions
+  widen the neighbor radius to 5 AND relax the token gate, so the middle
+  step of a chain ("价格谈不拢") enters the evidence even without a shared
+  token; contact domain (电话/号码/手机/邮箱/微信) restatements supersede
+  older versions.
+- **v1.6 — content-year time context + independent-project framing.**
+  Years named inside memory content ("2021年我住在福州") are indexed at
+  write time and boosted by year-anchored questions, so the state at that
+  time answers instead of the newest truth. README/CHANGELOG reframed:
+  memory-as-history is an independent project, AML is one protocol it
+  speaks (never "the AML adapter").
+- **v1.5 — temporal expansion, domain versions, rules, contradictions.**
+  Conservative relative-time clues (去年/上周/…) anchored on real message
+  timestamps; predicate-group version detection (residence/occupation/
+  preference/acquired/relationship/identity/contact) so same-domain
+  restatements supersede older values; write-time rule memory (不能/禁止/
+  always/never/no smoking…) and read-time rule entries; contradiction pairs
+  recorded and surfaced at read time so the answer generator sees the
+  conflict instead of one side.
+- **v1.4 — hybrid retrieval hardening + trigger expansion.** (evaluated
+  v1.4 smoke 50.96, kept the regression work and folded the fixes into
+  v1.5+.)
+
+### AML interface foundations (previously in [Unreleased])
 
 - **AML (Agent Memory Leaderboard) Add/Search interface — text track.**
   memory-as-history is an independent project; AML is one evaluation protocol
