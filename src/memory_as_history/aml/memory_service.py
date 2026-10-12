@@ -42,6 +42,7 @@ from .contract import ContractError, add_ok, parse_add, parse_search
 from .chunking import split_long_message
 from .governance import (
     govern_entries,
+    predicate_group,
     record_possible_contradictions,
     record_possible_updates,
 )
@@ -285,6 +286,54 @@ _ORDER_QUERY_PATTERN = re.compile(
     r"what happened first|before that|after that|then what|"
     r"先.{0,4}后"
 )
+
+
+# -- v2.3 I1: cross-session preference aggregation -----------------------
+# "她喜欢什么 / what does she like" must aggregate preferences expressed
+# across sessions in different words ("我喜欢猫" s1, "我爱吃火锅" s2).
+# A generic preference question appends the user's preference-domain
+# memories (mid score) so the answer generator sees all of them; a
+# specific one ("她喜欢猫吗") still ranks its BM25 hit first.
+_PREFERENCE_QA_PATTERN = re.compile(
+    r"喜欢什么|爱吃什么|爱喝什么|最爱|偏好|兴趣|爱好|喜欢哪|喜欢些|"
+    r"\b(prefer|prefers|favorite|favourite|hobbies|hobby|"
+    r"what does (?:she|he|the user) like)\b"
+)
+
+
+def _preference_qa_append(
+    query: str, entries: list[dict], conn: Any
+) -> list[dict]:
+    """Append unseen preference-domain memories for a generic preference
+    question. Filtered by the governance domain so 爱/喜欢 hits like
+    "爱人" or "可爱" never leak in. Scored 0.6: below a specific BM25 hit,
+    above nothing — they answer the open-ended question."""
+    if not _PREFERENCE_QA_PATTERN.search(query.lower()) or conn is None:
+        return entries
+    seen = {e["id"] for e in entries}
+    try:
+        rows = conn.execute(
+            "SELECT id, content, created_at FROM memories "
+            "WHERE forgotten_at IS NULL "
+            "ORDER BY event_at DESC, created_at DESC LIMIT 200"
+        ).fetchall()
+    except sqlite3.Error:
+        return entries
+    for r in rows:
+        if r["id"] in seen:
+            continue
+        if predicate_group(r["content"]) != "preference":
+            continue
+        entries.append(
+            {
+                "id": r["id"],
+                "content": r["content"],
+                "score": 0.6,
+                "created_at": r["created_at"],
+            }
+        )
+        seen.add(r["id"])
+    return entries
 
 
 def _is_order_query(query: str) -> bool:
@@ -901,6 +950,9 @@ class MemoryService:
             # G2: rule questions ("可以…吗/can she") lift rule statements
             # above merely-similar memories.
             data = _rule_qa_boost(req["query"], data)
+            # I1: generic preference questions ("她喜欢什么") aggregate the
+            # preference domain across sessions.
+            data = _preference_qa_append(req["query"], data, store._conn)
             # C1: relative-time questions ("最近/上周/yesterday") answer
             # with the newest slice — which may share no word with the
             # question. Append the newest memories (mid score), then lift the
