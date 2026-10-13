@@ -160,7 +160,7 @@ Tool calls that violate protocol guards return **structured, self-correcting err
 open-source group). memory-as-history stands on its own as a project; AML is
 one evaluation protocol it speaks, not the other way around. The interface
 serves the history philosophy through versioned optimizations, all
-deterministic, auditable and committed to `main` one at a time (v0.2 → v2.3,
+deterministic, auditable and committed to `main` one at a time (v0.2 → v2.4,
 full suite green at every step):
 
 | Version | Mechanism | Why it matters |
@@ -175,6 +175,7 @@ full suite green at every step):
 | **v1.8–v1.9 retrieval precision** | Synonym query expansion (手机号→电话, 家→住在, mobile→phone); chronological rerank for sequence questions (先后/timeline) | Single-fact questions match stored phrasing; stories are narrated in the order they happened |
 | **v2.0–v2.1 semantics** | Preference revocation as version (我不喜欢咖啡了 ≠ contradiction); age versions; rule-QA boost (她可以吃辣吗); causal trigger growth | State changes discount the old value; rules answer first; causal chains stay open |
 | **v2.2–v2.3 aggregation** | Relative-time anchoring (最近/上周/yesterday lifts the newest slice); cross-session preference aggregation (她喜欢什么) | The newest state answers recent-time questions even without word overlap; preferences aggregate across sessions |
+| **v2.4 triple governance** | Structured-triple versioning by stable `subject_id`/`relation_id` (QID/PID), driven by the official `UPDATE: replace the prior value` instruction; different-entity triples never supersede each other | The official corpus's D1 test shape is now handled exactly — the new object ranks first, the old value stays retrievable for history questions (verified on real evaluation stores: 20 version edges, UPDATE queries return the new value first) |
 
 Runtime hardening (v0.6.1–v0.6.2): the shared E5 model is pre-warmed inside
 the serving process, so the first official `/search` cold start drops from
@@ -182,8 +183,8 @@ the serving process, so the first official `/search` cold start drops from
 0.44s, 8-concurrency wall ≈3.4s, memory ≈1.0 GiB of 2 GiB. All JSON responses
 carry `charset=utf-8` so Chinese evidence never mojibakes on the client side.
 
-AML interface tests: **157 cases** (contract / hybrid / governance / temporal /
-summary / rules / contradiction / v1.6–v2.3), all green; full suite **612
+AML interface tests: **170 cases** (contract / hybrid / governance / temporal /
+summary / rules / contradiction / v1.6–v2.4), all green; full suite **619
 passing**. Deployment is Docker + Caddy HTTPS, reproducible from a single
 `docker build` — the pinned model is downloaded at build time, so the
 container needs no network at runtime. Design decisions and version history:

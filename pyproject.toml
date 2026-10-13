@@ -1,6 +1,6 @@
 [project]
 name = "memory-as-history"
-version = "2.3.0"
+version = "2.4.0"
 description = "Agent memory as history: traceable claims, evidence, revisions, scoped narratives and accountable forgetting. SQLite-backed MCP server inspired by history and memory studies; speaks the Agent Memory Leaderboard Add/Search protocol as one of its interfaces."
 readme = "README.md"
 requires-python = ">=3.10"

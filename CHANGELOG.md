@@ -3,6 +3,59 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.0] — 2026-10-14
+
+Structured-triple version governance, designed from and verified against the
+REAL official evaluation data left in the server store after the Full run
+(1614 user stores, 1.2 GB; sampling showed the corpus is predominantly
+English, and the D1 "current value" test is an explicit instruction):
+
+    Corpus: UPDATE: replace the prior value of this subject and relation
+    with the following fact.
+    {"subject": "Hyderabad", "relation": "continent", "object": "Eurasia",
+     "subject_id": "Q1361", "relation_id": "P30", "object_id": "Q540"}
+
+The official stable ids (subject_id / relation_id, QID/PID) ARE the
+same-fact key the governor needs. v2.3 (and every earlier version) missed
+this entirely: replaying real stores showed 0 version edges and the OLD
+value ranking first — D1 was structurally broken on the real corpus.
+
+### Added
+
+- **`_triple_version`**: two structured triples with the same
+  subject_id+relation_id (falling back to subject+relation without ids) are
+  versions of one fact, independent of any token-similarity gate. The
+  UPDATE instruction shape now records a `superseded_by` edge at write time
+  and, at read time, the current object ranks first while the old value is
+  discounted (current-state questions) yet still retrievable (history
+  questions).
+- **Different-triple guard**: two triples about different subject+relation
+  are never versions — their shared template inflates coverage and must not
+  collapse independent facts (Hyderabad ≠ Beijing just because both carry
+  `subject_id`/`relation_id` fields).
+
+### Verified against real evaluation data
+
+- Replay of three official stores through v2.4: **20 `aml_updates` edges**
+  created (v2.3: 0), three UPDATE queries all returned the NEW object first
+  (`n=5-6` evidence each). English KG-triple retrieval (A1) and wiki-passage
+  retrieval (B4) also confirmed at 100% hit on real stores (23/23 queries).
+- Diagnostic scripts kept under `scripts/` (`diag_replay.py`,
+  `diag_real_data.py`, `analyze_server_data.py`) — read-only, redacted
+  output, official data never leaves the host.
+
+### Changed
+
+- `_version_decision` keeps its conservative length gate; a v2.4 attempt to
+  add a bare coverage branch was rolled back after it misclassified
+  same-length near-duplicates (第8条/第9条) and different-entity triples as
+  versions — triple-key matching is the exact, correct mechanism for the
+  structured shape.
+
+AML interface tests: **170 cases** (contract / hybrid / governance /
+temporal / summary / rules / contradiction / v1.6–v2.4), all green; full
+suite **619 passing**.
+
 ## [2.3.0] — 2026-10-12
 
 Memory-as-history 2.x is the capability line behind the Agent Memory

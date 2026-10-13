@@ -31,6 +31,7 @@ Design notes:
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -94,6 +95,55 @@ def _same_domain_version(old_text: str, new_text: str) -> bool:
         return False
     shared = token_set(old_text) & token_set(new_text)
     return bool(shared)
+
+
+# -- v2.4 D1: structured-triple version detection --------------------------
+# The official corpus injects knowledge as JSON triples carrying stable
+# identifiers: {"subject": "...", "relation": "...", "object": "...",
+# "subject_id": "Q1361", "relation_id": "P30", ...}. Revisions of the same
+# fact arrive as an explicit instruction:
+#   Corpus: UPDATE: replace the prior value of this subject and relation
+#   with the following fact.
+#   {"subject": "Hyderabad", "relation": "continent", "object": "Eurasia",
+#    "subject_id": "Q1361", "relation_id": "P30", ...}
+# The stable ids ARE the same-fact key the governor needs — far stronger than
+# any token similarity gate. When both sides carry the same subject_id +
+# relation_id (or, without ids, the same subject + relation), the newer
+# statement is a version of the older one, regardless of Jaccard/coverage.
+_TRIPLE_KEY_RE = re.compile(
+    r'"subject_id"\s*:\s*"([^"]+)"\s*,\s*"relation_id"\s*:\s*"([^"]+)"'
+)
+_TRIPLE_SR_RE = re.compile(
+    r'"subject"\s*:\s*"([^"]+)"\s*,\s*"relation"\s*:\s*"([^"]+)"'
+)
+
+
+def _triple_key(text: str) -> tuple[str, str] | None:
+    """Stable same-fact key of a structured triple, or None.
+
+    Prefers the official ``subject_id``/``relation_id`` pair (QID/PID); falls
+    back to ``subject``/``relation`` when no ids are present. Returns None for
+    anything that is not a triple-shaped JSON payload.
+    """
+    if '"subject"' not in text:
+        return None
+    m = _TRIPLE_KEY_RE.search(text)
+    if m:
+        return (m.group(1).lower(), m.group(2).lower())
+    m = _TRIPLE_SR_RE.search(text)
+    if m:
+        return (m.group(1).lower(), m.group(2).lower())
+    return None
+
+
+def _triple_version(old_text: str, new_text: str) -> bool:
+    """True when both statements are triples about the SAME subject+relation
+    (stable ids take precedence over the human-readable fields)."""
+    ok = _triple_key(old_text)
+    nk = _triple_key(new_text)
+    if ok is None or nk is None:
+        return False
+    return ok == nk
 
 
 # -- v1.5 D2: contradiction detection ------------------------------------
@@ -281,7 +331,10 @@ def _version_decision(
     the caller (``_normalize``), never by token similarity: tokenization
     drops single digits, so "第8条" and "第9条" share identical tokens but
     are distinct facts. Same-length near-identical entries are deliberately
-    NOT versions for the same reason.
+    NOT versions for the same reason. v2.4: structured-triple rewrites do
+    NOT go through this gate at all — they are versioned by their stable
+    subject_id/relation_id key (``_triple_version``), which is exact and
+    immune to template-token inflation.
     """
     longer = len(newer_text) >= 1.15 * len(older_text)
     if not longer:
@@ -367,8 +420,19 @@ def record_possible_updates(
             continue  # only later statements supersede earlier ones
         if _normalize(old["content"]) == _normalize(content):
             continue  # identical content: dedup is a read-time concern
+        # v2.4: two structured triples about DIFFERENT subject+relation are
+        # never versions of one fact — their template shares nearly every
+        # token, so Jaccard/coverage are meaningless between them (a
+        # Hyderabad triple and a Beijing triple must not supersede each
+        # other just because both carry subject_id/relation_id fields).
+        old_triple = _triple_key(old["content"])
+        new_triple = _triple_key(content)
+        if old_triple is not None and new_triple is not None and old_triple != new_triple:
+            continue
         jac, coverage = overlap_signals(old_tokens, new_tokens)
-        domain_version = _same_domain_version(old["content"], content)
+        domain_version = _same_domain_version(
+            old["content"], content
+        ) or _triple_version(old["content"], content)
         if not domain_version and not _version_decision(
             jac, coverage, old["content"], content
         ):
