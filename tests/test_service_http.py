@@ -1,4 +1,4 @@
-"""HTTP-layer contract tests for the AML Add/Search service.
+"""HTTP-layer contract tests for the Add/Search service.
 
 Boots the real stdlib ThreadingHTTPServer and checks routing, authentication,
 health checks, and the exact wire shapes the official smoke validates.
@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import build_server
+from memory_as_history.service import build_server
 
 PORT = 8765
 
 
 @pytest.fixture()
 def http_server():
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-http-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-http-"))
     httpd = build_server(host="127.0.0.1", port=PORT, data_dir=data_dir)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()

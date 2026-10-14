@@ -1,4 +1,4 @@
-"""Tests for AML temporal-clue reranking (P2, memory-as-history).
+"""Tests for temporal-clue reranking (P2, memory-as-history).
 
 The project treats memory as history: a question that names a time
 ("where did she live LAST YEAR?") should surface the facts as they
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.temporal import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.temporal import (
     detect_temporal_clues,
     parse_iso_ts,
     time_weight,
@@ -270,7 +270,7 @@ class FakeStore:
 
 
 def _service(monkeypatch, rows, use_temporal=True, mode="lexical"):
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-tmp-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-tmp-"))
     service = MemoryService(
         data_dir=data_dir, search_mode=mode, use_temporal=use_temporal
     )

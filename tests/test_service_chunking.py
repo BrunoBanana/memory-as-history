@@ -1,4 +1,4 @@
-"""Tests for AML primary-source chunking (P3, memory-as-history).
+"""Tests for primary-source chunking (P3, memory-as-history).
 
 Long messages are divided at sentence boundaries into complete blocks
 that share the original event metadata, so the source stays
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.chunking import split_long_message
+from memory_as_history.service import MemoryService
+from memory_as_history.service.chunking import split_long_message
 
 
 def _sentence(n: int = 28) -> str:
@@ -69,7 +69,7 @@ def test_newline_boundary_respected():
 # -- integration through MemoryService.add --------------------------------
 
 def _service():
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-chunk-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-chunk-"))
     return MemoryService(data_dir=data_dir, search_mode="lexical")
 
 

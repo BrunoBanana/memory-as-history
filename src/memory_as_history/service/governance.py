@@ -1,14 +1,15 @@
-"""Deterministic memory governance for the AML evaluation stream (v0.2).
+"""Deterministic memory governance (v0.2).
 
 Two mechanisms, both deterministic and model-free:
 
 1. Write-time update detection (``record_possible_updates``): after a memory
    is inserted, recent memories of the same user are scanned for same-fact
-   revisions — strong token overlap (Jaccard) or near-full coverage of the
-   older row by the newer statement. Each detected revision is recorded as a
-   ``superseded_by`` edge in ``aml_updates`` and every decision is written to
-   ``audit_log``. Nothing is deleted or rewritten: the history stays intact
-   and auditable, which is the project's core philosophy.
+   revisions — strong token overlap (Jaccard), near-full coverage of the
+   older row by the newer statement, or a matching structured-triple key.
+   Each detected revision is recorded as a ``superseded_by`` edge in the
+   updates table and every decision is written to ``audit_log``. Nothing is
+   deleted or rewritten: the history stays intact and auditable, which is
+   the project's core philosophy.
 
 2. Read-time version suppression (``govern_entries``): within the returned
    evidence window, near-duplicate entries are deduplicated (keep the newer)
@@ -36,6 +37,37 @@ import uuid
 from typing import Any
 
 from ..storage import _tokenize
+
+# Bookkeeping table names. New stores are created with the neutral
+# ``memory_*`` schema; stores created by earlier versions use the legacy
+# ``aml_*`` names and keep working unchanged (the resolver falls back to the
+# legacy name when the neutral one is absent).
+_TABLE_ALIASES: dict[str, tuple[str, str]] = {
+    "add_log": ("memory_add_log", "aml_add_log"),
+    "sessions": ("memory_sessions", "aml_sessions"),
+    "updates": ("memory_updates", "aml_updates"),
+    "summaries": ("memory_summaries", "aml_summaries"),
+    "contradictions": ("memory_contradictions", "aml_contradictions"),
+    "time_ctx": ("memory_time_ctx", "aml_time_ctx"),
+}
+
+
+def table_names(conn: Any) -> dict[str, str]:
+    """Resolve the active bookkeeping table names for a store.
+
+    Prefers the neutral schema; falls back to the legacy names so
+    pre-existing stores (including deployed evaluation stores) stay fully
+    readable and writable. One cheap ``sqlite_master`` probe per call is
+    negligible next to the query itself.
+    """
+    existing = {
+        r[0]
+        for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    return {
+        slot: (neutral if neutral in existing else legacy)
+        for slot, (neutral, legacy) in _TABLE_ALIASES.items()
+    }
 
 # Similarity signals. CJK bigrams make raw Jaccard decay fast as sentences
 # grow, so we combine two signals:
@@ -236,7 +268,7 @@ def record_possible_contradictions(
     recent: int = 300,
 ) -> int:
     """Scan recent memories of the same user for contradictory statements
-    and record ``aml_contradictions`` pairs (audited, never destructive).
+    and record contradiction pairs (audited, never destructive).
 
     Returns the number of pairs recorded. Called inside the Add
     transaction, after the new memory row is inserted. Pairs are symmetric
@@ -245,6 +277,7 @@ def record_possible_contradictions(
     """
     if not content:
         return 0
+    t = table_names(conn)
     rows = conn.execute(
         "SELECT id, content, event_at, session_position, created_at "
         "FROM memories WHERE id != ? AND forgotten_at IS NULL "
@@ -260,13 +293,13 @@ def record_possible_contradictions(
         if signal is None:
             continue
         conn.execute(
-            "INSERT INTO aml_contradictions (memory_id, conflicts_with, "
+            f"INSERT INTO {t['contradictions']} (memory_id, conflicts_with, "
             "signal, at) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(memory_id, conflicts_with) DO NOTHING",
             (row["id"], memory_id, signal, at),
         )
         conn.execute(
-            "INSERT INTO aml_contradictions (memory_id, conflicts_with, "
+            f"INSERT INTO {t['contradictions']} (memory_id, conflicts_with, "
             "signal, at) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(memory_id, conflicts_with) DO NOTHING",
             (memory_id, row["id"], signal, at),
@@ -274,7 +307,7 @@ def record_possible_contradictions(
         _audit(
             conn,
             row["id"],
-            "aml_contradiction",
+            "contradiction",
             f"conflicts_with={memory_id} signal={signal}",
             at,
         )
@@ -439,8 +472,9 @@ def record_possible_updates(
             continue
         if (jac >= _STRONG_JACCARD or coverage >= _STRONG_COVERAGE
                 or domain_version):
+            t = table_names(conn)
             conn.execute(
-                "INSERT INTO aml_updates (memory_id, superseded_by, "
+                f"INSERT INTO {t['updates']} (memory_id, superseded_by, "
                 "similarity, at) VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(memory_id, superseded_by) DO NOTHING",
                 (old["id"], memory_id, round(jac, 4), at),
@@ -448,7 +482,7 @@ def record_possible_updates(
             _audit(
                 conn,
                 old["id"],
-                "aml_supersede",
+                "supersede",
                 f"superseded_by={memory_id} jaccard={jac:.3f} coverage={coverage:.3f} "
                 f"domain={predicate_group(content) or '-'}",
                 at,
@@ -483,7 +517,7 @@ def govern_entries(
       otherwise). The older entry stays in the list, so history questions can
       still find it; it just ranks lower.
     - ``supersede_discount``: when given (a float, typically small), entries
-      recorded as superseded by a later statement (write-time ``aml_updates``
+      recorded as superseded by a later statement (write-time updates
       edges) are additionally discounted by that factor. This lets
       current-state questions ("where does X live NOW?") push older versions
       well down while history-anchored queries keep them by passing ``None``.
@@ -505,8 +539,9 @@ def govern_entries(
         ids = [e["id"] for e in entries]
         if ids:
             try:
+                t = table_names(conn)
                 rows = conn.execute(
-                    "SELECT DISTINCT memory_id FROM aml_updates "
+                    f"SELECT DISTINCT memory_id FROM {t['updates']} "
                     f"WHERE memory_id IN ({','.join('?' * len(ids))})",
                     ids,
                 ).fetchall()
@@ -535,7 +570,7 @@ def govern_entries(
                 _audit(
                     conn,
                     entries[older_idx]["id"],
-                    "aml_dedup_merge",
+                    "dedup_merge",
                     f"duplicate_of={entries[newer_idx]['id']}",
                     at,
                 )
@@ -565,7 +600,7 @@ def govern_entries(
             _audit(
                 conn,
                 item["id"],
-                "aml_version_discount",
+                "version_discount",
                 f"older_version jaccard={jac:.3f} coverage={cov:.3f} "
                 f"factor={factor}",
                 at,
@@ -576,7 +611,7 @@ def govern_entries(
             _audit(
                 conn,
                 item["id"],
-                "aml_supersede_discount",
+                "supersede_discount",
                 f"superseded_current_state factor={supersede_discount}",
                 at,
             )

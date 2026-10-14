@@ -17,7 +17,7 @@ v2.4 adds:
   (the parameter was accepted but never used).
 
 D1 behavior verified on real server data before this version: the old
-value ranked first and no aml_updates edge existed. After the fix the edge
+value ranked first and no memory_updates edge existed. After the fix the edge
 is recorded and the NEW value ranks first.
 """
 
@@ -27,8 +27,8 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.governance import _triple_key, _triple_version, _version_decision
+from memory_as_history.service import MemoryService
+from memory_as_history.service.governance import _triple_key, _triple_version, _version_decision
 
 BASE = 1_700_000_000_000
 
@@ -50,7 +50,7 @@ TRIPLE_DIFFERENT = (
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-v24-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-v24-")),
         search_mode="lexical",
     )
 
@@ -82,7 +82,7 @@ def _updates(svc, user_id) -> list[tuple[str, str]]:
     )
     conn = sqlite3.connect(db)
     rows = conn.execute(
-        "SELECT memory_id, superseded_by FROM aml_updates"
+        "SELECT memory_id, superseded_by FROM memory_updates"
     ).fetchall()
     conn.close()
     return rows

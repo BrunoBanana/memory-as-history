@@ -11,15 +11,15 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.memory_service import _recent_time_boost
+from memory_as_history.service import MemoryService
+from memory_as_history.service.memory_service import _recent_time_boost
 
 BASE = 1_700_000_000_000
 
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-v22-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-v22-")),
         search_mode="lexical",
     )
 

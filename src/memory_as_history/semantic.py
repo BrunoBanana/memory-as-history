@@ -39,7 +39,7 @@ class LocalE5:
     candidate IDs. Eligibility always comes from a fresh Store recall.
 
     The underlying model is shared process-wide (one load per process): the
-    AML HTTP service creates one Store per request, and re-loading a 470 MB
+    HTTP service creates one Store per request, and re-loading a 470 MB
     model on every search would time out the smoke checks.
     """
     _shared_model = None

@@ -16,19 +16,19 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.memory_service import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.memory_service import (
     _content_years,
     _is_rule_question,
     _is_rule_statement,
     _summary_clue,
 )
-from memory_as_history.aml.temporal import detect_temporal_clues
+from memory_as_history.service.temporal import detect_temporal_clues
 
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-v16-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-v16-")),
         search_mode="lexical",
     )
 

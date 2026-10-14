@@ -1,7 +1,7 @@
-"""AML Add/Search contract mirror.
+"""Add/Search contract mirror (memory-as-history).
 
-Single source of truth for the request/response shapes fixed by the Agent
-Memory Leaderboard API Guide (Cycle 2). Both the HTTP layer and the memory
+Single source of truth for the request/response shapes fixed by the
+standardized memory API Guide (Cycle 2). Both the HTTP layer and the memory
 service go through this module, so validation and response assembly cannot
 drift between the two.
 """

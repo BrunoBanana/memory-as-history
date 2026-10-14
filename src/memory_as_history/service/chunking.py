@@ -1,4 +1,4 @@
-"""Message chunking for the AML layer (memory-as-history).
+"""Message chunking for the memory service (memory-as-history).
 
 Primary-source preservation rule (史料保真): a long message is never
 truncated at the retrieval limit — instead it is divided at sentence

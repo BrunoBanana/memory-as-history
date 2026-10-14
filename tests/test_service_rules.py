@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.memory_service import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.memory_service import (
     _is_rule_question,
     _is_rule_statement,
 )
@@ -22,7 +22,7 @@ from memory_as_history.aml.memory_service import (
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-rule-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-rule-")),
         search_mode="lexical",
     )
 

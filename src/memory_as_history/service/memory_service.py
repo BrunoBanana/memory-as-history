@@ -1,20 +1,22 @@
-"""Per-user memory service implementing the AML Add/Search semantics.
+"""Per-user memory service implementing a standardized Add/Search
+semantics (the same write/read contract used by evaluation harnesses).
 
 Isolation by construction: each ``user_id`` owns one SQLite file, so
 cross-user retrieval is impossible — the Search scope and the write target
 are the same physical database.
 
 Write path: one transaction per Add request. The idempotency marker
-(``aml_add_log``), the memory rows and the per-session position counter are
+(add-log table), the memory rows and the per-session position counter are
 committed together, so a replay with the same ``request_id`` either finds a
 completed marker (and is echoed without re-writing) or re-runs from a clean
 rollback. There is no partial-write state to recover.
 
 Read path: reuses the project ``Store.recall`` (BM25, anchors/canon
 priority) and optionally ``Store.search`` (hybrid) on the same user
-database, flattened to the AML ``data`` array. The memories table is the
-project schema; the adapter only adds two ``aml_``-prefixed bookkeeping
-tables.
+database, flattened to the standard ``data`` array. The memories table is
+the project schema; the service only adds a few bookkeeping tables of its
+own (neutral ``memory_*`` names; legacy ``aml_*`` stores are read
+transparently, see ``governance.table_names``).
 """
 
 from __future__ import annotations
@@ -45,45 +47,55 @@ from .governance import (
     predicate_group,
     record_possible_contradictions,
     record_possible_updates,
+    table_names,
 )
 from .temporal import detect_temporal_clues, parse_iso_ts, time_weight
 
-DEFAULT_DATA_DIR = Path.home() / ".memory-as-history" / "aml"
+# Default storage root. The ``memory`` sub-directory is the current name;
+# a legacy ``aml`` sub-directory is picked up when present so older local
+# stores keep working without a migration.
+_LEGACY_DATA_DIR = Path.home() / ".memory-as-history" / "aml"
+_MEMORY_DATA_DIR = Path.home() / ".memory-as-history" / "memory"
+DEFAULT_DATA_DIR = (
+    _LEGACY_DATA_DIR
+    if _LEGACY_DATA_DIR.exists() and not _MEMORY_DATA_DIR.exists()
+    else _MEMORY_DATA_DIR
+)
 
-# Adapter-owned bookkeeping tables. Prefix ``aml_`` keeps them clearly
-# separated from the project schema.
-AML_SCHEMA = """
-CREATE TABLE IF NOT EXISTS aml_add_log (
+# Service-owned bookkeeping tables (neutral names; legacy stores use the
+# ``aml_`` names, which ``governance.table_names`` resolves transparently).
+MEMORY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS memory_add_log (
     request_id TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
     session_id TEXT NOT NULL,
     status     TEXT NOT NULL,
     at         TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS aml_sessions (
+CREATE TABLE IF NOT EXISTS memory_sessions (
     session_id    TEXT PRIMARY KEY,
     next_position INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS aml_updates (
+CREATE TABLE IF NOT EXISTS memory_updates (
     memory_id     TEXT NOT NULL,
     superseded_by TEXT NOT NULL,
     similarity    REAL NOT NULL,
     at            TEXT NOT NULL,
     PRIMARY KEY (memory_id, superseded_by)
 );
-CREATE TABLE IF NOT EXISTS aml_summaries (
+CREATE TABLE IF NOT EXISTS memory_summaries (
     session_id TEXT PRIMARY KEY,
     summary    TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS aml_contradictions (
+CREATE TABLE IF NOT EXISTS memory_contradictions (
     memory_id     TEXT NOT NULL,
     conflicts_with TEXT NOT NULL,
     signal        TEXT NOT NULL,
     at            TEXT NOT NULL,
     PRIMARY KEY (memory_id, conflicts_with)
 );
-CREATE TABLE IF NOT EXISTS aml_time_ctx (
+CREATE TABLE IF NOT EXISTS memory_time_ctx (
     memory_id TEXT PRIMARY KEY,
     year      INTEGER NOT NULL,
     at        TEXT NOT NULL
@@ -376,8 +388,8 @@ def _recent_time_boost(
 
 # -- v1.6 C1: content years ----------------------------------------------
 # Years named inside memory content ("2021年我住在福州", "in 2020 we moved",
-# "during 2019"). Stored in aml_time_ctx at write time; a question anchored
-# to a year boosts the memories that describe that year.
+# "during 2019"). Stored in the time-context table at write time; a
+# question anchored to a year boosts the memories that describe that year.
 _CONTENT_YEAR_PATTERN = re.compile(
     r"(20\d\d)年|in (?:the year )?(20\d\d)|during (?:the year )?(20\d\d)"
 )
@@ -417,7 +429,7 @@ def _query_years(clues: list) -> set[int]:
     return {y for y in years if 1900 <= y <= 2100}
 
 # Column-for-column mirror of Store.remember's INSERT (storage.py). Keeping
-# the two write paths aligned is enforced by tests/test_aml_adapter.py.
+# the two write paths aligned is enforced by tests/test_service_adapter.py.
 _MEMORY_COLUMNS = (
     "id, content, source, status, tier, created_at, last_reviewed_at, "
     "review_status, security_sensitive, frame, content_tokens, event_at, "
@@ -451,12 +463,12 @@ def _open_connection(data_dir: Path, user_id: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 30000")
-    # Project schema + adapter bookkeeping share one creation script, then the
-    # same additive migrations Store applies. executescript commits any open
-    # transaction first; the script itself carries the BEGIN IMMEDIATE so
-    # creation and upgrades share the lock.
+    # Project schema + service bookkeeping share one creation script, then
+    # the same additive migrations Store applies. executescript commits any
+    # open transaction first; the script itself carries the BEGIN IMMEDIATE
+    # so creation and upgrades share the lock.
     conn.executescript(
-        "BEGIN IMMEDIATE;\n" + SCHEMA + KNOWLEDGE_SCHEMA + AML_SCHEMA
+        "BEGIN IMMEDIATE;\n" + SCHEMA + KNOWLEDGE_SCHEMA + MEMORY_SCHEMA
     )
     _migrate(conn)
     conn.commit()
@@ -478,7 +490,7 @@ def _audit_expand(conn: sqlite3.Connection, row: dict, at: str) -> None:
         (
             uuid.uuid4().hex[:12],
             row["id"],
-            "aml_turn_expand",
+            "turn_expand",
             f"expanded_from_seed position={row.get('session_position')}",
             at,
         ),
@@ -524,8 +536,9 @@ def _update_summary(old: str | None, point: str) -> str:
 
 def _upsert_summary(conn: sqlite3.Connection, session_id: str, point: str) -> None:
     """Append one point to the session summary inside the Add transaction."""
+    t = table_names(conn)
     row = conn.execute(
-        "SELECT summary FROM aml_summaries WHERE session_id = ?",
+        f"SELECT summary FROM {t['summaries']} WHERE session_id = ?",
         (session_id,),
     ).fetchone()
     old = row["summary"] if row is not None else None
@@ -533,7 +546,7 @@ def _upsert_summary(conn: sqlite3.Connection, session_id: str, point: str) -> No
     if new == old and row is not None:
         return
     conn.execute(
-        "INSERT OR REPLACE INTO aml_summaries (session_id, summary, updated_at) "
+        f"INSERT OR REPLACE INTO {t['summaries']} (session_id, summary, updated_at) "
         "VALUES (?, ?, ?)",
         (session_id, new, _now()),
     )
@@ -548,7 +561,7 @@ def _summary_clue(query: str) -> bool:
 
 
 class MemoryService:
-    """AML-facing memory service for one data directory.
+    """Memory write/read service for one data directory.
 
     Thread-safe: every call opens its own SQLite connection (or its own
     ``Store``), and per-user write serialization comes from SQLite's own
@@ -582,7 +595,7 @@ class MemoryService:
         # facts as they stood then. Conservative by design.
         self.use_temporal = use_temporal
         # Concurrency gate for the expensive retrieval stage (embedding
-        # inference). The AML service runs on a 2 GB host; without this,
+        # inference). The service runs on a 2 GB host; without this,
         # 16 parallel Search calls can push the E5 model past physical
         # memory and trip the OOM killer (observed 2026-10-04). Requests
         # queue inside the gate instead of exhausting memory. Retrieval
@@ -604,7 +617,7 @@ class MemoryService:
     def add(self, payload: object) -> dict:
         req = parse_add(payload)
         print(
-            f"[aml-add] rid={req['request_id'][:24]} "
+            f"[mem-add] rid={req['request_id'][:24]} "
             f"uid={req['user_id'][:24]} sid={req['session_id'][:24]} "
             f"msgs={len(req['messages'])} at={_now()}",
             flush=True,
@@ -612,8 +625,9 @@ class MemoryService:
         conn = self._open_connection(req["user_id"])
         try:
             conn.execute("BEGIN IMMEDIATE")
+            t = table_names(conn)
             row = conn.execute(
-                "SELECT status FROM aml_add_log WHERE request_id = ?",
+                f"SELECT status FROM {t['add_log']} WHERE request_id = ?",
                 (req["request_id"],),
             ).fetchone()
             if row is not None and row["status"] == "done":
@@ -623,7 +637,7 @@ class MemoryService:
                 )
             at = _now()
             conn.execute(
-                "INSERT OR REPLACE INTO aml_add_log "
+                f"INSERT OR REPLACE INTO {t['add_log']} "
                 "(request_id, user_id, session_id, status, at) "
                 "VALUES (?, ?, ?, 'done', ?)",
                 (req["request_id"], req["user_id"], req["session_id"], at),
@@ -695,12 +709,12 @@ class MemoryService:
                     # fact as it stood then.
                     for year in _content_years(block):
                         conn.execute(
-                            "INSERT OR IGNORE INTO aml_time_ctx "
+                            f"INSERT OR IGNORE INTO {t['time_ctx']} "
                             "(memory_id, year, at) VALUES (?, ?, ?)",
                             (mid, year, at),
                         )
             conn.execute(
-                "INSERT INTO aml_sessions (session_id, next_position) "
+                f"INSERT INTO {t['sessions']} (session_id, next_position) "
                 "VALUES (?, ?) "
                 "ON CONFLICT(session_id) DO UPDATE SET "
                 "next_position = excluded.next_position",
@@ -717,8 +731,9 @@ class MemoryService:
     def _session_next_position(
         self, conn: sqlite3.Connection, session_id: str
     ) -> int:
+        t = table_names(conn)
         row = conn.execute(
-            "SELECT next_position FROM aml_sessions WHERE session_id = ?",
+            f"SELECT next_position FROM {t['sessions']} WHERE session_id = ?",
             (session_id,),
         ).fetchone()
         return int(row["next_position"]) if row is not None else 0
@@ -776,7 +791,7 @@ class MemoryService:
     def search(self, payload: object) -> dict:
         req = parse_search(payload)
         print(
-            f"[aml-search] uid={req['user_id'][:24]} "
+            f"[mem-search] uid={req['user_id'][:24]} "
             f"q={req['query'][:200]} top_k={req.get('top_k')} at={_now()}",
             flush=True,
         )
@@ -912,7 +927,7 @@ class MemoryService:
                                     "VALUES (?, NULL, ?, ?, ?)",
                                     (
                                         uuid.uuid4().hex[:12],
-                                        "aml_temporal_hit",
+                                        "temporal_hit",
                                         f"clue={clue.label} offset={int(clue.offset_seconds)}",
                                         _now(),
                                     ),
@@ -1022,8 +1037,9 @@ class MemoryService:
         conn = store._conn
         if conn is None:
             return []
+        t = table_names(conn)
         rows = conn.execute(
-            "SELECT session_id, summary FROM aml_summaries"
+            f"SELECT session_id, summary FROM {t['summaries']}"
         ).fetchall()
         if rows:
             return [(r["session_id"], r["summary"]) for r in rows]
@@ -1043,7 +1059,7 @@ class MemoryService:
             for content in contents:
                 summary = _update_summary(summary, _point(content))
             conn.execute(
-                "INSERT OR REPLACE INTO aml_summaries (session_id, summary, updated_at) "
+                f"INSERT OR REPLACE INTO {t['summaries']} (session_id, summary, updated_at) "
                 "VALUES (?, ?, ?)",
                 (sid, summary, now),
             )
@@ -1116,8 +1132,9 @@ class MemoryService:
         ids = [e["id"] for e in entries]
         seen = set(ids)
         try:
+            t = table_names(conn)
             q = (
-                "SELECT memory_id, conflicts_with, signal FROM aml_contradictions "
+                f"SELECT memory_id, conflicts_with, signal FROM {t['contradictions']} "
                 f"WHERE memory_id IN ({','.join('?' * len(ids))}) "
                 f"OR conflicts_with IN ({','.join('?' * len(ids))})"
             )
@@ -1157,7 +1174,7 @@ class MemoryService:
                         (
                             uuid.uuid4().hex[:12],
                             r["id"],
-                            "aml_contradiction_partner",
+                            "contradiction_partner",
                             f"partner_of={mine} signal={signal}",
                             _now(),
                         ),
@@ -1187,8 +1204,9 @@ class MemoryService:
             return entries
         ids = [e["id"] for e in entries]
         try:
+            t = table_names(conn)
             rows = conn.execute(
-                "SELECT memory_id FROM aml_time_ctx "
+                f"SELECT memory_id FROM {t['time_ctx']} "
                 f"WHERE memory_id IN ({','.join('?' * len(ids))}) "
                 f"AND year IN ({','.join('?' * len(years))})",
                 ids + sorted(years),
@@ -1211,7 +1229,7 @@ class MemoryService:
                         (
                             uuid.uuid4().hex[:12],
                             item["id"],
-                            "aml_time_ctx_boost",
+                            "time_ctx_boost",
                             f"years={','.join(map(str, sorted(years)))}",
                             now,
                         ),
@@ -1291,7 +1309,7 @@ class MemoryService:
                     "VALUES (?, NULL, ?, ?, ?)",
                     (
                         uuid.uuid4().hex[:12],
-                        "aml_order_rerank",
+                        "order_rerank",
                         f"chronological n={len(entries)}",
                         _now(),
                     ),
@@ -1320,7 +1338,7 @@ class MemoryService:
 
         Returns expanded rows ordered by (session_id, session_position),
         deduplicated against the seeds, bounded by the remaining Top K
-        budget. Every expansion decision is audited (``aml_turn_expand``).
+        budget. Every expansion decision is audited (``turn_expand``).
         """
         budget = max(top_k - len(seed_rows), 0)
         if budget <= 0 or not seed_rows:
@@ -1338,7 +1356,8 @@ class MemoryService:
         if not signal:
             return []
         window = radius if radius is not None else int(
-            os.environ.get("AML_EXPAND_RADIUS", "3")
+            os.environ.get("MEMORY_EXPAND_RADIUS")
+            or os.environ.get("AML_EXPAND_RADIUS", "3")
         )
         seen_ids = {r["id"] for r in seed_rows}
         found: dict[tuple[str, int], dict] = {}

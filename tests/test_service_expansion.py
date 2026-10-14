@@ -1,4 +1,4 @@
-"""Tests for AML read-time neighbor expansion (P0 evidence boost).
+"""Tests for read-time neighbor expansion (P0 evidence boost).
 
 Multi-evidence questions ("where does X live?" when a later turn says
 "moved to Y") need more than one turn. Neighbor expansion adds nearby
@@ -13,11 +13,11 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from memory_as_history.aml import MemoryService
+from memory_as_history.service import MemoryService
 
 
 def _service() -> tuple[MemoryService, Path]:
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-exp-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-exp-"))
     return MemoryService(data_dir=data_dir), data_dir
 
 
@@ -123,7 +123,7 @@ def test_expansion_is_audited():
     conn = sqlite3.connect(str(data_dir / "users" / f"{_hash('u1')}.db"))
     try:
         rows = conn.execute(
-            "SELECT action FROM audit_log WHERE action = 'aml_turn_expand'"
+            "SELECT action FROM audit_log WHERE action = 'turn_expand'"
         ).fetchall()
     finally:
         conn.close()

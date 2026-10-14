@@ -1,4 +1,4 @@
-"""Tests for AML rolling summaries (F1: long-history global synthesis).
+"""Tests for rolling summaries (F1: long-history global synthesis).
 
 Review-style questions ("总结一下…", "Summarize the whole conversation")
 must be able to draw on the entire history, not only the retrieved window.
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.memory_service import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.memory_service import (
     _point,
     _summary_clue,
     _update_summary,
@@ -24,7 +24,7 @@ from memory_as_history.aml.memory_service import (
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-sum-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-sum-")),
         search_mode="lexical",
     )
 
@@ -87,7 +87,7 @@ def test_summary_built_on_add():
     _add(svc, "u1", "s1", ["你好", "我住在杭州"])
     store = svc._user_store("u1")
     rows = store._conn.execute(
-        "SELECT summary FROM aml_summaries"
+        "SELECT summary FROM memory_summaries"
     ).fetchall()
     assert len(rows) == 1
     assert "杭州" in rows[0]["summary"]
@@ -122,7 +122,7 @@ def test_idempotent_add_no_duplicate_points():
     _add(svc, "u1", "s1", ["她住在杭州"], request_id="r1")  # replay
     store = svc._user_store("u1")
     row = store._conn.execute(
-        "SELECT summary FROM aml_summaries"
+        "SELECT summary FROM memory_summaries"
     ).fetchone()
     assert row["summary"].count("杭州") == 1
     store.close()
@@ -133,9 +133,9 @@ def test_lazy_build_for_preexisting_data():
     svc = _service()
     _add(svc, "u1", "s1", ["她在上海工作", "她养了一条狗"])
     store = svc._user_store("u1")
-    store._conn.execute("DROP TABLE aml_summaries")
+    store._conn.execute("DROP TABLE memory_summaries")
     store._conn.execute(
-        "CREATE TABLE aml_summaries (session_id TEXT PRIMARY KEY, "
+        "CREATE TABLE memory_summaries (session_id TEXT PRIMARY KEY, "
         "summary TEXT NOT NULL, updated_at TEXT NOT NULL)"
     )
     store._conn.commit()

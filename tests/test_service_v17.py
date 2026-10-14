@@ -12,9 +12,9 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.governance import predicate_group, record_possible_updates
-from memory_as_history.aml.memory_service import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.governance import predicate_group, record_possible_updates
+from memory_as_history.service.memory_service import (
     _is_causal_query,
     _point,
     _summary_clue,
@@ -23,7 +23,7 @@ from memory_as_history.aml.memory_service import (
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-v17-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-v17-")),
         search_mode="lexical",
     )
 
@@ -114,7 +114,7 @@ def test_contact_restatement_supersedes():
     )
     assert n == 1
     row = conn.execute(
-        "SELECT superseded_by FROM aml_updates WHERE memory_id = 'old'"
+        "SELECT superseded_by FROM memory_updates WHERE memory_id = 'old'"
     ).fetchone()
     assert row is not None and row[0] == "new"
     conn.close()
@@ -131,7 +131,7 @@ def _fresh_conn():
             id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
             session_position INTEGER, created_at TEXT, forgotten_at TEXT
         );
-        CREATE TABLE aml_updates (
+        CREATE TABLE memory_updates (
             memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
             similarity REAL NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, superseded_by)

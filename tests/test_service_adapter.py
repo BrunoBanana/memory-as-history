@@ -1,6 +1,6 @@
-"""Contract tests for the AML Add/Search adapter (text track).
+"""Contract tests for the Add/Search service.
 
-These assert the fixed AML contract (Cycle 2 API Guide) at the service
+These assert the fixed Add/Search contract at the service boundary
 layer: synchronous write visibility, request_id idempotency, strict user_id
 isolation, top_k bounding, structured errors, streaming interleaving, and
 read compatibility with the project Store.
@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.contract import ContractError
+from memory_as_history.service import MemoryService
+from memory_as_history.service.contract import ContractError
 from memory_as_history.storage import Store
 
 
 def _service() -> tuple[MemoryService, Path]:
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-test-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-test-"))
     return MemoryService(data_dir=data_dir), data_dir
 
 
@@ -84,7 +84,7 @@ def test_add_orders_messages_within_session():
             {"role": "user", "content": "第二条消息"},
         ],
     )
-    # positions are assigned in message order via the aml_sessions counter
+    # positions are assigned in message order via the memory_sessions counter
     db = service._open_connection("u1")
     try:
         rows = db.execute(
@@ -116,7 +116,7 @@ def test_same_request_id_replay_does_not_duplicate():
     conn2 = service._open_connection("u1")
     try:
         next_pos = conn2.execute(
-            "SELECT next_position FROM aml_sessions WHERE session_id = 's1'"
+            "SELECT next_position FROM memory_sessions WHERE session_id = 's1'"
         ).fetchone()
     finally:
         conn2.close()

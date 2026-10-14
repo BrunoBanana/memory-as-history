@@ -1,7 +1,7 @@
 [project]
 name = "memory-as-history"
-version = "2.4.0"
-description = "Agent memory as history: traceable claims, evidence, revisions, scoped narratives and accountable forgetting. SQLite-backed MCP server inspired by history and memory studies; speaks the Agent Memory Leaderboard Add/Search protocol as one of its interfaces."
+version = "2.5.0"
+description = "Agent memory as history: traceable claims, evidence, revisions, scoped narratives and accountable forgetting. SQLite-backed MCP server inspired by history and memory studies; also speaks a standardized memory Add/Search HTTP contract (write transcripts, retrieve evidence)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -32,7 +32,7 @@ Changelog = "https://github.com/BrunoBanana/memory-as-history/blob/main/CHANGELO
 
 [project.scripts]
 memory-as-history = "memory_as_history.server:main"
-memory-as-history-aml = "memory_as_history.aml.__main__:main"
+memory-as-history-server = "memory_as_history.service.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

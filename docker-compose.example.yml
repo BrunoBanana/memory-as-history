@@ -1,21 +1,22 @@
 # Minimal TLS deployment: Caddy terminates HTTPS (automatic Let's Encrypt)
-# in front of the AML service. Replace aml.example.com with your domain.
+# in front of the memory service. Replace memory.example.com with your domain.
 #
 # Usage:
 #   docker compose -f docker-compose.example.yml up -d
 #
-# Then set AML_API_KEY in the environment / .env file before starting.
+# Then set MEMORY_API_KEY in the environment / .env file before starting
+# (legacy AML_API_KEY is also accepted by the service).
 
 services:
-  aml:
+  memory:
     build: .
     restart: unless-stopped
     environment:
-      AML_DATA_DIR: /data
-      AML_API_KEY: ${AML_API_KEY:-}
-      AML_SEARCH_MODE: ${AML_SEARCH_MODE:-lexical}
+      MEMORY_DATA_DIR: /data
+      MEMORY_API_KEY: ${MEMORY_API_KEY:-}
+      MEMORY_SEARCH_MODE: ${MEMORY_SEARCH_MODE:-lexical}
     volumes:
-      - aml-data:/data
+      - memory-data:/data
 
   caddy:
     image: caddy:2
@@ -28,9 +29,9 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      - aml
+      - memory
 
 volumes:
-  aml-data:
+  memory-data:
   caddy-data:
   caddy-config:

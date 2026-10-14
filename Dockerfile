@@ -1,14 +1,15 @@
-# memory-as-history — AML Add/Search service (text track)
+# memory-as-history — standardized memory Add/Search service
 #
-# Build:  docker build -t memory-as-history-aml .
-# Run:    docker run -d --name aml \
+# Build:  docker build -t memory-as-history-server .
+# Run:    docker run -d --name memory-server \
 #           -p 8000:8000 \
-#           -v aml-data:/data \
-#           -e AML_API_KEY=<your-memory-system-key> \
-#           memory-as-history-aml
+#           -v memory-data:/data \
+#           -e MEMORY_API_KEY=<your-memory-system-key> \
+#           memory-as-history-server
 #
-# TLS: put this behind a reverse proxy (see docs/aml/ for a Caddy example).
-# The service itself speaks plain HTTP on 8000.
+# TLS: put this behind a reverse proxy (Caddy). The service itself speaks
+# plain HTTP on 8000. Legacy env names (AML_DATA_DIR / AML_API_KEY /
+# AML_SEARCH_MODE) are still accepted for backward compatibility.
 
 FROM python:3.11-slim
 
@@ -24,12 +25,12 @@ COPY src ./src
 RUN pip install --no-cache-dir ".[semantic]" \
     && python -m memory_as_history.semantic download
 
-ENV AML_DATA_DIR=/data \
-    AML_API_KEY="" \
-    AML_SEARCH_MODE=lexical \
+ENV MEMORY_DATA_DIR=/data \
+    MEMORY_API_KEY="" \
+    MEMORY_SEARCH_MODE=lexical \
     PYTHONUNBUFFERED=1
 
 VOLUME /data
 EXPOSE 8000
 
-CMD ["memory-as-history-aml", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["memory-as-history-server", "--host", "0.0.0.0", "--port", "8000"]

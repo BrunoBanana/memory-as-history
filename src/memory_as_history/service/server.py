@@ -1,9 +1,9 @@
-"""Zero-dependency HTTP layer for the AML Add/Search endpoints.
+"""Zero-dependency HTTP layer for the Add/Search endpoints.
 
 Uses ``http.server.ThreadingHTTPServer`` from the standard library: no extra
 runtime dependencies, trivially dockerized, and adequate for the declared
 evaluation concurrency. TLS termination is delegated to a reverse proxy
-(see docs/aml/ for the deployment recipe).
+(a Caddy recipe lives in the deployment notes).
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ from .contract import ContractError, error_detail
 from .memory_service import DEFAULT_DATA_DIR, MemoryService
 
 MAX_BODY_BYTES = 100 * 1024 * 1024  # Add bodies may carry long transcripts
-DEBUG = os.environ.get("AML_DEBUG") == "1"
+DEBUG = os.environ.get("MEMORY_DEBUG") == "1" or os.environ.get("AML_DEBUG") == "1"
 
 
-class AMLHandler(BaseHTTPRequestHandler):
+class MemoryHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     service: MemoryService | None = None  # assigned by make_handler
 
@@ -75,7 +75,7 @@ class AMLHandler(BaseHTTPRequestHandler):
         if not presented:
             # Diagnostic only, redacted: never log the presented secret.
             print(
-                f"[aml-auth] REJECT missing-key auth_len={len(auth)} "
+                f"[mem-auth] REJECT missing-key auth_len={len(auth)} "
                 f"auth_head={auth[:4]!r} at={_dt.datetime.now(_dt.timezone.utc).isoformat()}",
                 flush=True,
             )
@@ -83,7 +83,7 @@ class AMLHandler(BaseHTTPRequestHandler):
         ok = secrets.compare_digest(presented, api_key)
         if not ok:
             print(
-                f"[aml-auth] REJECT mismatch presented_len={len(presented)} "
+                f"[mem-auth] REJECT mismatch presented_len={len(presented)} "
                 f"presented_head={presented[:4]!r} "
                 f"at={_dt.datetime.now(_dt.timezone.utc).isoformat()}",
                 flush=True,
@@ -111,7 +111,7 @@ class AMLHandler(BaseHTTPRequestHandler):
             self._json(status, body)
         except Exception:
             # Never leak internals to the client; the platform retries 5xx
-            # with backoff. With AML_DEBUG=1 the traceback goes to stderr.
+            # with backoff. With MEMORY_DEBUG=1 the traceback goes to stderr.
             if DEBUG:
                 traceback.print_exc(file=sys.stderr)
             body, status = error_detail("internal server error", 500)
@@ -139,16 +139,16 @@ class AMLHandler(BaseHTTPRequestHandler):
         pass
 
 
-def make_handler(service: MemoryService) -> Callable[..., AMLHandler]:
+def make_handler(service: MemoryService) -> Callable[..., MemoryHandler]:
     """Bind a service to the handler class.
 
     ``BaseHTTPRequestHandler.__init__`` processes the request *during*
     construction (it calls ``self.handle()``), so the service must already be
     visible as a class attribute when the request arrives — an instance
-    attribute set after ``AMLHandler(...)`` returns would be too late.
+    attribute set after ``MemoryHandler(...)`` returns would be too late.
     """
 
-    class Handler(AMLHandler):
+    class Handler(MemoryHandler):
         pass
 
     # Class bodies cannot see enclosing function variables, so bind the
@@ -166,7 +166,7 @@ def build_server(
     semantic_min: float = 0.85,
     use_temporal: bool = True,
 ) -> ThreadingHTTPServer:
-    """Build (but do not block on) the AML HTTP server. Tests use this."""
+    """Build (but do not block on) the memory HTTP server. Tests use this."""
     service = MemoryService(
         data_dir=data_dir if data_dir is not None else DEFAULT_DATA_DIR,
         search_mode=search_mode,
@@ -188,7 +188,7 @@ def serve(
     semantic_min: float = 0.85,
     use_temporal: bool = True,
 ) -> ThreadingHTTPServer:
-    """Start the AML service and block forever."""
+    """Start the memory service and block forever."""
     httpd = build_server(host, port, data_dir, api_key, search_mode, semantic_min, use_temporal)
     httpd.serve_forever()
     return httpd

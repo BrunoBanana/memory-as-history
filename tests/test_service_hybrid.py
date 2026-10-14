@@ -1,4 +1,4 @@
-"""Tests for AML hybrid/semantic search-mode filtering (P1).
+"""Tests for hybrid/semantic search-mode filtering (P1).
 
 Hybrid mode surfaces the RRF combined score as the contract score and
 qualifies ordinary memories when the row carries EITHER a lexical hit
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
+from memory_as_history.service import MemoryService
 
 
 class FakeStore:
@@ -40,7 +40,7 @@ class FakeStore:
 
 
 def _service(monkeypatch, rows, mode="hybrid", semantic_min=0.85):
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-hyb-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-hyb-"))
     service = MemoryService(data_dir=data_dir, search_mode=mode, semantic_min=semantic_min)
     store = FakeStore(rows, mode)
     monkeypatch.setattr(service, "_user_store", lambda user_id: store)

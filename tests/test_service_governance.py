@@ -1,9 +1,9 @@
-"""Tests for the AML governance layer (v0.2).
+"""Tests for the governance layer (v0.2).
 
 Deterministic, model-free memory governance:
 
 - write-time update detection records ``superseded_by`` edges in
-  ``aml_updates`` (audited, non-destructive);
+  ``memory_updates`` (audited, non-destructive);
 - read-time suppression deduplicates near-exact evidence and discounts
   older versions of the same fact, while keeping them retrievable so
   history-style questions still work.
@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.governance import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.governance import (
     _version_decision,
     govern_entries,
     is_revision,
@@ -34,7 +34,7 @@ from memory_as_history.aml.governance import (
 
 
 def _service() -> tuple[MemoryService, Path]:
-    data_dir = Path(tempfile.mkdtemp(prefix="aml-gov-"))
+    data_dir = Path(tempfile.mkdtemp(prefix="mem-gov-"))
     return MemoryService(data_dir=data_dir), data_dir
 
 
@@ -120,10 +120,10 @@ def test_update_detection_records_supersede_edge_and_audit():
     conn = _conn(service)
     try:
         edges = conn.execute(
-            "SELECT memory_id, superseded_by FROM aml_updates"
+            "SELECT memory_id, superseded_by FROM memory_updates"
         ).fetchall()
         audits = conn.execute(
-            "SELECT action FROM audit_log WHERE action = 'aml_supersede'"
+            "SELECT action FROM audit_log WHERE action = 'supersede'"
         ).fetchall()
     finally:
         conn.close()
@@ -145,7 +145,7 @@ def test_old_statement_cannot_supersede_newer_one():
     )
     conn = _conn(service)
     try:
-        n = conn.execute("SELECT COUNT(*) AS n FROM aml_updates").fetchone()["n"]
+        n = conn.execute("SELECT COUNT(*) AS n FROM memory_updates").fetchone()["n"]
     finally:
         conn.close()
     assert n == 0
@@ -157,7 +157,7 @@ def test_exact_duplicate_is_not_recorded_as_update():
     _add(service, "r2", "u1", "s1", [{"role": "user", "content": "完全一样的内容"}])
     conn = _conn(service)
     try:
-        n = conn.execute("SELECT COUNT(*) AS n FROM aml_updates").fetchone()["n"]
+        n = conn.execute("SELECT COUNT(*) AS n FROM memory_updates").fetchone()["n"]
     finally:
         conn.close()
     assert n == 0  # dedup is a read-time concern
@@ -172,7 +172,7 @@ def test_idempotent_replay_does_not_duplicate_updates():
     _add(service, "r2", "u1", "s1", msg_new)  # replay
     conn = _conn(service)
     try:
-        n = conn.execute("SELECT COUNT(*) AS n FROM aml_updates").fetchone()["n"]
+        n = conn.execute("SELECT COUNT(*) AS n FROM memory_updates").fetchone()["n"]
     finally:
         conn.close()
     assert n == 1
@@ -251,13 +251,13 @@ def test_govern_entries_supersede_discount_current_state():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript(
-        "CREATE TABLE aml_updates (memory_id TEXT NOT NULL, "
+        "CREATE TABLE memory_updates (memory_id TEXT NOT NULL, "
         "superseded_by TEXT NOT NULL, similarity REAL, at TEXT);"
         "CREATE TABLE audit_log (id TEXT, memory_id TEXT, action TEXT, "
         "reason TEXT, at TEXT);"
     )
     conn.execute(
-        "INSERT INTO aml_updates VALUES ('old','new',0.8,'2026-02-01T00:00:00Z')"
+        "INSERT INTO memory_updates VALUES ('old','new',0.8,'2026-02-01T00:00:00Z')"
     )
     conn.commit()
     # current-state question (no temporal clue): extra supersede discount
@@ -280,7 +280,7 @@ def test_record_possible_updates_returns_edge_count():
             id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
             session_position INTEGER, created_at TEXT, forgotten_at TEXT
         );
-        CREATE TABLE aml_updates (
+        CREATE TABLE memory_updates (
             memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
             similarity REAL NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, superseded_by)
@@ -307,12 +307,12 @@ def test_record_possible_updates_returns_edge_count():
     )
     assert count == 1
     row = conn.execute(
-        "SELECT memory_id, superseded_by FROM aml_updates"
+        "SELECT memory_id, superseded_by FROM memory_updates"
     ).fetchone()
     assert row["memory_id"] == old_id
     assert row["superseded_by"] == "new-id"
     audit = conn.execute(
-        "SELECT action FROM audit_log WHERE action = 'aml_supersede'"
+        "SELECT action FROM audit_log WHERE action = 'supersede'"
     ).fetchone()
     assert audit is not None
     conn.close()
@@ -321,7 +321,7 @@ def test_record_possible_updates_returns_edge_count():
 # -- v1.5 D1: predicate-group revision detection -------------------------
 
 def test_predicate_group_residence():
-    from memory_as_history.aml.governance import predicate_group
+    from memory_as_history.service.governance import predicate_group
 
     assert predicate_group("李明住在福州") == "residence"
     assert predicate_group("李明搬到上海") == "residence"
@@ -341,7 +341,7 @@ def test_domain_revision_captured_when_jaccard_low():
             id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
             session_position INTEGER, created_at TEXT, forgotten_at TEXT
         );
-        CREATE TABLE aml_updates (
+        CREATE TABLE memory_updates (
             memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
             similarity REAL NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, superseded_by)
@@ -368,12 +368,12 @@ def test_domain_revision_captured_when_jaccard_low():
     )
     assert count == 1
     row = conn.execute(
-        "SELECT memory_id, superseded_by FROM aml_updates"
+        "SELECT memory_id, superseded_by FROM memory_updates"
     ).fetchone()
     assert row["memory_id"] == old_id
     assert row["superseded_by"] == "new-res"
     audit = conn.execute(
-        "SELECT action FROM audit_log WHERE action = 'aml_supersede'"
+        "SELECT action FROM audit_log WHERE action = 'supersede'"
     ).fetchone()
     assert audit is not None
     conn.close()
@@ -390,7 +390,7 @@ def test_domain_revision_not_cross_domain():
             id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
             session_position INTEGER, created_at TEXT, forgotten_at TEXT
         );
-        CREATE TABLE aml_updates (
+        CREATE TABLE memory_updates (
             memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
             similarity REAL NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, superseded_by)

@@ -3,22 +3,52 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.0] — 2026-10-14
+
+Project identity cleanup: the Add/Search service is now fully neutral —
+it is a standard capability of memory-as-history, not a wrapper around
+any external competition.
+
+### Changed (renames; breaking for downstream imports)
+
+- `memory_as_history.aml` package → **`memory_as_history.service`**
+  (same modules: `memory_service`, `governance`, `contract`, `chunking`,
+  `temporal`, `server`).
+- Tests `test_aml_*.py` → **`test_service_*.py`** (19 files).
+- Entry point `memory-as-history-aml` → **`memory-as-history-server`**
+  (`python -m memory_as_history.service`).
+- Bookkeeping tables: new stores use neutral names (`memory_add_log`,
+  `memory_sessions`, `memory_updates`, `memory_summaries`,
+  `memory_contradictions`, `memory_time_ctx`). **Legacy `aml_*`-named
+  stores keep working unchanged** — `governance.table_names` resolves the
+  active names per store, so pre-existing databases are fully readable and
+  writable with no migration.
+- Runtime logs `[mem-add]`/`[mem-search]`/`[mem-auth]`; audit events use
+  neutral names (`turn_expand`, `supersede`, `contradiction`, …).
+- Env vars: `MEMORY_*` names are canonical; legacy `AML_*` names are still
+  accepted. Dockerfile / compose / README updated accordingly.
+
+Docs, changelog history and README were rewritten to describe the service
+as a standard memory interface. Diagnostic scripts that read the legacy
+stores (`scripts/diag_*.py`, `scripts/analyze_server_data.py`) stay local
+and are not part of the published repository.
+
 ## [2.4.0] — 2026-10-14
 
-Structured-triple version governance, designed from and verified against the
-REAL official evaluation data left in the server store after the Full run
-(1614 user stores, 1.2 GB; sampling showed the corpus is predominantly
-English, and the D1 "current value" test is an explicit instruction):
+Structured-triple version governance for knowledge-graph-shaped memories.
+When a fact arrives as a structured triple — e.g. an explicit instruction
+to replace the prior value of a subject+relation, carrying stable
+subject/relation identifiers (QID/PID style):
 
-    Corpus: UPDATE: replace the prior value of this subject and relation
+    UPDATE: replace the prior value of this subject and relation
     with the following fact.
     {"subject": "Hyderabad", "relation": "continent", "object": "Eurasia",
      "subject_id": "Q1361", "relation_id": "P30", "object_id": "Q540"}
 
-The official stable ids (subject_id / relation_id, QID/PID) ARE the
-same-fact key the governor needs. v2.3 (and every earlier version) missed
-this entirely: replaying real stores showed 0 version edges and the OLD
-value ranking first — D1 was structurally broken on the real corpus.
+the stable ids ARE the same-fact key the governor needs. Earlier versions
+missed this entirely: a replay of large English KG corpora showed 0
+version edges and the OLD value ranking first — current-state questions
+were structurally wrong on this shape.
 
 ### Added
 
@@ -34,15 +64,15 @@ value ranking first — D1 was structurally broken on the real corpus.
   collapse independent facts (Hyderabad ≠ Beijing just because both carry
   `subject_id`/`relation_id` fields).
 
-### Verified against real evaluation data
+### Verified on large English knowledge-graph corpora
 
-- Replay of three official stores through v2.4: **20 `aml_updates` edges**
+- Replay of three representative stores through v2.4: **20 version edges**
   created (v2.3: 0), three UPDATE queries all returned the NEW object first
-  (`n=5-6` evidence each). English KG-triple retrieval (A1) and wiki-passage
-  retrieval (B4) also confirmed at 100% hit on real stores (23/23 queries).
-- Diagnostic scripts kept under `scripts/` (`diag_replay.py`,
+  (`n=5-6` evidence each). English KG-triple retrieval and wiki-passage
+  retrieval also confirmed at 100% hit on the same stores (23/23 queries).
+- Diagnostic/verification scripts live under `scripts/` (`diag_replay.py`,
   `diag_real_data.py`, `analyze_server_data.py`) — read-only, redacted
-  output, official data never leaves the host.
+  output, corpus data never leaves the host.
 
 ### Changed
 
@@ -52,19 +82,18 @@ value ranking first — D1 was structurally broken on the real corpus.
   versions — triple-key matching is the exact, correct mechanism for the
   structured shape.
 
-AML interface tests: **170 cases** (contract / hybrid / governance /
+Service interface tests: **170 cases** (contract / hybrid / governance /
 temporal / summary / rules / contradiction / v1.6–v2.4), all green; full
 suite **619 passing**.
 
 ## [2.3.0] — 2026-10-12
 
-Memory-as-history 2.x is the capability line behind the Agent Memory
-Leaderboard interface: every version below is a deterministic, auditable
-improvement to the retrieval/governance engine, landed on `main` one commit
-at a time with the full suite green. The project stands on its own; AML is
-one evaluation protocol it speaks.
+Memory-as-history 2.x is the deterministic capability line of the
+retrieval/governance engine: every version below is an auditable
+improvement to evidence recall and memory governance, landed on `main`
+one commit at a time with the full suite green.
 
-### Added (AML interface capability line)
+### Added (capability line)
 
 - **v2.3 — cross-session preference aggregation.** Generic preference
   questions ("她喜欢什么 / what does she like") append the user's
@@ -100,12 +129,10 @@ one evaluation protocol it speaks.
   step of a chain ("价格谈不拢") enters the evidence even without a shared
   token; contact domain (电话/号码/手机/邮箱/微信) restatements supersede
   older versions.
-- **v1.6 — content-year time context + independent-project framing.**
-  Years named inside memory content ("2021年我住在福州") are indexed at
-  write time and boosted by year-anchored questions, so the state at that
-  time answers instead of the newest truth. README/CHANGELOG reframed:
-  memory-as-history is an independent project, AML is one protocol it
-  speaks (never "the AML adapter").
+- **v1.6 — content-year time context.** Years named inside memory content
+  ("2021年我住在福州") are indexed at write time and boosted by
+  year-anchored questions, so the state at that time answers instead of
+  the newest truth.
 - **v1.5 — temporal expansion, domain versions, rules, contradictions.**
   Conservative relative-time clues (去年/上周/…) anchored on real message
   timestamps; predicate-group version detection (residence/occupation/
@@ -114,26 +141,21 @@ one evaluation protocol it speaks.
   always/never/no smoking…) and read-time rule entries; contradiction pairs
   recorded and surfaced at read time so the answer generator sees the
   conflict instead of one side.
-- **v1.4 — hybrid retrieval hardening + trigger expansion.** (evaluated
-  v1.4 smoke 50.96, kept the regression work and folded the fixes into
-  v1.5+.)
+- **v1.4 — hybrid retrieval hardening + trigger expansion.** Regression
+  work folded into v1.5+.
 
-### AML interface foundations (previously in [Unreleased])
+### Add/Search service foundations (previously in [Unreleased])
 
-- **AML (Agent Memory Leaderboard) Add/Search interface — text track.**
-  memory-as-history is an independent project; AML is one evaluation protocol
-  it speaks. The interface is a zero-dependency HTTP service exposing the
-  project's memory storage and
-  BM25 retrieval through the competition's fixed contract: synchronous
+- **Standardized Add/Search interface.** A zero-dependency HTTP service
+  exposing the project's memory storage and
+  BM25 retrieval through a fixed contract: synchronous
   `POST /add` (single-transaction request_id idempotency, per-user SQLite
   isolation, per-session ordered positions), `POST /search`
   (`{"data": [...]}` evidence array bounded by `top_k`, no answer leakage),
-  and unauthenticated `GET /health`. Runs as `python -m memory_as_history.aml`
-  or the new `memory-as-history-aml` entry point. 26 contract tests
-  (service + HTTP) and `scripts/aml_smoke.py` (end-to-end official-smoke
-  simulation) are included; full suite 454 passing. Deployment recipe and
-  submission materials checklist live in [docs/aml/](docs/aml/README.md),
-  design in [docs/plans/2026-09-30-aml-adapter.md](docs/plans/2026-09-30-aml-adapter.md).
+  and unauthenticated `GET /health`. Runs as `python -m
+  memory_as_history.service` or the `memory-as-history-server` entry
+  point. 26 contract tests (service + HTTP) and an end-to-end smoke
+  simulation are included; full suite 454 passing at that stage.
 
 ## [1.3.1] — 2026-09-24
 

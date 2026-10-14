@@ -13,8 +13,8 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.governance import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.governance import (
     _is_revocation,
     contradiction_signal,
     predicate_group,
@@ -26,7 +26,7 @@ DEFAULT_TS = 1_700_000_000_000
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-v20-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-v20-")),
         search_mode="lexical",
     )
 
@@ -100,12 +100,12 @@ def test_revocation_records_version_edge():
     )
     assert n == 1
     row = conn.execute(
-        "SELECT superseded_by FROM aml_updates WHERE memory_id = 'old'"
+        "SELECT superseded_by FROM memory_updates WHERE memory_id = 'old'"
     ).fetchone()
     assert row is not None and row[0] == "new"
     # and NO contradiction pair for the same pair
     bad = conn.execute(
-        "SELECT COUNT(*) FROM aml_contradictions "
+        "SELECT COUNT(*) FROM memory_contradictions "
         "WHERE memory_id IN ('old','new')"
     ).fetchone()[0]
     assert bad == 0
@@ -147,7 +147,7 @@ def test_age_version_edge():
     )
     assert n == 1
     row = conn.execute(
-        "SELECT superseded_by FROM aml_updates WHERE memory_id = 'old'"
+        "SELECT superseded_by FROM memory_updates WHERE memory_id = 'old'"
     ).fetchone()
     assert row is not None and row[0] == "new"
     conn.close()
@@ -172,12 +172,12 @@ def _fresh_conn():
             id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
             session_position INTEGER, created_at TEXT, forgotten_at TEXT
         );
-        CREATE TABLE aml_updates (
+        CREATE TABLE memory_updates (
             memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
             similarity REAL NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, superseded_by)
         );
-        CREATE TABLE aml_contradictions (
+        CREATE TABLE memory_contradictions (
             memory_id TEXT NOT NULL, conflicts_with TEXT NOT NULL,
             signal TEXT NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, conflicts_with)

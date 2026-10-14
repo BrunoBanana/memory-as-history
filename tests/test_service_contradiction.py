@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from memory_as_history.aml import MemoryService
-from memory_as_history.aml.governance import (
+from memory_as_history.service import MemoryService
+from memory_as_history.service.governance import (
     contradiction_signal,
     record_possible_contradictions,
 )
@@ -24,7 +24,7 @@ from memory_as_history.aml.governance import (
 
 def _service():
     return MemoryService(
-        data_dir=Path(tempfile.mkdtemp(prefix="aml-con-")),
+        data_dir=Path(tempfile.mkdtemp(prefix="mem-con-")),
         search_mode="lexical",
     )
 
@@ -80,7 +80,7 @@ def test_contradiction_recorded_and_audited():
             id TEXT PRIMARY KEY, content TEXT, event_at TEXT,
             session_position INTEGER, created_at TEXT, forgotten_at TEXT
         );
-        CREATE TABLE aml_contradictions (
+        CREATE TABLE memory_contradictions (
             memory_id TEXT NOT NULL, conflicts_with TEXT NOT NULL,
             signal TEXT NOT NULL, at TEXT NOT NULL,
             PRIMARY KEY (memory_id, conflicts_with)
@@ -107,12 +107,12 @@ def test_contradiction_recorded_and_audited():
     assert count == 1
     # both directions stored for a symmetric single-query lookup
     pairs = conn.execute(
-        "SELECT memory_id, conflicts_with FROM aml_contradictions"
+        "SELECT memory_id, conflicts_with FROM memory_contradictions"
     ).fetchall()
     assert len(pairs) == 2
     assert {p["memory_id"] for p in pairs} == {"old", "new"}
     audit = conn.execute(
-        "SELECT action FROM audit_log WHERE action = 'aml_contradiction'"
+        "SELECT action FROM audit_log WHERE action = 'contradiction'"
     ).fetchone()
     assert audit is not None
     conn.close()

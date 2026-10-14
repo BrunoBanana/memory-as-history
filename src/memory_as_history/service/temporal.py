@@ -1,4 +1,4 @@
-"""Temporal clue detection for the AML layer (memory-as-history).
+"""Temporal clue detection for the memory service (memory-as-history).
 
 A memory system that treats conversation as history answers
 "where did she live LAST YEAR?" with the facts as they stood at that
