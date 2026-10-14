@@ -159,7 +159,7 @@ Tool calls that violate protocol guards return **structured, self-correcting err
 fixed Add/Search HTTP contract (write transcripts, retrieve evidence) — a
 standardized memory interface used by evaluation harnesses and agent
 frameworks. The service is versioned through deterministic, auditable
-optimizations, all committed to `main` one at a time (v0.2 → v2.4, full
+optimizations, all committed to `main` one at a time (v0.2 → v2.6, full
 suite green at every step):
 
 | Version | Mechanism | Why it matters |
@@ -175,6 +175,7 @@ suite green at every step):
 | **v2.0–v2.1 semantics** | Preference revocation as version (我不喜欢咖啡了 ≠ contradiction); age versions; rule-QA boost (她可以吃辣吗); causal trigger growth | State changes discount the old value; rules answer first; causal chains stay open |
 | **v2.2–v2.3 aggregation** | Relative-time anchoring (最近/上周/yesterday lifts the newest slice); cross-session preference aggregation (她喜欢什么) | The newest state answers recent-time questions even without word overlap; preferences aggregate across sessions |
 | **v2.4 triple governance** | Structured-triple versioning by stable `subject_id`/`relation_id` (QID/PID), driven by an explicit `UPDATE: replace the prior value` instruction; different-entity triples never supersede each other | Knowledge-graph-shaped updates are handled exactly — the new object ranks first, the old value stays retrievable for history questions (verified on large English KG corpora: 20 version edges, update queries return the new value first) |
+| **v2.5–v2.6 English governance** | English predicate groups (live→moved, work→joined, like→hate, married→divorced…), word-split negation (doesn't/can't), opposite pairs, revocation ("no longer", "anymore"), residence family query expansion (live↔moved), KG relation synonyms (capital↔capital city, born↔birthplace…) | English non-structured memories finally get version/contradiction/current-state handling — "she moved to Berlin" supersedes "she lived in London" and answers "where does she live now" first; English KG queries match stored relation phrasing |
 
 Runtime hardening (v0.6.1–v0.6.2): the shared E5 model is pre-warmed inside
 the serving process, so the first `/search` cold start drops from
@@ -182,9 +183,9 @@ the serving process, so the first `/search` cold start drops from
 GiB of 2 GiB. All JSON responses carry `charset=utf-8` so Chinese evidence
 never mojibakes on the client side.
 
-Service interface tests: **170 cases** (contract / hybrid / governance /
-temporal / summary / rules / contradiction / v1.6–v2.4), all green; full
-suite **619 passing**. Deployment is Docker + Caddy HTTPS, reproducible
+Service interface tests: **177 cases** (contract / hybrid / governance /
+temporal / summary / rules / contradiction / v1.6–v2.6), all green; full
+suite **625 passing**. Deployment is Docker + Caddy HTTPS, reproducible
 from a single `docker build` — the pinned model is downloaded at build
 time, so the container needs no network at runtime. Design decisions and
 version history: `CHANGELOG.md`.

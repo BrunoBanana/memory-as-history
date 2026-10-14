@@ -238,8 +238,9 @@ _QUERY_SYNONYMS_EN: dict[str, tuple[str, ...]] = {
     "mobile": ("phone", "number"),
     "email": ("mail", "contact", "e-mail"),
     "name": ("called", "call me"),
-    "live": ("lived", "reside", "stay", "residing"),
-    "lives": ("lived", "reside", "stays"),
+    "live": ("lived", "reside", "stay", "residing", "moved", "relocated", "lives"),
+    "lives": ("lived", "reside", "stays", "moved", "relocated"),
+    "lived": ("live", "resides", "stayed", "moved", "relocated"),
     "like": ("love", "prefer", "favorite", "enjoy"),
     "likes": ("loves", "prefers", "enjoys"),
     "job": ("work", "occupation", "career", "position"),
@@ -247,6 +248,25 @@ _QUERY_SYNONYMS_EN: dict[str, tuple[str, ...]] = {
     "pet": ("cat", "dog", "animal"),
     "cat": ("kitten", "kitty"),
     "dog": ("puppy"),
+    # -- v2.5: KG relation-word variants. Real-world memory corpora store
+    # knowledge-graph triples (subject/relation/object); questions phrase the
+    # relation differently ("capital city" vs stored "capital"). These are
+    # high-confidence relation synonyms only — nothing ambiguous is added.
+    "capital": ("capital city",),
+    "capital city": ("capital",),
+    "located": ("situated", "location"),
+    "location": ("located", "situated"),
+    "situated": ("located", "location"),
+    "born": ("birthplace", "birth place"),
+    "birthplace": ("born",),
+    "country": ("nation",),
+    "nation": ("country",),
+    "population": ("inhabitants",),
+    "president": ("leader",),
+    "leader": ("president",),
+    "founded": ("established",),
+    "established": ("founded",),
+    "member": ("part",),
 }
 
 

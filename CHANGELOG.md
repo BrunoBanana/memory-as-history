@@ -3,6 +3,46 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.6.0] — 2026-10-14
+
+English governance forms, driven by real-world memory corpora that are
+predominantly English. Before v2.6, version/contradiction/revocation logic
+was Chinese-only (住在/工作/喜欢/了/再…), so non-structured English
+statements had **no** same-fact revision detection at all — only the
+structured-triple path (v2.4) handled them.
+
+### Added
+
+- **English predicate groups** (word-boundary regexes): residence
+  (live/lived/moved/relocated/settled…), occupation (work/job/joined/
+  quit/resigned…), preference (like/love/hate/prefer/support/oppose/
+  against…), acquired (bought/adopted/owns…), relationship (married/
+  divorced/dating…), identity (born/birthday/graduated/age…), contact
+  (phone/email/contact…). "She lived in London" → "She moved to Berlin"
+  now records a `superseded_by` edge and ranks the new value first on
+  current-state questions — previously 0 edges.
+- **English negation** via word-splitting (`[a-z']+`, `endswith("n't")`)
+  instead of `\b` regexes — Python's `\b` does not treat the apostrophe in
+  "doesn't" as a boundary, so `\bn't\b` silently missed every contraction.
+- **English opposite pairs** (like/hate, support/oppose, support/against,
+  approve/reject, married/divorced, for/against) for D2 contradiction
+  detection; **English revocation** ("no longer", "not anymore", "stopped",
+  "quit", change markers now/anymore/these days) routes state changes to
+  the version path instead of D2.
+- **English subject-word sharing** for same-domain versions: the shared
+  tokenizer drops English stopwords, so "She lived in London" / "She moved
+  to Berlin" shared zero tokens; a dedicated English content-word set
+  (pronouns kept, minimal stopwords) bridges that gap while the length gate
+  still keeps same-length different facts apart.
+- **KG relation-word synonym expansion**: capital↔capital city, located↔
+  situated/location, born↔birthplace, country↔nation, population↔
+  inhabitants, president↔leader, founded↔established, member↔part;
+  residence family cross-links (live→moved/relocated, moved→live) so
+  "where does she live now" recalls "she moved to Berlin" and the version
+  discount floats the new state first.
+
+Service interface tests: **177 cases**; full suite **625 passing**.
+
 ## [2.5.0] — 2026-10-14
 
 Project identity cleanup: the Add/Search service is now fully neutral —

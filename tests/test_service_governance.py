@@ -453,3 +453,90 @@ def test_current_state_question_ranks_new_version_first():
     # both versions are still retrievable (history preserved), but the new
     # one must appear first for a current-state question
     assert contents[0] == "李明搬到上海"
+
+
+# -- v2.5 English governance (real corpus is predominantly English) --------
+
+
+def test_en_predicate_group_residence_and_occupation():
+    from memory_as_history.service.governance import predicate_group
+
+    assert predicate_group("she lived in London") == "residence"
+    assert predicate_group("he moved to Berlin") == "residence"
+    assert predicate_group("they relocated to Paris") == "residence"
+    assert predicate_group("works at Acme Corp") == "occupation"
+    assert predicate_group("joined Google in 2020") == "occupation"
+    assert predicate_group("I like coffee") == "preference"
+    assert predicate_group("she bought a car") == "acquired"
+    assert predicate_group("they got married") == "relationship"
+    assert predicate_group("born in 1995") == "identity"
+    assert predicate_group("my phone is 123") == "contact"
+
+
+def test_en_predicate_group_no_false_positives():
+    """Word-boundary matching: ordinary verbs must not fire on substring
+    collisions ("live" in "deliver", "like" in "alike", "no" in "notice")."""
+    from memory_as_history.service.governance import predicate_group
+
+    assert predicate_group("the delivery arrived") is None
+    assert predicate_group("they are alike") is None
+    assert predicate_group("I noticed something") is None
+    assert predicate_group("it is a wonderful place") is None
+
+
+def test_en_same_domain_revision_supersedes():
+    """English residence restatement ("moved to") must record a version edge
+    exactly like the Chinese path — this was entirely missing before v2.5."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "content": "She lived in London", "timestamp": 1_700_000_000_000}],
+    )
+    _add(
+        service, "r2", "u1", "s1",
+        [{"role": "user", "content": "She moved to Berlin", "timestamp": 1_700_000_010_000}],
+    )
+    conn = _conn(service)
+    row = conn.execute("SELECT memory_id, superseded_by FROM memory_updates").fetchone()
+    conn.close()
+    assert row is not None, "English same-domain restatement should supersede"
+    res = _search(service, "Where does she live now?", "u1", top_k=10)
+    assert res["data"][0]["content"] == "She moved to Berlin"
+
+
+def test_en_negation_flip_is_contradiction():
+    from memory_as_history.service.governance import contradiction_signal
+
+    assert contradiction_signal("She likes cats", "She doesn't like cats") == "negation_flip"
+    assert contradiction_signal("He supports the plan", "He is against the plan") is not None
+    # both negated -> no flip
+    assert contradiction_signal("She doesn't like cats", "He doesn't like cats") is None
+
+
+def test_en_revocation_is_state_change_not_contradiction():
+    """'I don't like coffee anymore' revokes the earlier state (version path),
+    it must NOT be recorded as a contradiction pair."""
+    from memory_as_history.service.governance import contradiction_signal
+
+    assert contradiction_signal("I like coffee", "I don't like coffee anymore") is None
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "content": "I like coffee", "timestamp": 1_700_000_000_000}],
+    )
+    _add(
+        service, "r2", "u1", "s1",
+        [{"role": "user", "content": "I don't like coffee anymore", "timestamp": 1_700_000_010_000}],
+    )
+    conn = _conn(service)
+    n_contra = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n_contra == 0
+    res = _search(service, "Does she like coffee?", "u1", top_k=10)
+    assert res["data"][0]["content"] == "I don't like coffee anymore"
+
+
+def test_en_opposite_pair_married_divorced():
+    from memory_as_history.service.governance import contradiction_signal
+
+    assert contradiction_signal("They are married", "They are divorced") is not None

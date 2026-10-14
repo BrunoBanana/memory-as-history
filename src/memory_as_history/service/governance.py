@@ -92,6 +92,10 @@ _DISCOUNT_WEAK = 0.50
 # raw Jaccard/coverage gates miss the revision. Grouping predicates by fact
 # domain (residence / occupation / preference / acquired / relationship /
 # identity) lets a same-domain restatement supersede the older version.
+# v2.5: English predicates joined the same groups — real-world memory
+# corpora are predominantly English, and English non-structured statements
+# ("she lived in London" → "she moved to Berlin") had no version detection
+# at all before (only the structured-triple path handled them).
 _PREDICATE_GROUPS: dict[str, tuple[str, ...]] = {
     "residence": ("住在", "居住", "搬到", "迁往", "移居", "定居", "回了", "去了", "离开", "搬去", "搬回", "地址", "住址"),
     "occupation": ("工作", "就职", "任职", "上班", "职业", "辞职", "跳槽", "入职"),
@@ -103,10 +107,46 @@ _PREDICATE_GROUPS: dict[str, tuple[str, ...]] = {
                  "岁", "多大了", "几岁", "属相"),
     "contact": ("电话", "号码", "手机", "邮箱", "微信", "联系方式", "手机号", "换了号"),
 }
-# Same-domain restatement with any shared subject token is treated as a
-# version candidate even at low raw overlap.
-_DOMAIN_JACCARD = 0.15
-_DOMAIN_COVERAGE = 0.25
+# English predicates, word-boundary matched so "live" never fires on
+# "deliver" and "like" never fires on "alike". Each pattern is a regex.
+_EN_PREDICATE_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "residence": (
+        re.compile(r"\b(?:live|lives|lived|stay|stays|stayed|staying|"
+                   r"move|moves|moved|relocat(?:e|ed|ing)|settle|settled|"
+                   r"address|zip code)\b", re.I),
+    ),
+    "occupation": (
+        re.compile(r"\b(?:work|works|worked|working|job|occupation|career|"
+                   r"employ(?:ed|er|ment)?|hire|hires|hired|join|joined|"
+                   r"quit|quits|quitted|resign(?:ed)?|promot(?:ed|ion)?|"
+                   r"fire|fired|laid off)\b", re.I),
+    ),
+    "preference": (
+        re.compile(r"\b(?:like|likes|liked|love|loves|loved|hate|hates|"
+                   r"hated|prefer|prefers|preferred|enjoy|enjoys|enjoyed|"
+                   r"favorite|favourite|fond of|dislike|dislikes|"
+                   r"support|supports|supported|oppos(?:e|es|ed)|against|"
+                   r"favor|favors|favored|approve|approves|approved)\b", re.I),
+    ),
+    "acquired": (
+        re.compile(r"\b(?:bought?|adopt(?:ed)?|acquire|acquired|purchase|"
+                   r"purchased|own|owns|owned|got a new|get a new)\b", re.I),
+    ),
+    "relationship": (
+        re.compile(r"\b(?:marri(?:ed|age)?|divorc(?:ed)?|dating|engaged?|"
+                   r"relationship|broke up|breakup|partner|boyfriend|"
+                   r"girlfriend|wedding)\b", re.I),
+    ),
+    "identity": (
+        re.compile(r"\b(?:born|birthday|birth place|rename|renamed|became|"
+                   r"graduate|graduated|age|years? old|nationality|"
+                   r"citizen(?:ship)?)\b", re.I),
+    ),
+    "contact": (
+        re.compile(r"\b(?:phone|mobile|cell(?:phone)?|email|e-mail|contact|"
+                   r"whatsapp|telegram|skype)\b", re.I),
+    ),
+}
 
 
 def predicate_group(text: str) -> str | None:
@@ -116,7 +156,28 @@ def predicate_group(text: str) -> str | None:
     for group, predicates in _PREDICATE_GROUPS.items():
         if any(p in text for p in predicates):
             return group
+    for group, patterns in _EN_PREDICATE_PATTERNS.items():
+        if any(p.search(text) for p in patterns):
+            return group
     return None
+
+
+# English subject-word sharing (v2.5): the shared tokenizer filters English
+# stopwords, so "She lived in London" / "She moved to Berlin" share zero
+# tokens even though the subject ("she") is identical. For English we share
+# the full word set (len>=3, minimal stopword list, pronouns kept) — the
+# length gate in ``_version_decision`` still separates genuine restatements
+# from same-length different facts.
+_EN_VERSION_STOP = frozenset(
+    "the a an of to in on for with and or is are was were be been this that "
+    "it its as at by from we you i they them his her their our your do does "
+    "did not no".split()
+)
+
+
+def _en_content_words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]+", text.lower())
+            if len(w) >= 3 and w not in _EN_VERSION_STOP}
 
 
 def _same_domain_version(old_text: str, new_text: str) -> bool:
@@ -126,6 +187,8 @@ def _same_domain_version(old_text: str, new_text: str) -> bool:
     if group is None or predicate_group(old_text) != group:
         return False
     shared = token_set(old_text) & token_set(new_text)
+    if not shared:
+        shared = _en_content_words(old_text) & _en_content_words(new_text)
     return bool(shared)
 
 
@@ -184,7 +247,26 @@ def _triple_version(old_text: str, new_text: str) -> bool:
 # versions: we keep BOTH (the history is preserved), record the pair, and
 # at read time surface the partner when either side is retrieved, so the
 # answer generator sees the conflict instead of one side only.
+# v2.5: English negation and opposite pairs joined the same conservative
+# logic (word-boundary so "not" never fires inside "notice").
 _NEGATION_WORDS = ("不", "没", "无", "别", "禁止", "不允许", "反对")
+# English negation via word-splitting rather than ``\\b`` regexes: Python's
+# ``\\b`` does not treat the apostrophe in "doesn't" as a word boundary, so a
+# ``\\bn't\\b`` pattern silently misses every contraction. Word-splitting on
+# ``[a-z']+`` keeps "doesn't" intact and tests ``endswith("n't")``.
+_EN_NEGATION_WORDS = frozenset(("not", "no", "never", "without", "nor", "neither"))
+
+
+def _has_negation(text: str) -> bool:
+    """Chinese substring or English word-boundary negation."""
+    if any(w in text for w in _NEGATION_WORDS):
+        return True
+    for w in re.findall(r"[a-z']+", text.lower()):
+        if w in _EN_NEGATION_WORDS:
+            return True
+        if w.endswith("n't"):
+            return True
+    return False
 _OPPOSITE_PAIRS: tuple[tuple[str, str], ...] = (
     ("喜欢", "讨厌"),
     ("支持", "反对"),
@@ -193,6 +275,32 @@ _OPPOSITE_PAIRS: tuple[tuple[str, str], ...] = (
     ("接受", "拒绝"),
     ("是", "不是"),
 )
+_EN_OPPOSITE_PATTERNS: tuple[tuple[re.Pattern[str], re.Pattern[str]], ...] = (
+    (re.compile(r"\blike[sd]?\b", re.I), re.compile(r"\bhate[sd]?\b", re.I)),
+    (re.compile(r"\blove[sd]?\b", re.I), re.compile(r"\bhate[sd]?\b", re.I)),
+    (re.compile(r"\bsupport(?:s|ed)?\b", re.I), re.compile(r"\boppos(?:e|es|ed)\b", re.I)),
+    (re.compile(r"\bsupport(?:s|ed)?\b", re.I), re.compile(r"\bagainst\b", re.I)),
+    (re.compile(r"\bfavor(?:s|ed)?\b", re.I), re.compile(r"\bagainst\b", re.I)),
+    (re.compile(r"\bapprove(?:s|d)?\b", re.I), re.compile(r"\breject(?:s|ed)?\b", re.I)),
+    (re.compile(r"\ballow(?:s|ed)?\b", re.I), re.compile(r"\bforbid(?:s|den)?\b", re.I)),
+    (re.compile(r"\baccept(?:s|ed)?\b", re.I), re.compile(r"\breject(?:s|ed)?\b", re.I)),
+    (re.compile(r"\bagree[sd]?\b", re.I), re.compile(r"\bdisagree[sd]?\b", re.I)),
+    (re.compile(r"\bmarried\b", re.I), re.compile(r"\bdivorced\b", re.I)),
+    (re.compile(r"\bfor\b", re.I), re.compile(r"\bagainst\b", re.I)),
+)
+
+
+def _cross_opposite(a_text: str, b_text: str) -> str | None:
+    """Opposite-pair contradiction: one side carries one word of a pair and
+    the other side carries its counterpart (Chinese substring or English
+    word-boundary), in either direction."""
+    for x, y in _OPPOSITE_PAIRS:
+        if (x in a_text and y in b_text) or (y in a_text and x in b_text):
+            return f"{x}/{y}"
+    for px, py in _EN_OPPOSITE_PATTERNS:
+        if (px.search(a_text) and py.search(b_text)) or (py.search(a_text) and px.search(b_text)):
+            return "en-opposite"
+    return None
 
 
 # -- v2.0 I1: preference revocation --------------------------------------
@@ -202,20 +310,43 @@ _OPPOSITE_PAIRS: tuple[tuple[str, str], ...] = (
 # negation on a known fact domain routes revocation away from D2 so the
 # old value is discounted instead of being kept alive as a conflict pair.
 _REVOCATION_NEG = ("不", "不再", "没", "没有", "从不", "很少")
+_EN_CHANGE_MARKER = (
+    re.compile(r"\bnow\b", re.I),
+    re.compile(r"\banymore\b", re.I),
+    re.compile(r"\bany more\b", re.I),
+    re.compile(r"\bthese days\b", re.I),
+    re.compile(r"\bnowadays\b", re.I),
+    re.compile(r"\bsince\b", re.I),
+)
+_EN_REVOCATION_PHRASE = (
+    re.compile(r"\bno longer\b", re.I),
+    re.compile(r"\bnot anymore\b", re.I),
+    re.compile(r"\bnot any more\b", re.I),
+    re.compile(r"\bstopped\b", re.I),
+    re.compile(r"\bquit\b", re.I),
+    re.compile(r"\bgave up\b", re.I),
+)
 
 
 def _is_revocation(text: str) -> bool:
     """True when the statement negates a known fact domain as a STATE CHANGE
-    (a revocation of the earlier state), e.g. "我不喜欢咖啡了". Requires a
-    domain predicate AND a change marker (了/再): "她不住在福州" without 了
-    is a flat negative assertion (kept as a contradiction, both sides
-    preserved), while "她不住在福州了" is a move-out (version). Plain
-    negations ("今天不下雨") never count."""
+    (a revocation of the earlier state), e.g. "我不喜欢咖啡了" or
+    "I don't like coffee anymore". Chinese requires a domain predicate AND a
+    change marker (了/再): "她不住在福州" without 了 is a flat negative
+    assertion (kept as a contradiction, both sides preserved), while
+    "她不住在福州了" is a move-out (version). English requires either an
+    explicit revocation phrase ("no longer", "stopped") or a change marker
+    ("now", "anymore") combined with negation. Plain negations ("今天不下雨",
+    "it is not raining") never count."""
     if not text or predicate_group(text) is None:
         return False
-    if "了" not in text and "再" not in text:
-        return False
-    return any(w in text for w in _REVOCATION_NEG)
+    if ("了" in text or "再" in text) and any(w in text for w in _REVOCATION_NEG):
+        return True
+    if any(p.search(text) for p in _EN_REVOCATION_PHRASE):
+        return True
+    if any(p.search(text) for p in _EN_CHANGE_MARKER) and _has_negation(text):
+        return True
+    return False
 
 
 def contradiction_signal(old_text: str, new_text: str) -> str | None:
@@ -246,14 +377,11 @@ def contradiction_signal(old_text: str, new_text: str) -> str | None:
     shared_chars = set(old_text) & set(new_text)
     if len(shared_chars) < 2:
         return None
-    old_neg = any(w in old_text for w in _NEGATION_WORDS)
-    new_neg = any(w in new_text for w in _NEGATION_WORDS)
+    old_neg = _has_negation(old_text)
+    new_neg = _has_negation(new_text)
     if old_neg != new_neg:
         return "negation_flip"
-    for a, b in _OPPOSITE_PAIRS:
-        if (a in old_text and b in new_text) or (b in old_text and a in new_text):
-            return f"opposite:{a}/{b}"
-    return None
+    return _cross_opposite(old_text, new_text)
 
 
 def record_possible_contradictions(
