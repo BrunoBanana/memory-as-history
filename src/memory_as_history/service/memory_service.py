@@ -707,6 +707,7 @@ class MemoryService:
                             session_position=cursor - 1,
                             created_at=at,
                             at=at,
+                            source=msg["role"],
                         )
                     # D2: record contradictory statements (same subject,
                     # same fact domain, flipped polarity) so read time can
@@ -720,6 +721,7 @@ class MemoryService:
                             session_position=cursor - 1,
                             created_at=at,
                             at=at,
+                            source=msg["role"],
                         )
                     # C1: extract years named in the content ("2021年我住在
                     # 福州" -> year 2021). Questions anchored to a year then

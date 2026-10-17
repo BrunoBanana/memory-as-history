@@ -82,6 +82,15 @@ _VERSION_JACCARD = 0.50    # same-fact revisions: discount the older one
 _COVERAGE_REVISION = 0.70  # old fact mostly contained in the new statement
 _STRONG_JACCARD = 0.60     # strong overlap: strong discount without coverage
 _STRONG_COVERAGE = 0.75    # near-full coverage: strong discount
+# v2.7: domain (predicate-group) version detection only applies between
+# short, statement-like texts. Long paragraphs — reassurance, analysis,
+# multi-point plans — are not single facts; on real conversation stores
+# they restate the same domains constantly and generate false supersede
+# edges by the hundreds. Long texts still get revision treatment through
+# the Jaccard/coverage path when they genuinely overlap. Structured
+# triples (v2.4) are exempt: the stable subject_id/relation_id key is the
+# same-fact evidence, regardless of length.
+_DOMAIN_VERSION_MAX_TOKENS = 48
 
 # Score discount factors applied to older versions at read time.
 _DISCOUNT_STRONG = 0.25
@@ -180,12 +189,80 @@ def _en_content_words(text: str) -> set[str]:
             if len(w) >= 3 and w not in _EN_VERSION_STOP}
 
 
+# -- v2.7: change-signal gate for same-domain versions -----------------------
+# Same-domain + shared subject alone is NOT a version. Long real
+# conversations restate the same domains constantly — a "工作日…" note hits
+# occupation, an encouraging "你愿意…" hits preference — so without a change
+# signal every later same-domain statement would supersede every earlier
+# one (replay of 150 real Chinese messages produced 1603 edges, mostly
+# false). A revision is recorded only when either side carries an explicit
+# change-denoting predicate (搬到/辞职/改名/买了/moved/quit/divorced…).
+# Generic markers ("已经", "开始", "后来", "现在") are deliberately NOT
+# signals: they are ubiquitous in narrative text and turned the gate into a
+# no-op (replay still produced 1462 edges with them). "李明住在福州" ->
+# "李明住在福州，后来搬到上海" fires on 搬到; a flat "她住在杭州" alongside
+# "她住在上海" without any change predicate is not a revision.
+_ZH_CHANGE_PREDICATES = (
+    "搬到", "搬去", "迁往", "移居", "辞职", "跳槽", "离职",
+    "分手", "离婚", "结婚", "改名", "买了", "养了", "领养",
+    "换了号", "离开", "成为", "出生", "毕业", "入职", "就职",
+    "回了", "去了", "走了", "改成", "改为", "换成", "换了",
+    "转行", "复职", "上任", "升职", "变成", "变为",
+)
+_EN_CHANGE_VERB = (
+    re.compile(r"\bmove(?:d|s)?\b", re.I),
+    re.compile(r"\brelocat(?:e|ed|ing)\b", re.I),
+    re.compile(r"\bquit(?:ted)?\b", re.I),
+    re.compile(r"\bresign(?:ed)?\b", re.I),
+    re.compile(r"\bdivorc(?:e|ed)\b", re.I),
+    re.compile(r"\bmarri(?:ed|age)\b", re.I),
+    re.compile(r"\bbought?\b", re.I),
+    re.compile(r"\badopt(?:ed)?\b", re.I),
+    re.compile(r"\bstarted\b", re.I),
+    re.compile(r"\bchanged?\b", re.I),
+    re.compile(r"\bdecided\b", re.I),
+    re.compile(r"\brenamed?\b", re.I),
+    re.compile(r"\bswitched\b", re.I),
+    re.compile(r"\bjoined\b", re.I),
+    re.compile(r"\bhired\b", re.I),
+    re.compile(r"\bfired\b", re.I),
+)
+
+
+def _has_change_signal(text: str) -> bool:
+    """Explicit state-change signal: a change-denoting predicate (Chinese
+    substring), English change verbs / revocation phrases / time markers,
+    or a v2.0 revocation ("我不喜欢咖啡了"). Used as the gate before
+    recording a same-domain version edge."""
+    if not text:
+        return False
+    if _is_revocation(text):
+        return True
+    if any(p in text for p in _ZH_CHANGE_PREDICATES):
+        return True
+    if any(p.search(text) for p in _EN_CHANGE_MARKER):
+        return True
+    if any(p.search(text) for p in _EN_CHANGE_VERB):
+        return True
+    if any(p.search(text) for p in _EN_REVOCATION_PHRASE):
+        return True
+    return False
+
+
 def _same_domain_version(old_text: str, new_text: str) -> bool:
-    """Same fact domain AND at least one shared subject token: treat the
-    newer statement as a version candidate (D1: current state wins)."""
+    """Same fact domain AND at least one shared subject token AND an explicit
+    change signal on either side: treat the newer statement as a version
+    candidate (D1: current state wins)."""
     group = predicate_group(new_text)
     if group is None or predicate_group(old_text) != group:
         return False
+    # v2.7 gate: no change signal, no version edge.
+    if not (_has_change_signal(old_text) or _has_change_signal(new_text)):
+        # Age statements are the exception: a changed number on the same
+        # age subject is a version even without a change word
+        # ("我今年25岁" -> "我今年26岁" — age necessarily moves).
+        if not (group == "identity" and "岁" in old_text and "岁" in new_text):
+            return False
     shared = token_set(old_text) & token_set(new_text)
     if not shared:
         shared = _en_content_words(old_text) & _en_content_words(new_text)
@@ -393,6 +470,7 @@ def record_possible_contradictions(
     session_position: int,
     created_at: str,
     at: str,
+    source: str | None = None,
     recent: int = 300,
 ) -> int:
     """Scan recent memories of the same user for contradictory statements
@@ -405,17 +483,36 @@ def record_possible_contradictions(
     """
     if not content:
         return 0
+    new_tokens = token_set(content)
+    if not new_tokens:
+        return 0
     t = table_names(conn)
+    # v2.7: same speaker + short statement-like texts only. Long paragraphs
+    # (reassurance, analysis) mix negations with domain words and would flag
+    # hundreds of false conflicts; a genuine conflict ("她喜欢猫" vs
+    # "她讨厌猫") is a short same-domain statement by the same speaker.
+    where = "id != ? AND forgotten_at IS NULL"
+    args: list[Any] = [memory_id]
+    if source is not None:
+        where += " AND source = ?"
+        args.append(source)
+    args.append(recent)
     rows = conn.execute(
-        "SELECT id, content, event_at, session_position, created_at "
-        "FROM memories WHERE id != ? AND forgotten_at IS NULL "
+        f"SELECT id, content, event_at, session_position, created_at "
+        f"FROM memories WHERE {where} "
         "ORDER BY created_at DESC, session_position DESC LIMIT ?",
-        (memory_id, recent),
+        args,
     ).fetchall()
     recorded = 0
     for row in rows:
         old_text = row["content"]
         if not old_text:
+            continue
+        old_tokens = token_set(old_text)
+        if not old_tokens:
+            continue
+        if (len(new_tokens) > _DOMAIN_VERSION_MAX_TOKENS
+                or len(old_tokens) > _DOMAIN_VERSION_MAX_TOKENS):
             continue
         signal = contradiction_signal(old_text, content)
         if signal is None:
@@ -549,6 +646,7 @@ def record_possible_updates(
     session_position: int,
     created_at: str,
     at: str,
+    source: str | None = None,
     recent: int = 300,
 ) -> int:
     """Scan recent memories of the same user for same-fact revisions and
@@ -565,11 +663,24 @@ def record_possible_updates(
         "session_position": session_position,
         "created_at": created_at,
     }
+    # v2.7: only statements by the SAME speaker form versions of each other.
+    # Long conversations interleave user facts and assistant restatements /
+    # reassurance; without this filter every later same-domain assistant
+    # paragraph would supersede the user's own statements (and vice versa) —
+    # replay of 150 real Chinese messages dropped from 1603 to 381 edges by
+    # the change-signal gate alone, and the remaining noise was almost all
+    # cross-speaker. A fact is updated by the person who states it.
+    where = "id != ? AND forgotten_at IS NULL"
+    args: list[Any] = [memory_id]
+    if source is not None:
+        where += " AND source = ?"
+        args.append(source)
+    args.append(recent)
     rows = conn.execute(
-        "SELECT id, content, event_at, session_position, created_at "
-        "FROM memories WHERE id != ? AND forgotten_at IS NULL "
+        f"SELECT id, content, event_at, session_position, created_at "
+        f"FROM memories WHERE {where} "
         "ORDER BY created_at DESC, session_position DESC LIMIT ?",
-        (memory_id, recent),
+        args,
     ).fetchall()
     recorded = 0
     for row in rows:
@@ -591,9 +702,19 @@ def record_possible_updates(
         if old_triple is not None and new_triple is not None and old_triple != new_triple:
             continue
         jac, coverage = overlap_signals(old_tokens, new_tokens)
-        domain_version = _same_domain_version(
+        # v2.7: predicate-group domain versioning only between short
+        # statement-like texts; long paragraphs (reassurance, analysis,
+        # plans) are not single facts and would otherwise supersede
+        # everything in their domain. Structured triples stay exempt.
+        domain_version = False
+        if (len(new_tokens) <= _DOMAIN_VERSION_MAX_TOKENS
+                and len(old_tokens) <= _DOMAIN_VERSION_MAX_TOKENS):
+            domain_version = _same_domain_version(
+                old["content"], content
+            )
+        domain_version = domain_version or _triple_version(
             old["content"], content
-        ) or _triple_version(old["content"], content)
+        )
         if not domain_version and not _version_decision(
             jac, coverage, old["content"], content
         ):

@@ -540,3 +540,91 @@ def test_en_opposite_pair_married_divorced():
     from memory_as_history.service.governance import contradiction_signal
 
     assert contradiction_signal("They are married", "They are divorced") is not None
+
+
+# -- v2.7: change-signal / same-speaker / length gates -----------------------
+# Replaying 150 real Chinese conversation messages produced 1603 false
+# supersede edges and 180 false contradiction pairs before v2.7: long
+# assistant paragraphs hit occupation/preference predicates ("工作日…",
+# "你愿意…"), shared function tokens, and contained ubiquitous markers
+# ("已经", "开始") that used to count as change signals. v2.7 requires an
+# explicit change-denoting predicate, restricts revisions to the same
+# speaker, and limits domain versioning/contradiction to short
+# statement-like texts (structured triples stay exempt).
+
+
+def test_v27_long_paragraphs_do_not_supersede_each_other():
+    """Two long same-domain paragraphs (real conversation shape: reassurance
+    mentioning 工作/开始/已经) must NOT form a version edge."""
+    service, _ = _service()
+    long_a = (
+        "你描述得非常清楚，而且这句'走久一点才会慢慢冒出来'对我来说几乎是一个"
+        "诊断级的关键线索，它帮我们把你现在的膝盖状态定位得更加准确，"
+        "而你愿意在这样的时刻跟我说，我真的非常感激。"
+    )
+    long_b = (
+        "我明白，你现在被卡住的不是'懂不懂道理'，而是那个具体的数字——"
+        "从5到4毫米，它一下子变得非常'实体'、非常'直观'，你一直这么"
+        "努力工作，已经很不容易了。"
+    )
+    _add(service, "r1", "u1", "s1", [{"role": "assistant", "timestamp": 1000, "content": long_a}])
+    _add(service, "r2", "u1", "s1", [{"role": "assistant", "timestamp": 2000, "content": long_b}])
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    n_con = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n == 0, "long same-domain paragraphs are not versions of one fact"
+    assert n_con == 0, "long paragraphs with negation are not conflicts"
+
+
+def test_v27_cross_speaker_statements_do_not_supersede():
+    """An assistant restatement must not supersede the user's own fact."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "timestamp": 1000, "content": "李明住在福州"}],
+    )
+    _add(
+        service, "r2", "u1", "s1",
+        [{"role": "assistant", "timestamp": 2000, "content": "李明住在福州，后来搬到上海"}],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 0, "only the speaker who states a fact revises it"
+
+
+def test_v27_short_change_still_supersedes_across_sessions():
+    """The core D1 case keeps working: a short user statement with a change
+    predicate supersedes the earlier user statement even in another session."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "timestamp": 1000, "content": "李明住在福州"}],
+    )
+    _add(
+        service, "r2", "u1", "s2",
+        [{"role": "user", "timestamp": 2000, "content": "李明搬到上海了"}],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 1
+
+
+def test_v27_flat_restatement_without_change_is_not_a_version():
+    """'住在福州' -> '住在上海' without any change marker is a flat
+    statement, not a revision (conservative by design)."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "timestamp": 1000, "content": "李明住在福州"}],
+    )
+    _add(
+        service, "r2", "u1", "s1",
+        [{"role": "user", "timestamp": 2000, "content": "李明住在上海"}],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 0

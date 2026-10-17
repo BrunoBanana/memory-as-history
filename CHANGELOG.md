@@ -3,6 +3,51 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.0] — 2026-10-17
+
+Precision gates on governance, discovered by replaying real conversation
+stores through the full Add/Search pipeline. Before v2.7, same-domain +
+shared-token was enough to record a version edge and a contradiction pair;
+real long conversations restate the same domains constantly, so replaying
+**150 real Chinese messages produced 1603 supersede edges and 180
+contradiction pairs — nearly all false**. v2.7 makes revisions and
+conflicts conservative on real shapes.
+
+### Fixed
+
+- **Change-signal gate**: a version edge now requires an explicit
+  change-denoting predicate on either side (搬到/辞职/分手/改名/买了/moved/
+  quit/divorced…). Generic markers ("已经", "开始", "后来", "现在") were
+  ubiquitous in narrative text and turned the previous gate into a no-op
+  (edges only dropped 1603 → 1462 with them); they are deliberately not
+  signals. A flat "住在福州" beside "住在上海" with no change predicate is
+  not a revision.
+- **Same-speaker gate**: only statements by the same speaker form versions
+  of each other. Interleaved user facts and assistant restatements/
+  reassurance no longer supersede each other (a fact is revised by the
+  person who states it).
+- **Statement-length gate**: predicate-group domain versioning and
+  contradiction detection only apply to short, statement-like texts
+  (≤ 48 tokens). Long paragraphs — reassurance, analysis, multi-point
+  plans — are not single facts and were the source of the false edges
+  (assistant paragraphs mentioning 工作/职业 hit the occupation domain).
+  Long texts still get revision treatment through the Jaccard/coverage
+  path when they genuinely overlap; structured triples (v2.4) stay exempt
+  because the stable subject_id/relation_id key is same-fact evidence
+  regardless of length.
+
+### Verified
+
+- Replaying the same 150 real Chinese conversation messages after v2.7:
+  **0 version edges, 0 contradiction pairs** (the corpus is state/emotion
+  description with no genuine fact revisions — zero is correct), summaries
+  6, rule-marked 72, retrieval probes still hit the right turns.
+- Short-statement D1 keeps working across sessions ("李明住在福州" →
+  "李明搬到上海了" records one edge); English restatements ("She lived in
+  London" → "She moved to Berlin") unchanged; structured-triple UPDATE
+  versioning unchanged.
+- Service interface tests: **181 cases**; full suite green.
+
 ## [2.6.0] — 2026-10-14
 
 English governance forms, driven by real-world memory corpora that are
