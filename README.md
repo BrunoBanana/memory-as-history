@@ -178,6 +178,7 @@ suite green at every step):
 | **v2.5–v2.6 English governance** | English predicate groups (live→moved, work→joined, like→hate, married→divorced…), word-split negation (doesn't/can't), opposite pairs, revocation ("no longer", "anymore"), residence family query expansion (live↔moved), KG relation synonyms (capital↔capital city, born↔birthplace…) | English non-structured memories finally get version/contradiction/current-state handling — "she moved to Berlin" supersedes "she lived in London" and answers "where does she live now" first; English KG queries match stored relation phrasing |
 | **v2.7 precision gates** | Change-signal gate (only explicit change predicates: 搬到/moved/quit/divorced…), same-speaker gate (a fact is revised by the person who states it), statement-length gate (domain versioning/contradiction only for short statement-like texts ≤48 tokens; structured triples exempt) | Real conversation replay showed 1603 false version edges + 180 false contradictions on 150 messages from same-domain long paragraphs alone; v2.7 brings that to zero on real shapes while short-fact D1 ("李明住在福州"→"李明搬到上海了") and English/KG versioning stay intact — precision over recall in revision detection |
 | **v2.7.1 cross-role updates** | Structured triples are exempt from the same-speaker gate (their stable subject_id/relation_id key is exact same-fact evidence; a full 1614-store scan found 85 update instructions arriving as assistant vs stored triples ~all user); legacy stores without a source column degrade gracefully instead of crashing Add | UPDATE revisions keep working across roles, and old stores stay readable/writable — the same-speaker gate no longer silently kills D1 recall on real corpora |
+| **v2.8 case-insensitive triggers** | Summary/causal/order query triggers match case-insensitively (English questions are sentence-initial: "Summarize…", "What happened…", "Timeline…"); summary budget is a real entry cap (≤4 sessions, newest first) instead of a character-vs-count comparison that always broke on the first entry; summary points skip pure greeting/filler lines | Real-store diagnosis: "Summarize my recent experience" returned 0 summary entries before the fix, 4 after; review questions now see several sessions' substance newest-first, ordinary queries still get zero summary entries — F1/B2/C2 synthesis works on real English question shapes |
 
 Runtime hardening (v0.6.1–v0.6.2): the shared E5 model is pre-warmed inside
 the serving process, so the first `/search` cold start drops from
@@ -185,9 +186,9 @@ the serving process, so the first `/search` cold start drops from
 GiB of 2 GiB. All JSON responses carry `charset=utf-8` so Chinese evidence
 never mojibakes on the client side.
 
-Service interface tests: **184 cases** (contract / hybrid / governance /
-temporal / summary / rules / contradiction / v1.6–v2.7), all green; full
-suite **632 passing**. Deployment is Docker + Caddy HTTPS, reproducible
+Service interface tests: **190 cases** (contract / hybrid / governance /
+temporal / summary / rules / contradiction / v1.6–v2.8), all green; full
+suite **638 passing**. Deployment is Docker + Caddy HTTPS, reproducible
 from a single `docker build` — the pinned model is downloaded at build
 time, so the container needs no network at runtime. Design decisions and
 version history: `CHANGELOG.md`.

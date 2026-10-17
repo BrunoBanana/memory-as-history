@@ -3,6 +3,42 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.0] — 2026-10-17
+
+Query-trigger fixes found by running review/causal/order question shapes
+against a real 80-session store through the full Search path. English
+questions are sentence-initial ("Summarize…", "What happened…",
+"Timeline…"), and the summary / causal / order trigger patterns were
+case-sensitive — capitalized English triggers silently never fired, which
+crippled global synthesis (F1), causal-chain (B2) and chronological-order
+(C2) answers on real corpora.
+
+### Fixed
+
+- **Case-insensitive English query triggers.** `_SUMMARY_QUERY_PATTERN`,
+  `_CAUSAL_QUERY_PATTERN`, `_ORDER_QUERY_PATTERN` and `_CONTENT_YEAR_PATTERN`
+  now match with `re.I`; rule and preference patterns already lower-cased
+  the query before matching. "Summarize my recent experience" now triggers
+  summary entries (was silently returning none).
+- **Summary entry budget was broken.** `_summary_entries` stopped after the
+  first entry for any realistic Top K (`len(entries) * 2000 >= top_k`
+  compared characters against an entry count), so a review question saw one
+  session's summary only. It is now a real entry cap — a fraction of Top K,
+  at most 4 sessions — and summaries are ordered newest session first, so
+  the answer leads with the recent state.
+- **Summary points skip greeting lines.** `_point` took the first line of a
+  message; messages that opened with "你好/谢谢/嗯嗯" contributed the
+  greeting to the rolling summary. It now takes the first substantive line
+  (pure greeting/filler patterns are skipped).
+
+### Verified
+
+- Real 80-session store: "Summarize my recent experience" returns 4
+  summary entries (was 0 before the fix); Chinese review queries return 4
+  (was 1); ordinary factual queries ("膝盖现在怎么样了", "我最近情况怎么样")
+  still return zero summary entries — trigger discipline intact.
+- Service interface tests: **190 cases**; full suite green.
+
 ## [2.7.1] — 2026-10-17
 
 Cross-role UPDATE compatibility, found by a full-corpus scan of 1614 real

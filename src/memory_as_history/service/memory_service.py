@@ -110,13 +110,17 @@ SUMMARY_HEAD_RATIO = 0.4
 
 # Review-style queries ("总结/回顾/Summarize...") trigger a summary entry;
 # ordinary questions must never see one. Conservative on purpose.
+# v2.8: case-insensitive — real English questions are sentence-initial
+# ("Summarize the conversation…", "What happened…"); case-sensitive
+# matching silently missed every capitalized trigger.
 _SUMMARY_QUERY_PATTERN = re.compile(
     r"总结|回顾|综述|概括|整体|总体|全部|这些年|这段时间|这段|经历|"
     r"故事|一生|人生|过往|经历过什么|都发生了什么|"
     r"summar|overview|overall|the whole|entire|story|backstory|journey|"
     r"what happened|what have i been through|my life|life events|"
     r"tell me about myself|these years|past few years|"
-    r"all the (?:things|events|facts|memories)"
+    r"all the (?:things|events|facts|memories)",
+    re.I,
 )
 
 # -- v1.5 G2: rule memories ----------------------------------------------
@@ -300,7 +304,8 @@ _CAUSAL_QUERY_PATTERN = re.compile(
     r"起因|经过|造成|影响|于是|因此|随之|演变|前因后果|来由|缘由|缘故|后果|来龙去脉|"
     r"what happened|why|because|how did|how come|what led to|what caused|"
     r"what triggered|result of|result in|then what|what happened next|"
-    r"consequence|effect of|stem from|arise from|what came of|why did"
+    r"consequence|effect of|stem from|arise from|what came of|why did",
+    re.I,
 )
 
 
@@ -316,7 +321,8 @@ _ORDER_QUERY_PATTERN = re.compile(
     r"先后|顺序|按时间|一步步|过程|时间线|按顺序|"
     r"timeline|in order|sequence|step by step|chronological|"
     r"what happened first|before that|after that|then what|"
-    r"先.{0,4}后"
+    r"先.{0,4}后",
+    re.I,
 )
 
 
@@ -411,7 +417,8 @@ def _recent_time_boost(
 # "during 2019"). Stored in the time-context table at write time; a
 # question anchored to a year boosts the memories that describe that year.
 _CONTENT_YEAR_PATTERN = re.compile(
-    r"(20\d\d)年|in (?:the year )?(20\d\d)|during (?:the year )?(20\d\d)"
+    r"(20\d\d)年|in (?:the year )?(20\d\d)|during (?:the year )?(20\d\d)",
+    re.I,
 )
 
 
@@ -525,14 +532,31 @@ def _event_at(timestamp: int | None) -> str | None:
     ).isoformat()
 
 
+_GREETING_RE = re.compile(
+    r"^(?:你好|您好|早上好|中午好|下午好|晚上好|晚安|谢谢|多谢|感谢|"
+    r"嗯|嗯嗯|好的|好|明白|了解了|知道了|再见|拜拜|辛苦了|麻烦|"
+    r"hello|hi|thanks|thank you|ok|okay|yeah|sure|fine|great|got it|"
+    r"good (?:morning|afternoon|evening))[。！!.,，]?$",
+    re.I,
+)
+
+
 def _point(text: str, limit: int = 160) -> str:
-    """One summary point from a message: first non-empty line, truncated.
-    v1.7: 96 -> 160 chars so a review answer has the substance (who/what/
-    where), not just the sentence head."""
+    """One summary point from a message: the first substantive line,
+    truncated. v1.7: 96 -> 160 chars so a review answer has the substance
+    (who/what/where), not just the sentence head. v2.8: skips pure greeting
+    / filler lines ("你好", "谢谢", "嗯嗯") whose first line carries no
+    fact — the point is the first line with real content."""
     t = (text or "").strip()
     if not t:
         return ""
-    head = t.split("\n")[0].strip()
+    lines = [ln.strip() for ln in t.split("\n") if ln.strip()]
+    if not lines:
+        return ""
+    head = next(
+        (ln for ln in lines if not _GREETING_RE.match(ln) or len(ln) >= 12),
+        lines[0],
+    )
     return head if len(head) <= limit else head[:limit].rstrip() + "…"
 
 
@@ -1055,27 +1079,30 @@ class MemoryService:
     def _get_summaries(self, store: Store) -> list[dict]:
         """All session summaries for this user, building them lazily from the
         memories table when the table is empty (e.g. data written before the
-        summary feature shipped). Returns list of (session_id, summary)."""
+        summary feature shipped). Returns list of (session_id, summary),
+        newest session first so review answers lead with the recent state."""
         conn = store._conn
         if conn is None:
             return []
         t = table_names(conn)
         rows = conn.execute(
-            f"SELECT session_id, summary FROM {t['summaries']}"
+            f"SELECT session_id, summary FROM {t['summaries']} "
+            "ORDER BY updated_at DESC"
         ).fetchall()
         if rows:
             return [(r["session_id"], r["summary"]) for r in rows]
         # Lazy build: group memories by session, one point per content row.
         mems = conn.execute(
-            "SELECT session_id, content FROM memories "
+            "SELECT session_id, content, created_at FROM memories "
             "WHERE forgotten_at IS NULL "
             "ORDER BY session_id, session_position"
         ).fetchall()
         by_session: dict[str, list[str]] = {}
+        last_created: dict[str, str] = {}
         for r in mems:
             by_session.setdefault(r["session_id"], []).append(r["content"])
+            last_created[r["session_id"]] = r["created_at"]
         built: list[tuple[str, str]] = []
-        now = _now()
         for sid, contents in by_session.items():
             summary = ""
             for content in contents:
@@ -1083,32 +1110,44 @@ class MemoryService:
             conn.execute(
                 f"INSERT OR REPLACE INTO {t['summaries']} (session_id, summary, updated_at) "
                 "VALUES (?, ?, ?)",
-                (sid, summary, now),
+                (sid, summary, last_created.get(sid) or _now()),
             )
             built.append((sid, summary))
         if built:
             conn.commit()
+        # Newest session first.
+        built.sort(
+            key=lambda p: (last_created.get(p[0]) or ""), reverse=True
+        )
         return built
 
     def _summary_entries(self, store: Store, top_k: int) -> list[dict]:
         """Global-synthesis entries for review-style queries: one entry per
         session summary chunk, placed ahead of the ranked evidence with a
-        high score. Empty when nothing is available."""
+        high score. Empty when nothing is available. v2.8: the budget is a
+        real entry cap (a fraction of Top K, at most 4 sessions) instead of
+        a character-vs-count comparison that always broke on the first
+        entry — review questions now see several sessions' substance."""
         summaries = self._get_summaries(store)
         if not summaries:
             return []
+        # Entry cap: a fraction of Top K (so summaries never crowd out the
+        # ranked evidence), bounded to 4 sessions of substance.
+        max_entries = max(1, min(4, top_k // 4 or 1))
         entries: list[dict] = []
         for sid, summary in summaries:
             if not summary:
                 continue
-            # One entry per session, chunked to a sane size.
-            chunk = summary[:2000]
+            # One entry per session, chunked to a sane size (rolling
+            # summaries keep the earliest head plus the latest tail, so the
+            # chunk preserves both ends of the history).
+            chunk = summary[:2400]
             entries.append({
                 "id": f"summary_{hashlib.sha256(sid.encode('utf-8')).hexdigest()[:10]}",
                 "content": chunk,
                 "score": 999.0,
             })
-            if len(entries) >= 3 or len(entries) * 2000 >= top_k:
+            if len(entries) >= max_entries:
                 break
         return entries
 

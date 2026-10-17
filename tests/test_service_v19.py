@@ -46,6 +46,15 @@ def test_order_query_detection():
         assert _is_order_query(q), q
 
 
+def test_order_query_case_insensitive_english():
+    """v2.8: sentence-initial 'Timeline of events', 'In order…' must
+    trigger like their lowercase forms."""
+    for q in ("Timeline of the conversation", "In order, what happened",
+              "Step by step, how did it go", "Chronological sequence of events"):
+        assert _is_order_query(q), q
+    assert not _is_order_query("What is her phone number")
+
+
 def test_ordinary_query_not_order():
     assert not _is_order_query("她现在住在哪里")
     assert not _is_order_query("what is her phone number")

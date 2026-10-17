@@ -60,6 +60,27 @@ def test_summary_clue_detection():
     assert _summary_clue("王磊养了什么宠物") is False
 
 
+def test_summary_clue_case_insensitive_english():
+    """v2.8: real English questions are sentence-initial; case-sensitive
+    matching silently missed every capitalized trigger."""
+    assert _summary_clue("Summarize my recent experience")
+    assert _summary_clue("Overview of what happened")
+    assert _summary_clue("What happened in this conversation?")
+    assert _summary_clue("Tell me about my life")
+    assert _summary_clue("Summarize the past few years")
+    assert _summary_clue("what is her name") is False
+    assert _summary_clue("Where does she live") is False
+
+
+def test_point_skips_greeting_lines():
+    """v2.8: a message whose first line is a greeting / filler must not
+    become the summary point — the first substantive line is used."""
+    assert _point("你好\n我住在杭州") == "我住在杭州"
+    assert _point("嗯嗯\n好的，我明白了。") == "好的，我明白了。"
+    # fallback: when every line is short, the first line still wins.
+    assert _point("第一行\n第二行") == "第一行"
+
+
 def test_point_extraction():
     assert _point("第一行\n第二行") == "第一行"
     assert _point("  ") == ""
@@ -107,6 +128,43 @@ def test_review_query_gets_summary_entry():
     # summary entry present; ranked evidence may or may not match a
     # review-style query (its tokens rarely hit specific facts)
     assert len(data) >= 1
+
+
+def test_review_query_sees_multiple_sessions():
+    """v2.8: the old budget (len(entries) * 2000 >= top_k) broke after the
+    first entry for any realistic Top K — a review question saw one session
+    only. A real entry cap must surface several sessions."""
+    svc = _service()
+    _add(svc, "u1", "s1", ["她喜欢画画", "她住在杭州"])
+    _add(svc, "u1", "s2", ["他在上海工作", "他养了一条狗"], request_id="r2")
+    res = svc.search(
+        {"query": "总结一下他们的经历", "user_id": "u1", "top_k": 20}
+    )
+    summaries = [r for r in res["data"] if str(r["id"]).startswith("summary_")]
+    assert len(summaries) >= 2
+    joined = " ".join(s["content"] for s in summaries)
+    assert "杭州" in joined and "上海" in joined
+
+
+def test_lazy_build_newest_session_first():
+    """v2.8: lazy-built summaries rank the newest session first, so a
+    review answer leads with the recent state."""
+    svc = _service()
+    _add(svc, "u1", "s1", ["她住在杭州"])
+    store = svc._user_store("u1")
+    store._conn.execute("DROP TABLE memory_summaries")
+    store._conn.execute(
+        "CREATE TABLE memory_summaries (session_id TEXT PRIMARY KEY, "
+        "summary TEXT NOT NULL, updated_at TEXT NOT NULL)"
+    )
+    store._conn.commit()
+    store.close()
+    _add(svc, "u1", "s2", ["他在上海工作"], request_id="r2")
+    res = svc.search(
+        {"query": "总结一下经历", "user_id": "u1", "top_k": 20}
+    )
+    summaries = [r for r in res["data"] if str(r["id"]).startswith("summary_")]
+    assert summaries and "上海" in summaries[0]["content"]
 
 
 def test_plain_query_no_summary():

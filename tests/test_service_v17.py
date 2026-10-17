@@ -72,6 +72,16 @@ def test_causal_query_detection():
         assert _is_causal_query(q), q
 
 
+def test_causal_query_case_insensitive_english():
+    """v2.8: sentence-initial English causal questions ('What happened…',
+    'Why did…') must trigger like their lowercase forms."""
+    for q in ("What happened next", "Why did she move", "How did this happen",
+              "What led to the decision", "Then what happened"):
+        assert _is_causal_query(q), q
+    assert not _is_causal_query("Where does she live")
+    assert not _is_causal_query("What is her phone number")
+
+
 def test_ordinary_question_not_causal():
     assert not _is_causal_query("她住在哪里")
     assert not _is_causal_query("where does she live")
