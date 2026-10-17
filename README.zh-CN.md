@@ -84,8 +84,8 @@ Memory as History 保存**说过什么、主张依据什么，以及被采用的
 内存 ≈1.0 GiB / 2 GiB。所有 JSON 响应带 `charset=utf-8`，中文证据不会被
 客户端误解码成乱码。
 
-服务接口测试：**190 项**（contract/governance/expansion/hybrid/
-temporal/summary/rules/contradiction/v1.6–v2.8）全绿，全量 638 项。
+服务接口测试：**198 项**（contract/governance/expansion/hybrid/
+temporal/summary/rules/contradiction/v1.6–v2.9）全绿，全量 646 项。
 部署为 Docker + Caddy HTTPS，一次 `docker build`
 即可复现——模型在构建期下载，容器运行零外网。设计与版本历史：
 `CHANGELOG.md`。

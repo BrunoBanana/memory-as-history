@@ -3,6 +3,64 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.9.0] — 2026-10-17
+
+Replayed 360-message sessions from real official English stores (via the
+read-only replayer) and found the v2.7 length gate silently broken for
+English, plus two smaller consistency fixes. Replay audit before / after:
+
+| measure | store A | store B |
+| --- | --- | --- |
+| false version edges >160 chars | 29 / 0 | 19 / 1* |
+| contradiction pairs (long paragraphs) | 120 / 0 | 0 / 0 |
+
+*The one remaining >160-char edge is a Jaccard/coverage strong-overlap
+path (coverage 0.77): genuinely overlapping long texts are still
+versions — the length gate only gates predicate-domain versioning.
+
+### Fixed
+
+- **Length gate is now a character count.** `_DOMAIN_VERSION_MAX_TOKENS=48`
+  counted stopword-filtered unique tokens. That was correct for Chinese
+  (CJK bigrams survive filtering) but defeated for English: a 300-character
+  Wikipedia paragraph collapses to <=48 content words after stopword
+  removal, sailed through the gate, and generated assistant-vs-assistant
+  false version edges and `negation_flip` false contradictions on real
+  official stores (120/120 false contradiction pairs and 29/45 false edges
+  were >160 characters). The gate is now `_DOMAIN_VERSION_MAX_CHARS=160`,
+  language-neutral and immune to stopword filtering. Both version and
+  contradiction detection use it.
+- **Structured triples never enter contradiction detection.** Triples are
+  injected facts with stable subject_id/relation_id keys; polarity signals
+  are meaningless for JSON payloads and produced false pairs on real
+  stores. Contradiction detection now skips either side that is a triple.
+- **English pronoun subjects are shared-subject evidence.** Stopword
+  filtering drops every pronoun from token sets, so "I live in Paris" →
+  "I moved to Berlin" shared zero tokens while the Chinese equivalent
+  ("李明住在福州" → "李明搬到上海") keeps its name and works. A matching
+  sentence-initial personal pronoun (I/I, She/She…) now counts as the
+  shared subject; a pronoun mismatch (I vs She) means a different subject
+  and stays unshared. Genuine short English revisions supersede again.
+- **Read-time same-speaker gate.** The write-time gate (v2.7) only lets the
+  person who states a fact revise it; the read-time version discount is now
+  consistent: a cross-speaker restatement in the search window no longer
+  silently depresses the speaker's own fact. The internal speaker label is
+  carried on search entries and stripped before the response leaves Search,
+  so the protocol contract stays exactly {"id","content","score"?,
+  "created_at"?} per entry.
+
+### Verified
+
+- Real Chinese store replay (150 messages): still 0 version edges /
+  0 contradictions (the character gate did not loosen the Chinese result).
+- Real English store replay: long-paragraph false contradictions 120 → 0;
+  assistant-vs-assistant long false version edges 29 → 0 (store A).
+- Short English statements still contradict ("She loves cats" vs
+  "She hates cats") and still supersede ("I live in Paris" →
+  "I moved to Berlin"); long English paragraphs (Wikipedia-style, >160
+  chars) neither contradict nor version each other.
+- Service interface tests: **198 cases**; full suite **646 passing**.
+
 ## [2.8.0] — 2026-10-17
 
 Query-trigger fixes found by running review/causal/order question shapes

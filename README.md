@@ -179,6 +179,7 @@ suite green at every step):
 | **v2.7 precision gates** | Change-signal gate (only explicit change predicates: 搬到/moved/quit/divorced…), same-speaker gate (a fact is revised by the person who states it), statement-length gate (domain versioning/contradiction only for short statement-like texts ≤48 tokens; structured triples exempt) | Real conversation replay showed 1603 false version edges + 180 false contradictions on 150 messages from same-domain long paragraphs alone; v2.7 brings that to zero on real shapes while short-fact D1 ("李明住在福州"→"李明搬到上海了") and English/KG versioning stay intact — precision over recall in revision detection |
 | **v2.7.1 cross-role updates** | Structured triples are exempt from the same-speaker gate (their stable subject_id/relation_id key is exact same-fact evidence; a full 1614-store scan found 85 update instructions arriving as assistant vs stored triples ~all user); legacy stores without a source column degrade gracefully instead of crashing Add | UPDATE revisions keep working across roles, and old stores stay readable/writable — the same-speaker gate no longer silently kills D1 recall on real corpora |
 | **v2.8 case-insensitive triggers** | Summary/causal/order query triggers match case-insensitively (English questions are sentence-initial: "Summarize…", "What happened…", "Timeline…"); summary budget is a real entry cap (≤4 sessions, newest first) instead of a character-vs-count comparison that always broke on the first entry; summary points skip pure greeting/filler lines | Real-store diagnosis: "Summarize my recent experience" returned 0 summary entries before the fix, 4 after; review questions now see several sessions' substance newest-first, ordinary queries still get zero summary entries — F1/B2/C2 synthesis works on real English question shapes |
+| **v2.9 character-count length gate** | The predicate-domain version/contradiction gate is now a character count (≤160) instead of stopword-filtered token count; structured triples never enter contradiction detection; matching English pronoun subjects count as shared-subject evidence; read-time version discount applies the same-speaker gate (internal speaker label stripped before responses leave Search) | Real English store replay: long-paragraph false contradictions 120→0, assistant-vs-assistant false version edges 29→0, while short English statements still contradict ("She loves cats" vs "She hates cats") and still supersede ("I live in Paris"→"I moved to Berlin"); Chinese store replay keeps 0 false edges — the v2.7 precision gates now work on English real shapes, not just Chinese |
 
 Runtime hardening (v0.6.1–v0.6.2): the shared E5 model is pre-warmed inside
 the serving process, so the first `/search` cold start drops from
@@ -186,9 +187,9 @@ the serving process, so the first `/search` cold start drops from
 GiB of 2 GiB. All JSON responses carry `charset=utf-8` so Chinese evidence
 never mojibakes on the client side.
 
-Service interface tests: **190 cases** (contract / hybrid / governance /
-temporal / summary / rules / contradiction / v1.6–v2.8), all green; full
-suite **638 passing**. Deployment is Docker + Caddy HTTPS, reproducible
+Service interface tests: **198 cases** (contract / hybrid / governance /
+temporal / summary / rules / contradiction / v1.6–v2.9), all green; full
+suite **646 passing**. Deployment is Docker + Caddy HTTPS, reproducible
 from a single `docker build` — the pinned model is downloaded at build
 time, so the container needs no network at runtime. Design decisions and
 version history: `CHANGELOG.md`.

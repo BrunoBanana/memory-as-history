@@ -1061,11 +1061,22 @@ class MemoryService:
                 )
             )
         # Global budget: official Top K bounds the returned evidence.
+        # Strip the internal speaker label so the response stays exactly
+        # {"id", "content", "score"?, "created_at"?} per entry.
+        for e in data:
+            e.pop("_source", None)
         data = data[: req["top_k"]]
         return {"data": data}
 
     def _entry(self, row: dict, score_key: str = "relevance") -> dict:
         entry: dict = {"id": row["id"], "content": row["content"]}
+        # Internal speaker label so read-time governance can apply the same
+        # same-speaker gate as write time. Stripped from the response before
+        # it leaves Search (the protocol contract stays exactly
+        # {"id", "content", "score"?, "created_at"?}).
+        src = row.get("source")
+        if src is not None:
+            entry["_source"] = src
         value = row.get(score_key)
         if isinstance(value, (int, float)):
             entry["score"] = float(value)

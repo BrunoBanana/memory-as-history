@@ -737,3 +737,212 @@ def test_v271_legacy_store_without_source_column_adds_safely():
     ).fetchone()
     conn.close()
     assert n == 1 and row is not None and row[0] == "new"
+
+
+# -- v2.9: character-count length gate (English real shapes) ----------------
+# The v2.7 token gate counted stopword-filtered unique tokens: a long
+# English Wikipedia paragraph collapses to <=48 content words and sailed
+# through, producing assistant-vs-assistant false version edges and
+# negation_flip false contradictions on real official stores (replay
+# audit: 120/120 false contradiction pairs and 29/45 false version edges
+# were >160 characters). The gate is now a character count.
+
+_EN_LONG_A = (
+    "Albert Einstein was born in Ulm, in the Kingdom of Wurttemberg in the "
+    "German Empire. His father was Hermann Einstein, a salesman and "
+    "engineer, and his mother was Pauline Koch. In 1880, the family moved "
+    "to Munich, where his father and his uncle founded Elektrotechnische "
+    "Fabrik J. Einstein & Cie, a company that manufactured electrical "
+    "equipment based on direct current. The Einsteins were non-observant "
+    "Ashkenazi Jews, and Albert attended a Catholic elementary school."
+)
+_EN_LONG_B = (
+    "Marie Curie was born in Warsaw, in Congress Poland in the Russian "
+    "Empire. She was the youngest of five children. Her father, Wladyslaw, "
+    "was a mathematics and physics instructor, and her mother, Bronislawa, "
+    "was a singer, pianist and governess. The family lost their property "
+    "and money on bad investments. Marie was not allowed to attend the "
+    "University of Warsaw because women were not admitted, so she studied "
+    "at the Sorbonne in Paris, where she later moved permanently."
+)
+_EN_SHORT_A = "She loves cats and lives in London."
+_EN_SHORT_B = "She hates cats but lives in London."
+_EN_SHORT_VER_A = "I live in Paris."
+_EN_SHORT_VER_B = "I moved to Berlin."
+
+
+def test_v29_english_long_paragraphs_no_false_contradiction():
+    """Long assistant paragraphs (Wikipedia-style) must not flag each other
+    as contradictions even though one contains 'not' and both share
+    domain predicates."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "assistant", "timestamp": 1000, "content": _EN_LONG_A},
+            {"role": "assistant", "timestamp": 2000, "content": _EN_LONG_B},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n == 0, "long English paragraphs are not contradictions"
+
+
+def test_v29_english_short_statements_still_contradict():
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": _EN_SHORT_A},
+            {"role": "user", "timestamp": 2000, "content": _EN_SHORT_B},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n >= 2, "genuine short same-speaker contradiction must fire"
+
+
+def test_v29_english_long_paragraphs_no_false_version_edge():
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "assistant", "timestamp": 1000, "content": _EN_LONG_A},
+            {"role": "assistant", "timestamp": 2000, "content": _EN_LONG_B},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 0, "long English paragraphs are not versions of one fact"
+
+
+def test_v29_english_short_statement_version_still_fires():
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": _EN_SHORT_VER_A},
+            {"role": "user", "timestamp": 2000, "content": _EN_SHORT_VER_B},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 1, "short same-speaker English revision must supersede"
+
+
+def test_v29_triples_never_contradict_each_other():
+    """Structured triples are injected facts — polarity signals are
+    meaningless for JSON payloads, so triples never enter contradiction
+    detection."""
+    service, _ = _service()
+    t1 = _triple("Hyderabad", "continent", "Asia", "Q1361", "P30")
+    t2 = _triple("Beijing", "country", "China", "Q956", "P17")
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": t1},
+            {"role": "user", "timestamp": 2000, "content": t2},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n == 0, "structured triples are not natural-language statements"
+
+
+# -- v2.9: read-time same-speaker gate --------------------------------------
+# Write time (v2.7) only lets the person who states a fact revise it; the
+# read-time version discount must be consistent. A cross-speaker
+# restatement in the search window must not silently depress the speaker's
+# own fact.
+
+
+def test_v29_read_time_cross_speaker_no_version_discount():
+    from memory_as_history.service.governance import govern_entries
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE audit_log (
+            id TEXT PRIMARY KEY, memory_id TEXT, action TEXT,
+            reason TEXT, at TEXT
+        );
+        CREATE TABLE memory_updates (
+            memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
+            similarity REAL NOT NULL, at TEXT NOT NULL,
+            PRIMARY KEY (memory_id, superseded_by)
+        );
+        """
+    )
+    older = {
+        "id": "old", "content": "李明住在福州",
+        "score": 1.0, "created_at": "2026-01-01T00:00:00+00:00",
+        "_source": "user",
+    }
+    newer = {
+        "id": "new", "content": "李明搬到上海了",
+        "score": 1.0, "created_at": "2026-02-01T00:00:00+00:00",
+        "_source": "assistant",
+    }
+    out = govern_entries([older, newer], "2026-03-01T00:00:00+00:00", conn)
+    conn.close()
+    by_id = {e["id"]: e for e in out}
+    assert by_id["old"]["score"] == 1.0, (
+        "cross-speaker restatement must not discount the speaker's own fact"
+    )
+
+
+def test_v29_read_time_same_speaker_still_discounts():
+    from memory_as_history.service.governance import govern_entries
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE audit_log (
+            id TEXT PRIMARY KEY, memory_id TEXT, action TEXT,
+            reason TEXT, at TEXT
+        );
+        CREATE TABLE memory_updates (
+            memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
+            similarity REAL NOT NULL, at TEXT NOT NULL,
+            PRIMARY KEY (memory_id, superseded_by)
+        );
+        """
+    )
+    older = {
+        "id": "old", "content": "李明住在福州",
+        "score": 1.0, "created_at": "2026-01-01T00:00:00+00:00",
+        "_source": "user",
+    }
+    newer = {
+        "id": "new", "content": "李明搬到上海了",
+        "score": 1.0, "created_at": "2026-02-01T00:00:00+00:00",
+        "_source": "user",
+    }
+    out = govern_entries([older, newer], "2026-03-01T00:00:00+00:00", conn)
+    conn.close()
+    by_id = {e["id"]: e for e in out}
+    assert by_id["old"]["score"] < 1.0, (
+        "same-speaker revision must still be discounted at read time"
+    )
+
+
+def test_v29_search_response_has_no_source_field():
+    """The protocol contract stays exactly {"id","content","score"?,
+    "created_at"?} — the internal speaker label never leaks."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "timestamp": 1000, "content": "李明住在福州"}],
+    )
+    res = _search(service, "李明 住在 福州", "u1", top_k=10)
+    for e in res["data"]:
+        assert "_source" not in e, "internal speaker label must be stripped"
+        allowed = {"id", "content", "score", "created_at"}
+        assert set(e.keys()) <= allowed

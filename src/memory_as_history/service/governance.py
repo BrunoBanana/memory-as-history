@@ -90,7 +90,15 @@ _STRONG_COVERAGE = 0.75    # near-full coverage: strong discount
 # the Jaccard/coverage path when they genuinely overlap. Structured
 # triples (v2.4) are exempt: the stable subject_id/relation_id key is the
 # same-fact evidence, regardless of length.
-_DOMAIN_VERSION_MAX_TOKENS = 48
+#
+# v2.9: the gate is now a CHARACTER count, not a token-set count. The old
+# token gate silently failed for English: _tokenize drops stopwords, so a
+# 300-character Wikipedia paragraph collapses to <=48 unique content words
+# and sails through, generating assistant-vs-assistant false edges on real
+# official stores (replay audit: 120/120 false contradiction pairs were
+# >48 raw words; 29/45 false version edges likewise). A character count is
+# language-neutral and cannot be defeated by stopword filtering.
+_DOMAIN_VERSION_MAX_CHARS = 160
 
 # Score discount factors applied to older versions at read time.
 _DISCOUNT_STRONG = 0.25
@@ -189,6 +197,22 @@ def _en_content_words(text: str) -> set[str]:
             if len(w) >= 3 and w not in _EN_VERSION_STOP}
 
 
+# v2.9: English pronoun subjects are stripped by stopword filtering, so
+# "I live in Paris" / "I moved to Berlin" share zero content tokens while
+# Chinese keeps the name ("李明住在福州"). The same sentence-initial
+# personal pronoun is the subject evidence a version needs (same speaker
+# is already guaranteed by the write-time gate).
+_EN_PRONOUNS = frozenset("i she he we they you".split())
+
+
+def _pronoun_subject(text: str) -> str | None:
+    words = re.findall(r"[a-z]+", text.lower())
+    for w in words[:4]:
+        if w in _EN_PRONOUNS:
+            return w
+    return None
+
+
 # -- v2.7: change-signal gate for same-domain versions -----------------------
 # Same-domain + shared subject alone is NOT a version. Long real
 # conversations restate the same domains constantly — a "工作日…" note hits
@@ -266,6 +290,14 @@ def _same_domain_version(old_text: str, new_text: str) -> bool:
     shared = token_set(old_text) & token_set(new_text)
     if not shared:
         shared = _en_content_words(old_text) & _en_content_words(new_text)
+    if not shared:
+        # v2.9: same English pronoun subject is shared-subject evidence
+        # ("I live in Paris" -> "I moved to Berlin"); a pronoun mismatch
+        # (I vs She) means a different subject and stays unshared.
+        pa = _pronoun_subject(old_text)
+        pb = _pronoun_subject(new_text)
+        if pa and pa == pb:
+            shared = {pa}
     return bool(shared)
 
 
@@ -511,8 +543,13 @@ def record_possible_contradictions(
         old_tokens = token_set(old_text)
         if not old_tokens:
             continue
-        if (len(new_tokens) > _DOMAIN_VERSION_MAX_TOKENS
-                or len(old_tokens) > _DOMAIN_VERSION_MAX_TOKENS):
+        if (len(content) > _DOMAIN_VERSION_MAX_CHARS
+                or len(old_text) > _DOMAIN_VERSION_MAX_CHARS):
+            continue
+        # v2.9: structured triples are injected facts, not natural-language
+        # statements — polarity signals are meaningless for JSON payloads
+        # and generated false negation_flip pairs on real official stores.
+        if _triple_key(old_text) is not None or _triple_key(content) is not None:
             continue
         signal = contradiction_signal(old_text, content)
         if signal is None:
@@ -733,9 +770,11 @@ def record_possible_updates(
         # statement-like texts; long paragraphs (reassurance, analysis,
         # plans) are not single facts and would otherwise supersede
         # everything in their domain. Structured triples stay exempt.
+        # v2.9: the gate is a character count — the token-set gate was
+        # defeated by English stopword filtering (see _DOMAIN_VERSION_MAX_CHARS).
         domain_version = False
-        if (len(new_tokens) <= _DOMAIN_VERSION_MAX_TOKENS
-                and len(old_tokens) <= _DOMAIN_VERSION_MAX_TOKENS):
+        if (len(content) <= _DOMAIN_VERSION_MAX_CHARS
+                and len(old["content"]) <= _DOMAIN_VERSION_MAX_CHARS):
             domain_version = _same_domain_version(
                 old["content"], content
             )
@@ -850,6 +889,14 @@ def govern_entries(
                     f"duplicate_of={entries[newer_idx]['id']}",
                     at,
                 )
+                continue
+            # v2.9: same-speaker gate at read time. Write time (v2.7) only
+            # lets the person who states a fact revise it; the read-time
+            # discount must be consistent — a cross-speaker restatement in
+            # the window must not silently depress the speaker's own fact.
+            src_old = entries[older_idx].get("_source")
+            src_new = entries[newer_idx].get("_source")
+            if src_old is not None and src_new is not None and src_old != src_new:
                 continue
             jac, cov = overlap_signals(
                 token_set(older_text), token_set(newer_text)
