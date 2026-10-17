@@ -197,6 +197,40 @@ def _en_content_words(text: str) -> set[str]:
             if len(w) >= 3 and w not in _EN_VERSION_STOP}
 
 
+def _is_latin_text(text: str) -> bool:
+    """True when the text is predominantly ASCII letters (English)."""
+    if not text:
+        return False
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return False
+    latin = sum(1 for ch in letters if ch.isascii())
+    return latin / len(letters) >= 0.8
+
+
+def _stem_en(word: str) -> str:
+    """Lightweight English inflection normalization for the contradiction
+    shared-token gate: likes/like, cats/cat, lives/live. Conservative — no
+    ed/ing stripping (moved -> "mov" would corrupt matching), and protected
+    endings (ss/us/is/as, sh/ch/x/z) stay untouched."""
+    if word.endswith("ies") and len(word) > 4:
+        return word[:-3] + "y"
+    if (word.endswith("s") and len(word) > 3
+            and not word.endswith(("ss", "us", "is", "as"))
+            and not word.endswith(("sh", "ch", "x", "z"))):
+        return word[:-1]
+    return word
+
+
+def _en_shared_content_tokens(a: str, b: str) -> set[str]:
+    """Content tokens (stopword-filtered) shared by two English texts,
+    with inflection normalization — used by the contradiction subject
+    gate."""
+    sa = {_stem_en(w) for w in _en_content_words(a)}
+    sb = {_stem_en(w) for w in _en_content_words(b)}
+    return sa & sb
+
+
 # v2.9: English pronoun subjects are stripped by stopword filtering, so
 # "I live in Paris" / "I moved to Berlin" share zero content tokens while
 # Chinese keeps the name ("李明住在福州"). The same sentence-initial
@@ -486,6 +520,21 @@ def contradiction_signal(old_text: str, new_text: str) -> str | None:
     shared_chars = set(old_text) & set(new_text)
     if len(shared_chars) < 2:
         return None
+    # v2.10: character-level sharing is meaningless for English — any two
+    # sentences share letters, so same-domain short statements need shared
+    # CONTENT tokens to conflict. Chinese keeps the character gate, where
+    # CJK bigrams carry semantics ("她喜欢猫" vs "她讨厌猫" share zero
+    # bigrams yet conflict). Real English replay: 394 pairs in one
+    # 9811-message store, 64% with no negation word on either side. A
+    # single shared token is still too loose ("I work at a hospital and I
+    # don't like it" vs "I work long hours" share only "work") — two shared
+    # tokens means the same fact words, not just a domain word. Opposite
+    # pairs are exempt: the opposite words themselves ("married" /
+    # "divorced") prove the same-fact flip without any shared token.
+    if _is_latin_text(old_text) or _is_latin_text(new_text):
+        if len(_en_shared_content_tokens(old_text, new_text)) < 2:
+            if _cross_opposite(old_text, new_text) is None:
+                return None
     old_neg = _has_negation(old_text)
     new_neg = _has_negation(new_text)
     if old_neg != new_neg:
@@ -635,7 +684,22 @@ def _version_decision(
     if not longer:
         return False
     if token_set(older_text) <= token_set(newer_text):
-        return True
+        # v2.10: containment is a version only when the older statement is
+        # a real fact. Real English stores contain 1-2-token utterances
+        # ("I'm tired") that are swallowed by later longer messages — that
+        # is context, not a fact revision. Replay of one 9811-message
+        # store: 1873 edges, 89% without any change signal, median 1
+        # shared token. Gate: older >=3 content tokens (a real fact), or
+        # >=2 tokens AND the newer text carries an explicit change signal
+        # ("I live in Paris" -> "I lived in Paris and moved to Berlin" —
+        # the pronoun subject is stopword-filtered, so the older side has
+        # only 2 content tokens yet is a true revision).
+        old_toks = token_set(older_text)
+        if len(old_toks) >= 3:
+            return True
+        if len(old_toks) >= 2 and _has_change_signal(newer_text):
+            return True
+        return False
     return jaccard >= _STRONG_JACCARD
 
 

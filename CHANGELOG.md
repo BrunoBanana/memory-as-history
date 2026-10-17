@@ -3,6 +3,55 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.10.0] — 2026-10-17
+
+Replayed larger real English conversation stores (up to 9811 messages;
+1000 messages per store, 250 per session) and found the remaining
+over-trigger sources after v2.9. Both were short-statement artifacts, not
+long-paragraph ones:
+
+| measure | store A (9811 msgs) | store B (8103 msgs) | store C (4097 msgs) |
+| --- | --- | --- | --- |
+| version edges before / after | 1873 / 142 | 139 / 27 | 25 / 9 |
+| contradiction pairs before / after | 394 / 86 | 228 / 76 | 16 / 2 |
+
+Store A diagnosis: 1676/1873 version edges were token-containment of
+1-2-token utterances — "I'm tired" swallowed by a later longer message
+was treated as a fact revision; 89% of all edges carried no change
+signal and the median shared token count was 1. Contradiction pairs were
+character-level artifacts: any two English sentences share letters, so
+same-domain short statements with a negation word anywhere on one side
+flipped (64% of pairs had no "not" on either side — the negation was
+"don't"/"never"-style, the "opposite" was shared letters).
+
+### Fixed
+
+- **Containment versioning requires a real fact.** `_version_decision`
+  now versions on token containment only when the older statement has
+  >=3 content tokens, or >=2 tokens with an explicit change signal in
+  the newer text. Genuine rewrites are preserved ("She lives in Paris
+  with her dog named Max" -> "... and a cat named Lily"; "I live in
+  Paris" -> "I lived in Paris and moved to Berlin" — the pronoun subject
+  is stopword-filtered, hence the 2-token path).
+- **English contradiction pairs need shared content tokens.** The
+  character-level subject gate is kept for Chinese (CJK bigrams carry
+  semantics) but English now requires >=2 shared content tokens after
+  light inflection normalization (`_stem_en`: likes/like, cats/cat,
+  lives/live; conservative — no ed/ing stripping). Opposite pairs
+  ("married" / "divorced") are exempt: the opposite words themselves
+  prove the same-fact flip with zero shared tokens. Real-store effect:
+  store A 394 -> 86 pairs, store B 228 -> 76, store C 16 -> 2, while
+  "She likes cats" vs "She doesn't like cats" and "She loves cats" vs
+  "She hates cats" still fire.
+- Chinese replay stays clean: the 1528-message health store still
+  yields 0 version edges and 0 contradiction pairs.
+
+KG synonym verification note: the official English stores that looked
+KG-shaped are actually HTML-table crawls and Wikipedia document corpus
+("Corpus: Document title …"); no structured subject/relation triples
+flow through Add, so relation-word synonyms have no real-store hit
+scenario. They remain unit-tested.
+
 ## [2.9.0] — 2026-10-17
 
 Replayed 360-message sessions from real official English stores (via the

@@ -946,3 +946,101 @@ def test_v29_search_response_has_no_source_field():
         assert "_source" not in e, "internal speaker label must be stripped"
         allowed = {"id", "content", "score", "created_at"}
         assert set(e.keys()) <= allowed
+
+
+# -- v2.10: English short-statement precision ------------------------------
+# Real-store replay (9811-message conversation store, 1000 messages
+# replayed) showed two remaining over-trigger sources after v2.9:
+#   1873 version edges, 89% with NO change signal (containment path: a
+#   1-2-token utterance like "I'm tired" is swallowed by a later longer
+#   message and treated as a version), and 394 contradiction pairs, 64%
+#   with no negation word on either side (character-level sharing is
+#   meaningless for English — any two sentences share letters).
+
+
+def test_v210_short_utterance_not_swallowed_as_version():
+    """A 1-2-token utterance later expanded by a longer message is context,
+    not a fact revision — no containment version edge."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": "I'm tired."},
+            {"role": "user", "timestamp": 2000,
+             "content": "I'm tired of the job and I want to move on."},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 0, "swallowed short utterance is not a version"
+
+
+def test_v210_containment_with_change_signal_still_versions():
+    """The genuine containment revision keeps working: a longer statement
+    that fully contains the older one AND carries a change signal."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": "I live in Paris."},
+            {"role": "user", "timestamp": 2000,
+             "content": "I lived in Paris and moved to Berlin."},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 1, "containment + change signal is a real revision"
+
+
+def test_v210_english_same_domain_no_shared_token_not_contradiction():
+    """Same-domain short statements without a shared content token must not
+    conflict — 'I work at a hospital' vs 'I don't like my job' share only
+    letters, not facts."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": "I work at a hospital."},
+            {"role": "user", "timestamp": 2000, "content": "I don't like my job."},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n == 0, "letter-level sharing must not flag a conflict"
+
+
+def test_v210_english_genuine_contradiction_kept():
+    """'She loves cats' vs 'She hates cats' shares content tokens and
+    still conflicts."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": "She loves cats."},
+            {"role": "user", "timestamp": 2000, "content": "She hates cats."},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n >= 2, "genuine English contradiction must fire"
+
+
+def test_v210_chinese_contradiction_kept():
+    """The CJK character gate stays: '她喜欢猫' vs '她讨厌猫' share zero
+    bigrams but are a genuine conflict."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [
+            {"role": "user", "timestamp": 1000, "content": "她喜欢猫。"},
+            {"role": "user", "timestamp": 2000, "content": "她讨厌猫。"},
+        ],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_contradictions").fetchone()[0]
+    conn.close()
+    assert n >= 2, "genuine Chinese contradiction must fire"
