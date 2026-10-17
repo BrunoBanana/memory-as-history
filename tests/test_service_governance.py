@@ -628,3 +628,112 @@ def test_v27_flat_restatement_without_change_is_not_a_version():
     n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
     conn.close()
     assert n == 0
+
+
+# -- v2.7.1: cross-role UPDATE instructions keep triple versioning ----------
+# Full-corpus scan (1614 official stores): stored triples are ~all
+# source=user (1617 vs 1 assistant) yet 85 UPDATE instructions arrive as
+# source=assistant. The stable subject_id/relation_id key is exact
+# same-fact evidence, so the same-speaker gate must not veto it.
+
+
+def _triple(subject, relation, obj, subject_id, relation_id):
+    return (
+        f'{{"subject": "{subject}", "relation": "{relation}", '
+        f'"object": "{obj}", "subject_id": "{subject_id}", '
+        f'"relation_id": "{relation_id}"}}'
+    )
+
+
+def test_v271_triple_update_across_roles_still_supersedes():
+    """A stored user triple superseded by an assistant-delivered UPDATE
+    instruction (different role, same subject_id/relation_id) must still
+    record the version edge."""
+    service, _ = _service()
+    old_triple = _triple("Hyderabad", "continent", "Asia", "Q1361", "P30")
+    new_triple = _triple("Hyderabad", "continent", "Eurasia", "Q1361", "P30")
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "timestamp": 1000, "content": old_triple}],
+    )
+    _add(
+        service, "r2", "u1", "s2",
+        [{"role": "assistant", "timestamp": 2000, "content": new_triple}],
+    )
+    conn = _conn(service)
+    row = conn.execute("SELECT memory_id, superseded_by FROM memory_updates").fetchone()
+    conn.close()
+    assert row is not None, "stable triple key wins over the speaker gate"
+
+
+def test_v271_cross_role_plain_statement_still_blocked():
+    """Without a triple key, the same-speaker gate keeps blocking: a user
+    fact must not be superseded by an assistant restatement."""
+    service, _ = _service()
+    _add(
+        service, "r1", "u1", "s1",
+        [{"role": "user", "timestamp": 1000, "content": "李明住在福州"}],
+    )
+    _add(
+        service, "r2", "u1", "s2",
+        [{"role": "assistant", "timestamp": 2000, "content": "李明搬到上海了"}],
+    )
+    conn = _conn(service)
+    n = conn.execute("SELECT COUNT(*) FROM memory_updates").fetchone()[0]
+    conn.close()
+    assert n == 0
+
+
+def test_v271_legacy_store_without_source_column_adds_safely():
+    """A store whose memories table predates the source column must not
+    crash the Add path (governance degrades gracefully: no speaker gate,
+    other gates still apply)."""
+    service, _ = _service()
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE memories (
+            id TEXT PRIMARY KEY, content TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'working',
+            tier TEXT NOT NULL DEFAULT 'archive',
+            created_at TEXT NOT NULL,
+            forgotten_at TEXT,
+            event_at TEXT, session_id TEXT, session_position INTEGER
+        );
+        CREATE TABLE memory_updates (
+            memory_id TEXT NOT NULL, superseded_by TEXT NOT NULL,
+            similarity REAL NOT NULL, at TEXT NOT NULL,
+            PRIMARY KEY (memory_id, superseded_by)
+        );
+        CREATE TABLE memory_contradictions (
+            memory_id TEXT NOT NULL, conflicts_with TEXT NOT NULL,
+            signal TEXT NOT NULL, at TEXT NOT NULL,
+            PRIMARY KEY (memory_id, conflicts_with)
+        );
+        CREATE TABLE audit_log (
+            id TEXT PRIMARY KEY, memory_id TEXT, action TEXT,
+            reason TEXT, at TEXT
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO memories (id, content, created_at, session_position) "
+        "VALUES ('old', '李明住在福州', '2026-01-01T00:00:00+00:00', 0)"
+    )
+    # No source column anywhere: the call must neither raise nor skip.
+    n = record_possible_updates(
+        conn,
+        memory_id="new",
+        content="李明搬到上海了",
+        event_at=None,
+        session_position=1,
+        created_at="2026-02-01T00:00:00+00:00",
+        at="2026-03-01T00:00:00+00:00",
+        source="user",
+    )
+    row = conn.execute(
+        "SELECT superseded_by FROM memory_updates WHERE memory_id = 'old'"
+    ).fetchone()
+    conn.close()
+    assert n == 1 and row is not None and row[0] == "new"

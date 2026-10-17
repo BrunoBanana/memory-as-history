@@ -493,7 +493,7 @@ def record_possible_contradictions(
     # "她讨厌猫") is a short same-domain statement by the same speaker.
     where = "id != ? AND forgotten_at IS NULL"
     args: list[Any] = [memory_id]
-    if source is not None:
+    if source is not None and _has_column(conn, "memories", "source"):
         where += " AND source = ?"
         args.append(source)
     args.append(recent)
@@ -624,6 +624,20 @@ def _is_newer(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return _time_key(a) > _time_key(b)
 
 
+def _has_column(conn: Any, table: str, column: str) -> bool:
+    """True when the table actually carries the column. Older stores may
+    predate a column that newer schemas declare; governance must never
+    crash an Add on a legacy store (project principle: old stores stay
+    readable and writable)."""
+    try:
+        return any(
+            r[1] == column
+            for r in conn.execute(f"PRAGMA table_info({table})")
+        )
+    except Exception:  # noqa: BLE001 - a probe failure means "no column"
+        return False
+
+
 def _audit(
     conn: Any, memory_id: str, action: str, reason: str, at: str
 ) -> None:
@@ -670,21 +684,34 @@ def record_possible_updates(
     # replay of 150 real Chinese messages dropped from 1603 to 381 edges by
     # the change-signal gate alone, and the remaining noise was almost all
     # cross-speaker. A fact is updated by the person who states it.
+    # v2.7.1: the gate is applied per candidate (not in SQL) so structured
+    # triples stay exempt — their stable subject_id/relation_id key is exact
+    # same-fact evidence, and real corpora inject the UPDATE instruction
+    # under a different role than the stored triple (1614-store scan:
+    # triples are ~all user, yet 85 update instructions arrive as assistant).
+    # A missing source column on a legacy store simply disables the gate.
+    has_source_col = _has_column(conn, "memories", "source")
     where = "id != ? AND forgotten_at IS NULL"
     args: list[Any] = [memory_id]
-    if source is not None:
-        where += " AND source = ?"
-        args.append(source)
     args.append(recent)
+    select_cols = (
+        "id, content, source, event_at, session_position, created_at"
+        if has_source_col
+        else "id, content, event_at, session_position, created_at"
+    )
     rows = conn.execute(
-        f"SELECT id, content, event_at, session_position, created_at "
-        f"FROM memories WHERE {where} "
+        f"SELECT {select_cols} FROM memories WHERE {where} "
         "ORDER BY created_at DESC, session_position DESC LIMIT ?",
         args,
     ).fetchall()
     recorded = 0
     for row in rows:
         old = dict(row)
+        if has_source_col and source is not None and old.get("source") is not None:
+            if old["source"] != source and not _triple_version(
+                old["content"], content
+            ):
+                continue
         old_tokens = token_set(old["content"])
         if not old_tokens:
             continue

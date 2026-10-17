@@ -3,6 +3,38 @@
 All notable changes to this project are documented here. The format is
 loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.1] — 2026-10-17
+
+Cross-role UPDATE compatibility, found by a full-corpus scan of 1614 real
+official stores. v2.7's same-speaker gate assumed the revising statement
+and the stored fact share one source role; the scan shows stored triples
+are almost all `user` (1617 vs 1 assistant) while **85 update
+instructions arrive as `assistant`** — the gate would have silently broken
+version detection for those revisions (D1 recall loss).
+
+### Fixed
+
+- **Structured triples are exempt from the same-speaker gate.** Their
+  stable `subject_id`/`relation_id` key is exact same-fact evidence (far
+  stronger than any token heuristic); an UPDATE delivered under a
+  different role still supersedes the stored triple. The gate now applies
+  per candidate instead of in SQL.
+- **Legacy stores without a `source` column no longer crash Add.**
+  Governance probes the column and degrades gracefully (gate disabled,
+  change-signal and length gates still apply) — old stores stay readable
+  and writable, per project principle.
+
+### Verified
+
+- Full-corpus scan (1614 stores, 515k rows): triples ~all `user`;
+  UPDATE instructions `user` 565 / `assistant` 85 — the exact shape that
+  motivated the exemption.
+- Same-speaker gate still blocks plain cross-role restatements (user fact
+  vs assistant restatement → no edge); real Chinese store reopened through
+  MemoryService and written without crash; replay of 150 real Chinese
+  messages still yields **0 version edges, 0 contradiction pairs**.
+- Service interface tests: **184 cases**; full suite green.
+
 ## [2.7.0] — 2026-10-17
 
 Precision gates on governance, discovered by replaying real conversation
